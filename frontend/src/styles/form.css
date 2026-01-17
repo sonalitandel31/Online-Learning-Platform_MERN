@@ -1,0 +1,145 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  /*background: url("https://cdn.pixabay.com/photo/2018/08/04/11/30/draw-3583548_1280.png");*/
+}
+
+.register-container,
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.register-card,
+.login-card {
+  border-radius: 10px;
+  padding: 2rem;
+  width: 500px;
+  max-width: 95%;
+  background-color: #fff;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.register-card h2,
+.login-card h1 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+  font-size: 27px;
+}
+
+.form-input {
+  display: flex;          
+  align-items: center;
+  flex-wrap: wrap;       
+  margin-bottom: 1rem;
+}
+
+.form-input label {
+  width: 150px;           
+  font-weight: 500;
+  margin-right: 10px;
+}
+
+.form-input input {
+  flex: 1;               
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  outline: none;
+  font-size: 14px;
+}
+
+.form-input input[type="file"] {
+  width: 60%;
+}
+
+.form-input input.input-error {
+  border-color: red;
+}
+
+.form-input .error {
+  width: 100%;
+  color: red;
+  font-size: 0.85rem;
+  margin: 4px 0 0 160px;
+  display: block;
+  text-align: left;
+}
+
+.register-card input::placeholder,
+.login-card input::placeholder {
+  color: #aaa;
+}
+.d-flex {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.register-card button,
+.login-card button {
+  flex: 1;
+  border-radius: 6px;
+  padding: 5px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: 0.3s;
+}
+
+.login-card button[type="submit"]{
+  width: 200px;
+}
+
+.register-card button[type="submit"],
+.login-card button[type="submit"] {
+  background-color: #953ce7;
+  color: #fff;
+}
+
+.register-card button[type="reset"]{
+  background-color: #6c757d;
+  color: #fff;
+}
+
+.register-card button:hover,
+.login-card button:hover {
+  opacity: 0.9;
+}
+
+.role-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 1.6rem;
+}
+
+.role-buttons button {
+  flex: 1;
+  padding: 7px;
+  border-radius: 6px;       
+  border: 1px solid #9a9393;
+  background-color: #fff;
+  cursor: pointer;
+  transition: 0.3s;
+  border-bottom: none;      
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.role-buttons button.active {
+  background-color: #5d0dfd;
+  color: #fff;
+  border-color: #5d0dfd;
+  border-bottom: none;       
+}
+
+.link {
+  text-align: right;
+  margin-top: 6%;
+  margin-bottom: -3%;
+}

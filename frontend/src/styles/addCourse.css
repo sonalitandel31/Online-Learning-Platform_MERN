@@ -1,0 +1,82 @@
+.add-course-page {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 20px;
+  background-color: #f4f4f9;
+  min-height: 100vh;
+}
+
+.add-course-card {
+  background-color: #fff;
+  padding: 30px 25px;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 500px;
+}
+
+.add-course-title {
+  text-align: center;
+  color: #6f42c1;
+  margin-bottom: 20px;
+  font-size: 1.8rem;
+}
+
+.add-course-form label {
+  display: block;
+  margin-bottom: 6px;
+  margin-top: 12px;
+  font-weight: 500;
+  color: #333;
+}
+
+.input-field {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.input-field:focus {
+  border-color: #6f42c1;
+  box-shadow: 0 0 5px rgba(111, 66, 193, 0.3);
+}
+
+textarea.input-field {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 12px 0;
+  background-color: #6f42c1;
+  color: #fff;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 8px;
+  margin-top: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.submit-btn:hover {
+  background-color: #5925a3;
+}
+
+.submit-btn:disabled {
+  background-color: #a78bfa;
+  cursor: not-allowed;
+}
+
+.error-message {
+  color: #e63946;
+  font-weight: 500;
+  margin-bottom: 10px;
+  text-align: center;
+}
