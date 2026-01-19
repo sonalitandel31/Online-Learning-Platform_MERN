@@ -1,27 +1,26 @@
 import React, { useEffect, useState } from "react";
-import { CheckCircle, MessageSquare, User, BookOpen, Send, ShieldCheck, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle, User, BookOpen, Send, ShieldCheck, ChevronDown, ChevronUp, Lock, Unlock } from "lucide-react";
 import api from "../../../api/api";
 
 const CourseDiscussions = () => {
   const [groupedQuestions, setGroupedQuestions] = useState({});
   const [loading, setLoading] = useState(true);
-  const [expandedCourse, setExpandedCourse] = useState(null); // Accordion effect ke liye
+  const [expandedCourse, setExpandedCourse] = useState(null);
+  const [draftAnswers, setDraftAnswers] = useState({}); // questionId -> text
 
   const fetchDiscussions = async () => {
     try {
       const res = await api.get("/forum/instructor/questions");
-      
-      // Data ko Course Title ke hisab se group karna
-      const groups = res.data.reduce((acc, q) => {
+
+      const groups = (res.data || []).reduce((acc, q) => {
         const courseName = q.courseTitle || "Other Discussions";
         if (!acc[courseName]) acc[courseName] = [];
         acc[courseName].push(q);
         return acc;
       }, {});
-      
       setGroupedQuestions(groups);
     } catch (err) {
-      console.error("Failed to load discussions");
+      console.error("Failed to load discussions", err);
     } finally {
       setLoading(false);
     }
@@ -32,17 +31,29 @@ const CourseDiscussions = () => {
       await api.put(`/forum/question/${questionId}/solve`, { answerId });
       fetchDiscussions();
     } catch (err) {
-      console.error("Failed to mark as solved");
+      console.error("Failed to mark as solved", err);
     }
   };
 
-  const postAnswer = async (questionId, answerText) => {
-    if (!answerText.trim()) return;
+  const toggleLock = async (questionId, lockState) => {
     try {
-      await api.post("/forum/answer", { questionId, answerText });
+      await api.put(`/forum/question/${questionId}/lock`, { isLocked: lockState });
       fetchDiscussions();
     } catch (err) {
-      console.error("Failed to post answer");
+      console.error("Failed to update lock", err);
+    }
+  };
+
+  const postAnswer = async (questionId) => {
+    const answerText = (draftAnswers[questionId] || "").trim();
+    if (!answerText) return;
+
+    try {
+      await api.post("/forum/answer", { questionId, answerText });
+      setDraftAnswers((prev) => ({ ...prev, [questionId]: "" }));
+      fetchDiscussions();
+    } catch (err) {
+      console.error("Failed to post answer", err);
     }
   };
 
@@ -50,11 +61,13 @@ const CourseDiscussions = () => {
     fetchDiscussions();
   }, []);
 
-  if (loading) return (
-    <div className="d-flex justify-content-center p-5">
-      <div className="spinner-border text-primary" role="status"></div>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="d-flex justify-content-center p-5">
+        <div className="spinner-border text-primary" role="status"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="container-fluid p-0">
@@ -85,7 +98,6 @@ const CourseDiscussions = () => {
           padding: 20px;
         }
         .question-item:last-child { border-bottom: none; }
-        
         .answer-box {
           background: #f8f9fa;
           border-radius: 12px;
@@ -121,8 +133,7 @@ const CourseDiscussions = () => {
       ) : (
         Object.entries(groupedQuestions).map(([courseName, questions]) => (
           <div key={courseName} className="course-card">
-            {/* Course Header */}
-            <div 
+            <div
               className="course-header d-flex justify-content-between align-items-center"
               onClick={() => setExpandedCourse(expandedCourse === courseName ? null : courseName)}
             >
@@ -136,66 +147,96 @@ const CourseDiscussions = () => {
               {expandedCourse === courseName ? <ChevronUp /> : <ChevronDown />}
             </div>
 
-            {/* Questions List for this Course */}
             {(expandedCourse === courseName || Object.keys(groupedQuestions).length === 1) && (
               <div className="card-body p-0">
-                {questions.map((q) => (
-                  <div key={q._id} className="question-item">
-                    <div className="d-flex justify-content-between">
-                      <h6 className="fw-bold text-dark">{q.title}</h6>
-                      {q.isSolved && <span className="text-success small fw-bold"><CheckCircle size={14}/> Solved</span>}
-                    </div>
-                    <small className="text-muted"><User size={12}/> Asked by {q.userId?.name}</small>
+                {questions.map((q) => {
+                  const isClosed = q.isSolved || q.isLocked;
 
-                    {/* Answers Section */}
-                    <div className="ms-3 mt-3">
-                      {q.answers?.map((ans) => (
-                        <div key={ans._id} className={`answer-box ${ans.isVerified ? 'verified-box' : ''}`}>
-                          <div className="d-flex justify-content-between align-items-start">
-                            <p className="small mb-1">{ans.answerText}</p>
-                            {ans.isVerified && <ShieldCheck size={16} className="text-warning"/>}
-                          </div>
-                          <div className="d-flex justify-content-between align-items-center mt-1">
-                            <small className="fw-bold text-brand-purple">{ans.userId?.name}</small>
-                            {!q.isSolved && !ans.isVerified && (
-                              <button 
-                                className="btn btn-sm py-0 text-brand-orange fw-bold" 
-                                onClick={() => markSolved(q._id, ans._id)}
-                              >
-                                Verify
-                              </button>
+                  return (
+                    <div key={q._id} className="question-item">
+                      <div className="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                          <h6 className="fw-bold text-dark mb-1">{q.title}</h6>
+                          <small className="text-muted d-block">
+                            <User size={12} /> Asked by {q.userId?.name}
+                          </small>
+                          <div className="mt-2 d-flex gap-2">
+                            {q.isSolved && (
+                              <span className="text-success small fw-bold">
+                                <CheckCircle size={14} /> Solved
+                              </span>
+                            )}
+                            {q.isLocked && (
+                              <span className="small fw-bold" style={{ color: "#a85d00" }}>
+                                <Lock size={14} /> Locked
+                              </span>
                             )}
                           </div>
                         </div>
-                      ))}
-                    </div>
 
-                    {/* Input for this question */}
-                    {!q.isSolved && (
-                      <div className="mt-3 d-flex gap-2">
-                        <input
-                          type="text"
-                          className="form-control form-control-sm border-0 bg-light"
-                          placeholder="Reply to this student..."
-                          value={q.newAnswer || ""}
-                          onChange={(e) => {
-                            const updatedGroups = { ...groupedQuestions };
-                            updatedGroups[courseName] = updatedGroups[courseName].map(ques => 
-                              ques._id === q._id ? { ...ques, newAnswer: e.target.value } : ques
-                            );
-                            setGroupedQuestions(updatedGroups);
-                          }}
-                        />
-                        <button 
-                          className="btn btn-sm btn-post px-3"
-                          onClick={() => postAnswer(q._id, q.newAnswer || "")}
-                        >
-                          <Send size={14}/>
-                        </button>
+                        <div className="d-flex gap-2">
+                          {!q.isLocked ? (
+                            <button className="btn btn-sm btn-outline-warning" onClick={() => toggleLock(q._id, true)}>
+                              <Lock size={14} className="me-1" /> Lock
+                            </button>
+                          ) : (
+                            <button className="btn btn-sm btn-outline-success" onClick={() => toggleLock(q._id, false)}>
+                              <Unlock size={14} className="me-1" /> Unlock
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                ))}
+
+                      {/* Answers */}
+                      <div className="ms-3 mt-3">
+                        {(q.answers || [])
+                          .sort((a, b) => (b.isVerified === true) - (a.isVerified === true))
+                          .map((ans) => (
+                            <div key={ans._id} className={`answer-box ${ans.isVerified ? "verified-box" : ""}`}>
+                              <div className="d-flex justify-content-between align-items-start">
+                                <p className="small mb-1">{ans.answerText}</p>
+                                {ans.isVerified && <ShieldCheck size={16} className="text-warning" />}
+                              </div>
+                              <div className="d-flex justify-content-between align-items-center mt-1">
+                                <small className="fw-bold" style={{ color: "var(--brand-purple)" }}>
+                                  {ans.userId?.name || "User"}
+                                </small>
+                                {!q.isSolved && !q.isLocked && !ans.isVerified && (
+                                  <button
+                                    className="btn btn-sm py-0 fw-bold"
+                                    style={{ color: "var(--brand-orange)" }}
+                                    onClick={() => markSolved(q._id, ans._id)}
+                                  >
+                                    Verify
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+
+                      {/* Reply input */}
+                      {!isClosed ? (
+                        <div className="mt-3 d-flex gap-2">
+                          <input
+                            type="text"
+                            className="form-control form-control-sm border-0 bg-light"
+                            placeholder="Reply to this student..."
+                            value={draftAnswers[q._id] || ""}
+                            onChange={(e) => setDraftAnswers((prev) => ({ ...prev, [q._id]: e.target.value }))}
+                          />
+                          <button className="btn btn-sm btn-post px-3" onClick={() => postAnswer(q._id)}>
+                            <Send size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="mt-3 small text-muted">
+                          {q.isLocked ? "Discussion locked. Replies disabled." : "Solved thread. Replies disabled."}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

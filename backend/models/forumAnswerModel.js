@@ -1,4 +1,4 @@
-const { default: mongoose } = require("mongoose");
+const mongoose = require("mongoose");
 
 const forumAnswerSchema = mongoose.Schema(
   {
@@ -11,6 +11,11 @@ const forumAnswerSchema = mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "user",
       required: true,
+    },
+    parentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ForumAnswer",
+      default: null
     },
     answerText: {
       type: String,
@@ -28,6 +33,11 @@ const forumAnswerSchema = mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'user',
       default: []
+    }],
+    reports: [{
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: "user" },
+      reason: String,
+      createdAt: { type: Date, default: Date.now }
     }],
   },
   { timestamps: true }

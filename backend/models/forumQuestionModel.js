@@ -1,4 +1,4 @@
-const { default: mongoose } = require("mongoose");
+const mongoose = require("mongoose");
 
 const forumQuestionSchema = mongoose.Schema(
   {
@@ -30,12 +30,31 @@ const forumQuestionSchema = mongoose.Schema(
       ref: "ForumAnswer",
       default: null,
     },
+    upvotedBy: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "user"
+    }],
     upvotes: {
       type: Number,
       default: 0,
     },
+    isLocked: { 
+      type: Boolean, 
+      default: false 
+    },
+    reports: [{
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: "user" },
+      reason: String,
+      createdAt: { type: Date, default: Date.now }
+    }],
+    lastActivityAt: { 
+      type: Date, 
+      default: Date.now 
+    },
   },
   { timestamps: true }
 );
+
+forumQuestionSchema.index({ title: "text", description: "text" });
 
 module.exports = mongoose.model("ForumQuestion", forumQuestionSchema);
