@@ -1,4 +1,3 @@
-// routes/forumRoutes.js
 const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware");
@@ -9,31 +8,57 @@ const {
   createQuestion,
   getCourseQuestions,
   getQuestionDetail,
-  markQuestionSolved,
+
+  acceptAnswerByOwner,
+  verifyAnswerByInstructor,
+
+  reportContent,
+  getInstructorReports,
+  getAdminReports,
+  resolveReport,
+
+  postReply,
+  getRepliesForQuestion,
+
   deleteQuestion,
   postAnswer,
   upvoteAnswer,
+
   getInstructorQuestions,
   getAdminQuestions,
+
   setQuestionLock,
 } = require("../controller/forumController");
 
-// Public count
+// ---------- Public ----------
 router.get("/course/:courseId/count", getForumCount);
 
-// Student view
+// ---------- Student/general authenticated ----------
 router.post("/question", authMiddleware, createQuestion);
 router.get("/course/:courseId", authMiddleware, getCourseQuestions);
 router.get("/question/:id", authMiddleware, getQuestionDetail);
 
-// Instructor/Admin actions
+// ---------- Answers ----------
+router.post("/answer", authMiddleware, postAnswer);
+router.put("/answer/upvote/:id", authMiddleware, upvoteAnswer);
+
+// ---------- Accept (question owner) ----------
 router.put(
-  "/question/:id/solve",
+  "/question/:id/accept",
   authMiddleware,
-  roleMiddleware(["instructor", "admin"]),
-  markQuestionSolved
+  roleMiddleware(["student", "user", "admin", "instructor"]), // depends on your app roles
+  acceptAnswerByOwner
 );
 
+// ---------- Verify (instructor/admin) ----------
+router.put(
+  "/question/:id/verify",
+  authMiddleware,
+  roleMiddleware(["instructor", "admin"]),
+  verifyAnswerByInstructor
+);
+
+// ---------- Lock/Unlock (instructor/admin) ----------
 router.put(
   "/question/:id/lock",
   authMiddleware,
@@ -41,15 +66,55 @@ router.put(
   setQuestionLock
 );
 
-// Admin moderation
-router.delete("/question/:id", authMiddleware, roleMiddleware(["admin"]), deleteQuestion);
+// ---------- Admin moderation ----------
+router.delete(
+  "/question/:id",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  deleteQuestion
+);
 
-// Answers
-router.post("/answer", authMiddleware, postAnswer);
-router.put("/answer/upvote/:id", authMiddleware, upvoteAnswer);
+// ---------- Panels ----------
+router.get(
+  "/instructor/questions",
+  authMiddleware,
+  roleMiddleware(["instructor"]),
+  getInstructorQuestions
+);
 
-// Panels
-router.get("/instructor/questions", authMiddleware, roleMiddleware(["instructor"]), getInstructorQuestions);
-router.get("/admin/questions", authMiddleware, roleMiddleware(["admin"]), getAdminQuestions);
+router.get(
+  "/admin/questions",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  getAdminQuestions
+);
+
+// ---------- Reports ----------
+router.post("/report", authMiddleware, reportContent);
+
+router.get(
+  "/instructor/reports",
+  authMiddleware,
+  roleMiddleware(["instructor"]),
+  getInstructorReports
+);
+
+router.get(
+  "/admin/reports",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  getAdminReports
+);
+
+router.put(
+  "/report/:id/action",
+  authMiddleware,
+  roleMiddleware(["instructor", "admin"]),
+  resolveReport
+);
+
+// ---------- Replies (threaded) ----------
+router.post("/reply", authMiddleware, postReply);
+router.get("/question/:id/replies", authMiddleware, getRepliesForQuestion);
 
 module.exports = router;

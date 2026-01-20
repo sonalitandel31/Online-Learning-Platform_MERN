@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+const { default: mongoose } = require("mongoose");
 
 const forumAnswerSchema = mongoose.Schema(
   {
@@ -12,33 +12,26 @@ const forumAnswerSchema = mongoose.Schema(
       ref: "user",
       required: true,
     },
-    parentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "ForumAnswer",
-      default: null
-    },
-    answerText: {
-      type: String,
-      required: true,
-    },
-    isVerified: {
-      type: Boolean,
-      default: false,
-    },
-    upvotes: {
-      type: Number,
-      default: 0,
-    },
-    upvotedBy: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'user',
-      default: []
-    }],
-    reports: [{
-      userId: { type: mongoose.Schema.Types.ObjectId, ref: "user" },
-      reason: String,
-      createdAt: { type: Date, default: Date.now }
-    }],
+
+    answerText: { type: String, required: true },
+
+    // Instructor validation
+    isVerified: { type: Boolean, default: false },
+
+    // Student acceptance (owner of question)
+    isAccepted: { type: Boolean, default: false },
+
+    // Likes/upvotes
+    upvotes: { type: Number, default: 0 },
+    upvotedBy: [
+      { type: mongoose.Schema.Types.ObjectId, ref: "user", default: [] },
+    ],
+
+    // Soft delete + audit
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "user", default: null },
+    deleteReason: { type: String, default: "" },
   },
   { timestamps: true }
 );

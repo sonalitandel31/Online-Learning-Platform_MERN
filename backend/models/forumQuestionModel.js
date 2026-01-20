@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+const { default: mongoose } = require("mongoose");
 
 const forumQuestionSchema = mongoose.Schema(
   {
@@ -12,49 +12,42 @@ const forumQuestionSchema = mongoose.Schema(
       ref: "user",
       required: true,
     },
-    title: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    description: {
-      type: String,
-      required: true,
-    },
-    isSolved: {
-      type: Boolean,
-      default: false,
+
+    title: { type: String, required: true, trim: true },
+    description: { type: String, required: true },
+
+    // Question status
+    isSolved: { type: Boolean, default: false },
+    isLocked: { type: Boolean, default: false },
+
+    // Accepted & Verified (SEPARATE concepts)
+    acceptedAnswerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ForumAnswer",
+      default: null,
     },
     verifiedAnswerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ForumAnswer",
       default: null,
     },
-    upvotedBy: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "user"
-    }],
-    upvotes: {
-      type: Number,
-      default: 0,
-    },
-    isLocked: { 
-      type: Boolean, 
-      default: false 
-    },
-    reports: [{
-      userId: { type: mongoose.Schema.Types.ObjectId, ref: "user" },
-      reason: String,
-      createdAt: { type: Date, default: Date.now }
-    }],
-    lastActivityAt: { 
-      type: Date, 
-      default: Date.now 
-    },
+
+    // Optional: question upvotes (you can implement later)
+    upvotes: { type: Number, default: 0 },
+
+    // Advanced / optional
+    isPinned: { type: Boolean, default: false },
+    tags: { type: [String], default: [] },
+
+    lastActivityAt: { type: Date, default: Date.now },
+
+    // Soft delete + audit
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "user", default: null },
+    deleteReason: { type: String, default: "" },
   },
   { timestamps: true }
 );
-
-forumQuestionSchema.index({ title: "text", description: "text" });
 
 module.exports = mongoose.model("ForumQuestion", forumQuestionSchema);
