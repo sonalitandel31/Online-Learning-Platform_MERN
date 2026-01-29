@@ -38,19 +38,19 @@ router.post("/question", authMiddleware, createQuestion);
 router.get("/course/:courseId", authMiddleware, getCourseQuestions);
 router.get("/question/:id", authMiddleware, getQuestionDetail);
 
-// ---------- Answers ----------
+//Answers
 router.post("/answer", authMiddleware, postAnswer);
 router.put("/answer/upvote/:id", authMiddleware, upvoteAnswer);
 
-// ---------- Accept (question owner) ----------
+//Accept (question owner)
 router.put(
   "/question/:id/accept",
   authMiddleware,
-  roleMiddleware(["student", "user", "admin", "instructor"]), // depends on your app roles
+  roleMiddleware(["student", "user", "admin", "instructor"]),
   acceptAnswerByOwner
 );
 
-// ---------- Verify (instructor/admin) ----------
+//Verify (instructor/admin)
 router.put(
   "/question/:id/verify",
   authMiddleware,
@@ -58,7 +58,7 @@ router.put(
   verifyAnswerByInstructor
 );
 
-// ---------- Lock/Unlock (instructor/admin) ----------
+//Lock/Unlock (instructor/admin)
 router.put(
   "/question/:id/lock",
   authMiddleware,
@@ -66,7 +66,7 @@ router.put(
   setQuestionLock
 );
 
-// ---------- Admin moderation ----------
+//Admin moderation
 router.delete(
   "/question/:id",
   authMiddleware,
@@ -74,7 +74,7 @@ router.delete(
   deleteQuestion
 );
 
-// ---------- Panels ----------
+//Panels
 router.get(
   "/instructor/questions",
   authMiddleware,

@@ -575,8 +575,8 @@ const CourseDiscussion = () => {
                           const cardStyle = ans.isAccepted
                             ? { backgroundColor: colors.acceptedBg, border: `2px solid #0d6efd` }
                             : ans.isVerified
-                            ? { backgroundColor: colors.verifiedBg, border: `2px solid #28a745` }
-                            : {};
+                              ? { backgroundColor: colors.verifiedBg, border: `2px solid #28a745` }
+                              : {};
 
                           const ansReplies = getRepliesForAnswer(ans._id);
 
@@ -629,19 +629,20 @@ const CourseDiscussion = () => {
                                 </span>
 
                                 <div className="d-flex align-items-center gap-2">
-                                  {/* Accept button */}
-                                  {isQuestionOwner && !selectedQuestion.isLocked && !ans.isAccepted && (
-                                    <button
-                                      className="btn btn-sm rounded-pill fw-bold"
-                                      style={{ backgroundColor: "#0d6efd", color: "#fff" }}
-                                      onClick={() => acceptAnswer(ans._id)}
-                                      title="Accept this answer"
-                                    >
-                                      Accept
-                                    </button>
-                                  )}
 
-                                  {/* Like button */}
+                                  {isQuestionOwner &&
+                                    !selectedQuestion.isLocked &&
+                                    !selectedQuestion.isSolved &&
+                                    !ans.isAccepted && (
+                                      <button
+                                        className="btn btn-sm rounded-pill fw-bold"
+                                        style={{ backgroundColor: "#0d6efd", color: "#fff" }}
+                                        onClick={() => acceptAnswer(ans._id)}
+                                      >
+                                        Accept
+                                      </button>
+                                    )}
+
                                   <button
                                     className="btn btn-sm border-0 rounded-pill d-flex align-items-center gap-2 px-3 fw-bold"
                                     style={{
@@ -649,14 +650,14 @@ const CourseDiscussion = () => {
                                       color: ans.hasLiked ? "#1e7e34" : "#b57a00",
                                       opacity: selectedQuestion.isLocked || ans.isMine ? 0.6 : 1,
                                     }}
-                                    disabled={selectedQuestion.isLocked || ans.isMine}
+                                    disabled={selectedQuestion.isLocked || selectedQuestion.isSolved || ans.isMine}
                                     onClick={() => upvote(ans._id, ans.isMine)}
                                     title={
                                       ans.isMine
                                         ? "You cannot like your own answer"
                                         : ans.hasLiked
-                                        ? "Click to remove like"
-                                        : "Click to like"
+                                          ? "Click to remove like"
+                                          : "Click to like"
                                     }
                                   >
                                     <span>{ans.hasLiked ? "✅" : "🧡"}</span> {ans.upvotes || 0}
@@ -702,7 +703,7 @@ const CourseDiscussion = () => {
                                   </div>
                                 )}
 
-                                {!selectedQuestion.isLocked ? (
+                                {!selectedQuestion.isLocked && !selectedQuestion.isSolved ? (
                                   <div className="d-flex gap-2 mt-2">
                                     <input
                                       className="form-control form-control-sm"
@@ -722,8 +723,13 @@ const CourseDiscussion = () => {
                                     </button>
                                   </div>
                                 ) : (
-                                  <div className="small text-muted mt-2">Thread locked. Replies disabled.</div>
+                                  <div className="small text-muted mt-2">
+                                    {selectedQuestion.isLocked
+                                      ? "Thread locked. Replies disabled."
+                                      : "Thread solved. Replies disabled."}
+                                  </div>
                                 )}
+
                               </div>
                             </div>
                           );

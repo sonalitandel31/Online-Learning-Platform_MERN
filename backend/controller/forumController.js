@@ -4,6 +4,233 @@ const Course = require("../models/courseModel");
 const ForumReport = require("../models/forumReportModel");
 const ForumReply = require("../models/forumReplyModel");
 const { default: mongoose } = require("mongoose");
+const { canAccessCourse, canAccessQuestion } = require("../utils/forumAccess");
+const userModel = require("../models/userModel");
+const nodemailer = require("nodemailer");
+
+const REPORT_POLICY = {
+  spam: { warnAt: 5, blockAt: 10 },
+  abuse: { warnAt: 3, blockAt: 7 },
+  harassment: { warnAt: 2, blockAt: 5 },
+  misinformation: { warnAt: 5, blockAt: 12 },
+  other: { warnAt: 8, blockAt: 20 },
+};
+
+const ALL_REASONS = Object.keys(REPORT_POLICY);
+
+/* const SPAM_WARN_AT = Number(process.env.SPAM_WARN_AT || 5);
+const SPAM_BLOCK_AT = Number(process.env.SPAM_BLOCK_AT || 10);
+ */
+const normalizeReason = (r = "") => (r || "").toString().trim().toLowerCase();
+const isSpamReason = (r) => normalizeReason(r) === "spam";
+
+function buildTransporter() {
+  if (!process.env.SMTP_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) return null;
+
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: false,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
+}
+
+async function sendEmail(to, subject, text) {
+  try {
+    if (!to) return;
+    const transporter = buildTransporter();
+    if (!transporter) return;
+
+    await transporter.sendMail({
+      from: process.env.MAIL_FROM || process.env.EMAIL_USER,
+      to,
+      subject,
+      text,
+    });
+  } catch (e) {
+    console.error("Email send failed:", e?.message || e);
+  }
+}
+
+async function getReasonCountForUser(userId, reasonKey, { status = "resolved" } = {}) {
+  if (!userId) return 0;
+
+  const q = { targetUserId: userId, status };
+  q.reason = { $regex: new RegExp(`^${String(reasonKey).trim()}$`, "i") };
+
+  return ForumReport.countDocuments(q);
+}
+
+async function attachTargetContent(reportsQuery = {}) {
+  // returns reports with: targetContent (object)
+  return ForumReport.aggregate([
+    { $match: reportsQuery },
+
+    // reporter / targetUser / actionBy / course populate (via lookups)
+    {
+      $lookup: {
+        from: "users",
+        localField: "reporterId",
+        foreignField: "_id",
+        as: "reporter",
+      },
+    },
+    { $unwind: { path: "$reporter", preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: "users",
+        localField: "targetUserId",
+        foreignField: "_id",
+        as: "targetUser",
+      },
+    },
+    { $unwind: { path: "$targetUser", preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: "users",
+        localField: "actionBy",
+        foreignField: "_id",
+        as: "actionUser",
+      },
+    },
+    { $unwind: { path: "$actionUser", preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: "courses",
+        localField: "courseId",
+        foreignField: "_id",
+        as: "course",
+      },
+    },
+    { $unwind: { path: "$course", preserveNullAndEmptyArrays: true } },
+
+    // -------------- Target lookups --------------
+    {
+      $lookup: {
+        from: "forumquestions",
+        localField: "targetId",
+        foreignField: "_id",
+        as: "targetQuestion",
+      },
+    },
+    {
+      $lookup: {
+        from: "forumanswers",
+        localField: "targetId",
+        foreignField: "_id",
+        as: "targetAnswer",
+      },
+    },
+    {
+      $lookup: {
+        from: "forumreplies",
+        localField: "targetId",
+        foreignField: "_id",
+        as: "targetReply",
+      },
+    },
+
+    // For answer/reply: also fetch their question for context (title)
+    {
+      $lookup: {
+        from: "forumquestions",
+        let: { ansQid: { $arrayElemAt: ["$targetAnswer.questionId", 0] } },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$_id", "$$ansQid"] } } },
+          { $project: { title: 1, courseId: 1, isDeleted: 1 } },
+        ],
+        as: "answerQuestion",
+      },
+    },
+    {
+      $lookup: {
+        from: "forumquestions",
+        let: { repQid: { $arrayElemAt: ["$targetReply.questionId", 0] } },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$_id", "$$repQid"] } } },
+          { $project: { title: 1, courseId: 1, isDeleted: 1 } },
+        ],
+        as: "replyQuestion",
+      },
+    },
+
+    // Build targetContent by switching targetType
+    {
+      $addFields: {
+        targetContent: {
+          $switch: {
+            branches: [
+              {
+                case: { $eq: ["$targetType", "question"] },
+                then: {
+                  kind: "question",
+                  questionId: "$targetId",
+                  title: { $arrayElemAt: ["$targetQuestion.title", 0] },
+                  text: { $arrayElemAt: ["$targetQuestion.description", 0] },
+                  isDeleted: { $arrayElemAt: ["$targetQuestion.isDeleted", 0] },
+                },
+              },
+              {
+                case: { $eq: ["$targetType", "answer"] },
+                then: {
+                  kind: "answer",
+                  answerId: "$targetId",
+                  questionId: { $arrayElemAt: ["$targetAnswer.questionId", 0] },
+                  questionTitle: { $arrayElemAt: ["$answerQuestion.title", 0] },
+                  text: { $arrayElemAt: ["$targetAnswer.answerText", 0] },
+                  isDeleted: { $arrayElemAt: ["$targetAnswer.isDeleted", 0] },
+                },
+              },
+              {
+                case: { $eq: ["$targetType", "reply"] },
+                then: {
+                  kind: "reply",
+                  replyId: "$targetId",
+                  questionId: { $arrayElemAt: ["$targetReply.questionId", 0] },
+                  answerId: { $arrayElemAt: ["$targetReply.answerId", 0] },
+                  questionTitle: { $arrayElemAt: ["$replyQuestion.title", 0] },
+                  text: { $arrayElemAt: ["$targetReply.replyText", 0] },
+                  isDeleted: { $arrayElemAt: ["$targetReply.isDeleted", 0] },
+                },
+              },
+            ],
+            default: { kind: "unknown" },
+          },
+        },
+      },
+    },
+
+    // shape output similar to populate() you already use
+    {
+      $project: {
+        targetType: 1,
+        targetId: 1,
+        reason: 1,
+        note: 1,
+        status: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        actionNote: 1,
+        actionAt: 1,
+
+        reporterId: { _id: "$reporter._id", name: "$reporter.name", role: "$reporter.role", email: "$reporter.email" },
+        targetUserId: { _id: "$targetUser._id", name: "$targetUser.name", role: "$targetUser.role", email: "$targetUser.email" },
+        actionBy: { _id: "$actionUser._id", name: "$actionUser.name", role: "$actionUser.role" },
+        courseId: { _id: "$course._id", title: "$course.title" },
+
+        targetContent: 1,
+      },
+    },
+
+    { $sort: { createdAt: -1 } },
+  ]);
+}
 
 const isObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -21,7 +248,6 @@ async function assertInstructorOwnsCourseByQuestion(questionId, instructorId) {
   return { ok: true, question, course };
 }
 
-// ---------------- COUNT (public) ----------------
 exports.getForumCount = async (req, res) => {
   try {
     const count = await ForumQuestion.countDocuments({
@@ -41,27 +267,29 @@ exports.createQuestion = async (req, res) => {
   if (!courseId || !title || !description) {
     return res.status(400).json({ message: "All fields required" });
   }
-  if (!isObjectId(courseId)) return res.status(400).json({ message: "Invalid courseId" });
 
-  try {
-    const question = await ForumQuestion.create({
-      courseId,
-      userId: req.user._id,
-      title,
-      description,
-      lastActivityAt: new Date(),
-    });
-
-    res.status(201).json(question);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to create question" });
+  const access = await canAccessCourse(req.user, courseId);
+  if (!access.ok) {
+    return res.status(access.status).json({ message: access.message });
   }
+
+  const question = await ForumQuestion.create({
+    courseId,
+    userId: req.user._id,
+    title,
+    description,
+    lastActivityAt: new Date(),
+  });
+
+  res.status(201).json(question);
 };
 
-// ---------------- COURSE QUESTIONS (student view) ----------------
 exports.getCourseQuestions = async (req, res) => {
   try {
+    const access = await canAccessCourse(req.user, req.params.courseId);
+    if (!access.ok) {
+      return res.status(access.status).json({ message: access.message });
+    }
     const { search = "", filter = "all", sort = "activity" } = req.query;
     const courseObjectId = new mongoose.Types.ObjectId(req.params.courseId);
 
@@ -82,10 +310,10 @@ exports.getCourseQuestions = async (req, res) => {
       sort === "newest"
         ? { createdAt: -1 }
         : sort === "activity"
-        ? { lastActivityAt: -1, createdAt: -1 }
-        : sort === "solved"
-        ? { isSolved: -1, lastActivityAt: -1 }
-        : { lastActivityAt: -1, createdAt: -1 };
+          ? { lastActivityAt: -1, createdAt: -1 }
+          : sort === "solved"
+            ? { isSolved: -1, lastActivityAt: -1 }
+            : { lastActivityAt: -1, createdAt: -1 };
 
     const questions = await ForumQuestion.aggregate([
       { $match: matchStage },
@@ -141,9 +369,13 @@ exports.getCourseQuestions = async (req, res) => {
   }
 };
 
-// ---------------- QUESTION DETAIL ----------------
 exports.getQuestionDetail = async (req, res) => {
   try {
+
+    const access = await canAccessQuestion(req.user, req.params.id);
+    if (!access.ok) {
+      return res.status(access.status).json({ message: access.message });
+    }
     const question = await ForumQuestion.findOne({
       _id: req.params.id,
       isDeleted: false,
@@ -178,41 +410,59 @@ exports.getQuestionDetail = async (req, res) => {
   }
 };
 
-// ---------------- POST ANSWER ----------------
 exports.postAnswer = async (req, res) => {
   const { questionId, answerText } = req.body;
 
   if (!questionId || !answerText?.trim()) {
     return res.status(400).json({ message: "Answer required" });
   }
-  if (!isObjectId(questionId)) return res.status(400).json({ message: "Invalid questionId" });
 
-  try {
-    const question = await ForumQuestion.findOne({ _id: questionId, isDeleted: false }).select("isLocked isSolved");
-    if (!question) return res.status(404).json({ message: "Question not found" });
+  const gate = await assertNotReportBlocked(req, res);
+  if (!gate.ok) return;
 
-    if (question.isLocked) return res.status(403).json({ message: "Discussion is locked" });
-
-    const answer = await ForumAnswer.create({
-      questionId,
-      userId: req.user._id,
-      answerText,
-    });
-
-    await ForumQuestion.findByIdAndUpdate(questionId, { lastActivityAt: new Date() });
-
-    res.status(201).json(answer);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to post answer" });
+  const access = await canAccessQuestion(req.user, questionId);
+  if (!access.ok) {
+    return res.status(access.status).json({ message: access.message });
   }
+
+  const question = await ForumQuestion.findById(questionId).select("isLocked isSolved userId title");
+  if (!question) return res.status(404).json({ message: "Question not found" });
+
+  if (question.isLocked || question.isSolved) {
+    return res.status(403).json({ message: "Discussion closed" });
+  }
+
+  const answer = await ForumAnswer.create({
+    questionId,
+    userId: req.user._id,
+    answerText,
+  });
+
+  await ForumQuestion.findByIdAndUpdate(questionId, {
+    lastActivityAt: new Date(),
+  });
+
+  if (question.userId?.toString() !== req.user._id.toString()) {
+    const owner = await userModel.findById(question.userId).select("email name");
+    await sendEmail(
+      owner?.email,
+      "Your question has a new answer",
+      `Hello ${owner?.name || ""},\n\nYour question "${question.title}" has received a new answer.\n\nPlease login to view it.`
+    );
+  }
+
+  res.status(201).json(answer);
 };
 
-// ---------------- UPVOTE ANSWER TOGGLE ----------------
 exports.upvoteAnswer = async (req, res) => {
   try {
     const answer = await ForumAnswer.findOne({ _id: req.params.id, isDeleted: false });
     if (!answer) return res.status(404).json({ message: "Answer not found" });
+
+    const question = await ForumQuestion.findById(answer.questionId).select("isLocked isSolved");
+    if (question?.isLocked || question?.isSolved) {
+      return res.status(403).json({ message: "Discussion closed" });
+    }
 
     const userId = req.user._id;
     const userIdStr = userId.toString();
@@ -246,7 +496,6 @@ exports.upvoteAnswer = async (req, res) => {
   }
 };
 
-// ---------------- ACCEPT ANSWER (student owner) ----------------
 exports.acceptAnswerByOwner = async (req, res) => {
   const { id: questionId } = req.params;
   const { answerId } = req.body;
@@ -256,35 +505,64 @@ exports.acceptAnswerByOwner = async (req, res) => {
   }
 
   try {
-    const question = await ForumQuestion.findOne({ _id: questionId, isDeleted: false }).select("userId isLocked");
+    const question = await ForumQuestion.findOne({
+      _id: questionId,
+      isDeleted: false,
+    }).select("userId isLocked isSolved title");
+
     if (!question) return res.status(404).json({ message: "Question not found" });
+
+    if (question.isSolved) return res.status(403).json({ message: "Question already solved" });
+
     if (question.isLocked) return res.status(403).json({ message: "Discussion is locked" });
 
     if (question.userId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: "Only question owner can accept answer" });
     }
 
-    const ans = await ForumAnswer.findOne({ _id: answerId, questionId, isDeleted: false });
+    const ans = await ForumAnswer.findOne({
+      _id: answerId,
+      questionId,
+      isDeleted: false,
+    }).select("userId");
+
     if (!ans) return res.status(400).json({ message: "Answer does not belong to this question" });
 
-    await ForumAnswer.updateMany({ questionId }, { isAccepted: false });
+    // unaccept all answers (only non-deleted)
+    await ForumAnswer.updateMany(
+      { questionId, isDeleted: false },
+      { isAccepted: false }
+    );
 
+    // mark question solved
     await ForumQuestion.findByIdAndUpdate(questionId, {
       isSolved: true,
       acceptedAnswerId: answerId,
       lastActivityAt: new Date(),
     });
 
+    // mark selected answer accepted
     await ForumAnswer.findByIdAndUpdate(answerId, { isAccepted: true });
 
-    res.json({ message: "Answer accepted. Question marked as solved." });
+    // ✅ email to answer author
+    try {
+      const answerAuthor = await userModel.findById(ans.userId).select("email name");
+      await sendEmail(
+        answerAuthor?.email,
+        "Your answer was accepted",
+        `Hello ${answerAuthor?.name || ""},\n\nYour answer was accepted for the question "${question.title}".\n\nPlease login to see details.`
+      );
+    } catch (e) {
+      console.error("Accept email error:", e?.message || e);
+    }
+
+    return res.json({ message: "Answer accepted. Question marked as solved." });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Failed to accept answer" });
+    return res.status(500).json({ message: "Failed to accept answer" });
   }
 };
 
-// ---------------- VERIFY ANSWER (instructor/admin) ----------------
 exports.verifyAnswerByInstructor = async (req, res) => {
   const { id: questionId } = req.params;
   const { answerId } = req.body;
@@ -294,21 +572,30 @@ exports.verifyAnswerByInstructor = async (req, res) => {
   }
 
   try {
+    // only instructor who owns the course can verify
     if (req.user.role?.toLowerCase() === "instructor") {
       const check = await assertInstructorOwnsCourseByQuestion(questionId, req.user._id);
       if (!check.ok) return res.status(check.status).json({ message: check.message });
     }
 
-    const question = await ForumQuestion.findOne({ _id: questionId, isDeleted: false }).select("isLocked");
+    const question = await ForumQuestion.findOne({
+      _id: questionId,
+      isDeleted: false,
+    }).select("isLocked title");
+
     if (!question) return res.status(404).json({ message: "Question not found" });
 
-    // If you want to allow verify even when locked, remove next line
     if (question.isLocked) return res.status(403).json({ message: "Discussion is locked" });
 
-    const ans = await ForumAnswer.findOne({ _id: answerId, questionId, isDeleted: false });
+    const ans = await ForumAnswer.findOne({
+      _id: answerId,
+      questionId,
+      isDeleted: false,
+    }).select("userId");
+
     if (!ans) return res.status(400).json({ message: "Answer does not belong to this question" });
 
-    await ForumAnswer.updateMany({ questionId }, { isVerified: false });
+    await ForumAnswer.updateMany({ questionId, isDeleted: false }, { isVerified: false });
 
     await ForumQuestion.findByIdAndUpdate(questionId, {
       verifiedAnswerId: answerId,
@@ -317,14 +604,25 @@ exports.verifyAnswerByInstructor = async (req, res) => {
 
     await ForumAnswer.findByIdAndUpdate(answerId, { isVerified: true });
 
-    res.json({ message: "Answer verified by instructor" });
+    // ✅ email to answer author
+    try {
+      const answerAuthor = await userModel.findById(ans.userId).select("email name");
+      await sendEmail(
+        answerAuthor?.email,
+        "Your answer was verified by instructor",
+        `Hello ${answerAuthor?.name || ""},\n\nYour answer was verified by the instructor for the question "${question.title}".\n\nPlease login to see details.`
+      );
+    } catch (e) {
+      console.error("Verify email error:", e?.message || e);
+    }
+
+    return res.json({ message: "Answer verified by instructor" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Failed to verify answer" });
+    return res.status(500).json({ message: "Failed to verify answer" });
   }
 };
 
-// ---------------- LOCK/UNLOCK ----------------
 exports.setQuestionLock = async (req, res) => {
   const { id: questionId } = req.params;
   const { isLocked } = req.body;
@@ -352,8 +650,6 @@ exports.setQuestionLock = async (req, res) => {
   }
 };
 
-// ---------------- SOFT DELETE THREAD (admin) ----------------
-// NOTE: Reason via DELETE body may be dropped. You can keep it; works in many cases.
 exports.deleteQuestion = async (req, res) => {
   const { id: questionId } = req.params;
   const { reason = "" } = req.body || {};
@@ -394,7 +690,6 @@ exports.deleteQuestion = async (req, res) => {
   }
 };
 
-// ---------------- INSTRUCTOR QUESTIONS (their courses) ----------------
 exports.getInstructorQuestions = async (req, res) => {
   try {
     const instructorId = new mongoose.Types.ObjectId(req.user._id);
@@ -486,7 +781,6 @@ exports.getInstructorQuestions = async (req, res) => {
   }
 };
 
-// ---------------- ADMIN QUESTIONS (all courses) ----------------
 exports.getAdminQuestions = async (req, res) => {
   try {
     const questions = await ForumQuestion.aggregate([
@@ -572,7 +866,6 @@ exports.getAdminQuestions = async (req, res) => {
   }
 };
 
-// ---------------- REPORT CONTENT ----------------
 exports.reportContent = async (req, res) => {
   const { targetType, targetId, reason, note = "" } = req.body;
 
@@ -583,7 +876,6 @@ exports.reportContent = async (req, res) => {
   if (!reason) return res.status(400).json({ message: "Reason required" });
 
   try {
-    // Avoid duplicate spam reports by same user on same target
     const existing = await ForumReport.findOne({
       targetType,
       targetId,
@@ -593,28 +885,42 @@ exports.reportContent = async (req, res) => {
     if (existing) return res.json({ message: "Already reported" });
 
     let courseId = null;
+    let targetUserId = null;
 
     if (targetType === "question") {
-      const q = await ForumQuestion.findOne({ _id: targetId, isDeleted: false }).select("courseId");
+      const q = await ForumQuestion.findOne({ _id: targetId, isDeleted: false }).select("courseId userId");
       if (!q) return res.status(404).json({ message: "Question not found" });
       courseId = q.courseId;
+      targetUserId = q.userId;
     }
 
     if (targetType === "answer") {
-      const a = await ForumAnswer.findOne({ _id: targetId, isDeleted: false }).select("questionId");
+      const a = await ForumAnswer.findOne({ _id: targetId, isDeleted: false }).select("questionId userId");
       if (!a) return res.status(404).json({ message: "Answer not found" });
+      targetUserId = a.userId;
+
       const q = await ForumQuestion.findOne({ _id: a.questionId, isDeleted: false }).select("courseId");
       if (!q) return res.status(404).json({ message: "Question not found" });
       courseId = q.courseId;
     }
 
     if (targetType === "reply") {
-      const r = await ForumReply.findOne({ _id: targetId, isDeleted: false }).select("questionId");
+      const r = await ForumReply.findOne({ _id: targetId, isDeleted: false }).select("questionId userId");
       if (!r) return res.status(404).json({ message: "Reply not found" });
+      targetUserId = r.userId;
+
       const q = await ForumQuestion.findOne({ _id: r.questionId, isDeleted: false }).select("courseId");
       if (!q) return res.status(404).json({ message: "Question not found" });
       courseId = q.courseId;
     }
+
+    // ✅ can't report own content
+    if (targetUserId && targetUserId.toString() === req.user._id.toString()) {
+      return res.status(400).json({ message: "You cannot report your own content" });
+    }
+
+    const access = await canAccessCourse(req.user, courseId);
+    if (!access.ok) return res.status(access.status).json({ message: access.message });
 
     const report = await ForumReport.create({
       targetType,
@@ -623,21 +929,39 @@ exports.reportContent = async (req, res) => {
       courseId,
       reason,
       note,
+      targetUserId, // ✅ ensure schema has this exact field
     });
 
-    res.status(201).json({ message: "Reported", reportId: report._id });
+    /*
+    if (targetUserId && isSpamReason(reason)) {
+      const spamCount = await getSpamCountForUser(targetUserId);
+
+      if (spamCount === SPAM_WARN_AT || spamCount === SPAM_BLOCK_AT) {
+        const u = await userModel.findById(targetUserId).select("email name");
+        const subject = spamCount === SPAM_BLOCK_AT ? "Forum posting blocked" : "Spam warning (forum)";
+        const text =
+          spamCount === SPAM_BLOCK_AT
+            ? `Hello ${u?.name || ""},\n\nYour forum posting has been blocked because your content received ${spamCount} spam reports.\n\nIf you believe this is a mistake, contact support.`
+            : `Hello ${u?.name || ""},\n\nWarning: Your content has received ${spamCount} spam reports.\n\nIf spam reports continue, your forum posting may be blocked.\n\nPlease follow community guidelines.`;
+
+        await sendEmail(u?.email, subject, text);
+      }
+    } */
+
+    return res.status(201).json({ message: "Reported", reportId: report._id });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Failed to report content" });
+    return res.status(500).json({ message: "Failed to report content" });
   }
 };
 
 exports.getAdminReports = async (req, res) => {
   try {
-    const reports = await ForumReport.find({ status: "pending" })
-      .populate("reporterId", "name role")
-      .sort({ createdAt: -1 });
+    const status = String(req.query.status || "pending").toLowerCase();
+    const q = {};
+    if (status !== "all") q.status = status;
 
+    const reports = await attachTargetContent(q);
     res.json(reports);
   } catch (err) {
     console.error(err);
@@ -648,17 +972,15 @@ exports.getAdminReports = async (req, res) => {
 exports.getInstructorReports = async (req, res) => {
   try {
     const instructorId = req.user._id;
+    const status = String(req.query.status || "pending").toLowerCase();
 
     const myCourses = await Course.find({ instructor: instructorId }).select("_id");
     const myCourseIds = myCourses.map((c) => c._id);
 
-    const reports = await ForumReport.find({
-      status: "pending",
-      courseId: { $in: myCourseIds },
-    })
-      .populate("reporterId", "name role")
-      .sort({ createdAt: -1 });
+    const q = { courseId: { $in: myCourseIds } };
+    if (status !== "all") q.status = status;
 
+    const reports = await attachTargetContent(q);
     res.json(reports);
   } catch (err) {
     console.error(err);
@@ -674,102 +996,79 @@ exports.resolveReport = async (req, res) => {
     return res.status(400).json({ message: "Invalid action" });
   }
 
-  try {
-    const report = await ForumReport.findById(id);
-    if (!report) return res.status(404).json({ message: "Report not found" });
+  const report = await ForumReport.findById(id);
+  if (!report) return res.status(404).json({ message: "Report not found" });
 
-    if (req.user.role?.toLowerCase() === "instructor") {
-      const course = await Course.findById(report.courseId).select("instructor");
-      if (!course) return res.status(404).json({ message: "Course not found" });
-      if (course.instructor.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ message: "Not allowed" });
-      }
+  report.status = action;
+  report.actionBy = req.user._id;
+  report.actionNote = actionNote;
+  report.actionAt = new Date();
+  await report.save();
+
+  if (action === "resolved" && report.targetUserId) {
+    const reasonKey = normalizeReason(report.reason) || "other";
+    const policy = REPORT_POLICY[reasonKey] || REPORT_POLICY.other;
+
+    const cnt = await getReasonCountForUser(report.targetUserId, reasonKey, { status: "resolved" });
+
+    if (cnt === policy.warnAt || cnt === policy.blockAt) {
+      const u = await userModel.findById(report.targetUserId).select("email name");
+
+      const isBlock = cnt === policy.blockAt;
+      const subject = isBlock ? "Forum posting blocked" : "Forum warning (reports)";
+
+      const text = isBlock
+        ? `Hello ${u?.name || ""},\n\nYour forum posting has been blocked because your content received ${cnt} confirmed "${reasonKey}" reports.\n\nIf you believe this is a mistake, contact support.`
+        : `Hello ${u?.name || ""},\n\nWarning: Your content has received ${cnt} confirmed "${reasonKey}" reports.\n\nIf this continues, your forum posting may be blocked.\n\nPlease follow community guidelines.`;
+
+      await sendEmail(u?.email, subject, text);
     }
-
-    report.status = action;
-    report.actionBy = req.user._id;
-    report.actionNote = actionNote;
-    report.actionAt = new Date();
-    await report.save();
-
-    res.json({ message: "Report updated" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to update report" });
   }
+
+  return res.json({ message: "Report updated" });
 };
 
 exports.postReply = async (req, res) => {
   const { questionId, answerId, replyText } = req.body;
 
-  if (!isObjectId(questionId))
-    return res.status(400).json({ message: "Invalid questionId" });
+  // ✅ spam block check
+  const gate = await assertNotReportBlocked(req, res);
+  if (!gate.ok) return;
 
-  if (!isObjectId(answerId))
-    return res.status(400).json({ message: "Invalid answerId" });
-
-  if (!replyText?.trim())
-    return res.status(400).json({ message: "Reply required" });
-
-  try {
-    const question = await ForumQuestion.findOne({
-      _id: questionId,
-      isDeleted: false,
-    }).select("isLocked");
-
-    if (!question)
-      return res.status(404).json({ message: "Question not found" });
-
-    if (question.isLocked)
-      return res.status(403).json({ message: "Discussion locked" });
-
-    // Ensure answer belongs to this question
-    const ans = await ForumAnswer.findOne({
-      _id: answerId,
-      questionId,
-      isDeleted: false,
-    });
-
-    if (!ans)
-      return res.status(400).json({ message: "Answer mismatch" });
-
-    const reply = await ForumReply.create({
-      questionId,
-      answerId,
-      parentId: null, // 🔒 FORCE 2-LEVEL
-      userId: req.user._id,
-      replyText: replyText.trim(),
-    });
-
-    await ForumQuestion.findByIdAndUpdate(questionId, {
-      lastActivityAt: new Date(),
-    });
-
-    res.status(201).json(reply);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to post reply" });
+  const access = await canAccessQuestion(req.user, questionId);
+  if (!access.ok) {
+    return res.status(access.status).json({ message: access.message });
   }
+
+  const question = await ForumQuestion.findById(questionId).select("isLocked isSolved");
+  if (!question) return res.status(404).json({ message: "Question not found" });
+
+  if (question.isLocked || question.isSolved) {
+    return res.status(403).json({ message: "Discussion closed" });
+  }
+
+  const reply = await ForumReply.create({
+    questionId,
+    answerId,
+    userId: req.user._id,
+    replyText: replyText.trim(),
+  });
+
+  await ForumQuestion.findByIdAndUpdate(questionId, {
+    lastActivityAt: new Date(),
+  });
+
+  res.status(201).json(reply);
 };
 
 exports.getRepliesForQuestion = async (req, res) => {
-  const { id: questionId } = req.params;
+  const access = await canAccessQuestion(req.user, req.params.id);
+  if (!access.ok) return res.status(access.status).json({ message: access.message });
 
-  if (!isObjectId(questionId))
-    return res.status(400).json({ message: "Invalid questionId" });
+  const replies = await ForumReply.find({
+    questionId: req.params.id,
+    isDeleted: false,
+  }).populate("userId", "name role");
 
-  try {
-    const replies = await ForumReply.find({
-      questionId,
-      parentId: null,   // 🔒 2-level only
-      isDeleted: false,
-    })
-      .populate("userId", "name role")
-      .sort({ createdAt: 1 });
-
-    res.json(replies);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to fetch replies" });
-  }
+  res.json(replies);
 };

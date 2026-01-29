@@ -1,4 +1,3 @@
-// models/forumReplyModel.js  (2-level only: answer -> reply)
 const { default: mongoose } = require("mongoose");
 
 const forumReplySchema = mongoose.Schema(
@@ -10,7 +9,6 @@ const forumReplySchema = mongoose.Schema(
       index: true,
     },
 
-    // 2-level ONLY: reply must be under an answer
     answerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ForumAnswer",
@@ -18,7 +16,6 @@ const forumReplySchema = mongoose.Schema(
       index: true,
     },
 
-    // keep for future threaded mode, but in 2-level it should always remain null
     parentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ForumReply",
@@ -39,7 +36,6 @@ const forumReplySchema = mongoose.Schema(
       trim: true,
     },
 
-    // Soft delete
     isDeleted: { type: Boolean, default: false, index: true },
     deletedAt: { type: Date, default: null },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "user", default: null },
@@ -48,7 +44,6 @@ const forumReplySchema = mongoose.Schema(
   { timestamps: true }
 );
 
-// Useful compound index for fast fetch in UI (question -> answer -> replies)
 forumReplySchema.index({ questionId: 1, answerId: 1, createdAt: 1 });
 
 module.exports = mongoose.model("ForumReply", forumReplySchema);

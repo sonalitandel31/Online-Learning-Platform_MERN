@@ -37,6 +37,12 @@ const CourseDiscussions = () => {
   const [loadingReports, setLoadingReports] = useState(true);
   const [actionId, setActionId] = useState(null);
 
+  const [reportStatus, setReportStatus] = useState("pending"); // pending | resolved | rejected | all
+  const [reportSearch, setReportSearch] = useState("");
+
+  // NEW: modal state for report details
+  const [selectedReport, setSelectedReport] = useState(null);
+
   // ------------------- Helpers -------------------
   const safeName = (u) => u?.name || "User";
 
@@ -145,11 +151,10 @@ const CourseDiscussions = () => {
     }
   };
 
-  // ------------------- Fetch Reports -------------------
   const fetchReports = async () => {
     try {
       setLoadingReports(true);
-      const res = await api.get("/forum/instructor/reports");
+      const res = await api.get(`/forum/instructor/reports?status=${reportStatus}`);
       setReports(res.data || []);
     } catch (err) {
       console.error("Failed to fetch instructor reports", err);
@@ -174,20 +179,48 @@ const CourseDiscussions = () => {
     }
   };
 
+  const filteredReports = useMemo(() => {
+    const s = reportSearch.trim().toLowerCase();
+    if (!s) return reports || [];
+
+    return (reports || []).filter((r) => {
+      const fields = [
+        r?.reason,
+        r?.targetType,
+        r?.status,
+        r?.reporterId?.name,
+        r?.targetUserId?.name,
+        r?.courseId?.title,
+        r?.actionBy?.name,
+        r?.actionNote,
+        r?.note,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return fields.includes(s);
+    });
+  }, [reports, reportSearch]);
+
   const groupedReports = useMemo(() => {
     const byType = {};
-    for (const r of reports) {
+    for (const r of filteredReports) {
       const k = r.targetType || "unknown";
       if (!byType[k]) byType[k] = [];
       byType[k].push(r);
     }
     return byType;
-  }, [reports]);
+  }, [filteredReports]);
+
+  useEffect(() => {
+    if (activeTab === "reports") fetchReports();
+    // eslint-disable-next-line
+  }, [reportStatus, activeTab]);
 
   // ------------------- Initial Load -------------------
   useEffect(() => {
     fetchDiscussions();
-    fetchReports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -203,11 +236,21 @@ const CourseDiscussions = () => {
     }
   };
 
+  const renderStatusBadge = (statusRaw) => {
+    const status = (statusRaw || "pending").toLowerCase();
+    return (
+      <span
+        className={`badge rounded-pill ${
+          status === "pending" ? "bg-warning text-dark" : status === "resolved" ? "bg-success" : "bg-danger"
+        }`}
+      >
+        {status}
+      </span>
+    );
+  };
+
   return (
-    <div
-      className="container-fluid py-4 px-2 px-md-4"
-      style={{ backgroundColor: "#f8f9fd", minHeight: "100vh" }}
-    >
+    <div className="container-fluid py-4 px-2 px-md-4" style={{ backgroundColor: "#f8f9fd", minHeight: "100vh" }}>
       <style>{`
         :root { --brand-purple:#7e50d3; --brand-light-purple:#f3effb; --brand-orange:#fd7e14; }
         .hub-card{ background:#fff; border-radius:18px; border:1px solid #eef0f7; box-shadow:0 10px 30px rgba(82,63,105,0.05); overflow:hidden; }
@@ -239,6 +282,75 @@ const CourseDiscussions = () => {
           gap:10px;
           margin-bottom: 4px;
         }
+
+        /* ------------------- Responsive Additions (Discussions) ------------------- */
+        .course-header, .question-item, .answer-box, .reply-box { word-break: break-word; overflow-wrap: anywhere; }
+        .tab-btn, .btn, button { touch-action: manipulation; }
+
+        @media (max-width: 768px) {
+          .hub-card { border-radius: 16px; }
+          .course-card { border-radius: 18px; }
+          .course-header { padding: 14px 14px; }
+          .question-item { padding: 14px 14px; }
+          .course-header .d-flex { flex-wrap: wrap; gap: 10px; }
+          .course-header h5 { font-size: 1rem; }
+          .tab-btn { padding: 10px 12px; border-radius: 12px; }
+          .badge-count { font-size: 0.78rem; }
+          .ms-3 { margin-left: 0.5rem !important; }
+          .btn.btn-sm { white-space: nowrap; }
+        }
+
+        @media (max-width: 576px) {
+          .container-fluid { padding-left: 10px !important; padding-right: 10px !important; }
+          .hub-card { padding: 14px !important; }
+          .course-header { padding: 12px 12px; border-radius: 16px 16px 0 0; }
+          .question-item { padding: 12px 12px; }
+          h3 { font-size: 1.1rem; }
+          .course-header h5 { font-size: 0.98rem; }
+          .course-header .d-flex.align-items-center.gap-3 { gap: 10px !important; }
+          .question-item > .d-flex.justify-content-between { flex-wrap: wrap; }
+          .ms-3 { margin-left: 0rem !important; }
+          .answer-box .d-flex.justify-content-between { flex-wrap: wrap; }
+          .question-item .mt-3.d-flex.gap-2 { flex-direction: column; }
+          .question-item .mt-3.d-flex.gap-2 .btn-post { width: 100%; justify-content: center; }
+          .form-select, .form-control { width: 100% !important; max-width: 100% !important; }
+        }
+
+        @media (max-width: 360px) {
+          .tab-btn { padding: 9px 10px; font-size: 0.9rem; }
+          .badge-count { display: inline-block; margin-top: 4px; }
+        }
+
+        /* ------------------- Reports responsiveness (NEW) ------------------- */
+        .report-table th, .report-table td { white-space: nowrap; }
+        .report-wrap { white-space: normal !important; word-break: break-word; overflow-wrap: anywhere; }
+
+        .modal-backdrop-custom {
+          position: fixed; inset: 0;
+          background: rgba(0,0,0,0.5);
+          z-index: 1040;
+        }
+        .modal-custom {
+          position: fixed; inset: 0;
+          z-index: 1050;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+        }
+        .modal-card {
+          width: min(920px, 100%);
+          max-height: 90vh;
+          overflow: auto;
+          background: #fff;
+          border-radius: 16px;
+          border: 1px solid #eef0f7;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+        }
+        @media (max-width: 576px) {
+          .modal-custom { padding: 10px; }
+          .modal-card { border-radius: 14px; }
+        }
       `}</style>
 
       {/* Header + Tabs */}
@@ -247,27 +359,17 @@ const CourseDiscussions = () => {
           <h3 className="fw-bolder mb-1" style={{ color: "#1e1e2d" }}>
             Instructor Forum
           </h3>
-          <div className="text-muted fw-medium">
-            Manage doubts, verify answers, and handle reports.
-          </div>
+          <div className="text-muted fw-medium">Manage doubts, verify answers, and handle reports.</div>
         </div>
 
         <div className="d-flex align-items-center gap-2">
-          <button
-            className={`tab-btn ${activeTab === "discussions" ? "active" : ""}`}
-            onClick={() => setActiveTab("discussions")}
-          >
+          <button className={`tab-btn ${activeTab === "discussions" ? "active" : ""}`} onClick={() => setActiveTab("discussions")}>
             <BookOpen size={18} /> Discussions
           </button>
 
-          <button
-            className={`tab-btn ${activeTab === "reports" ? "active" : ""}`}
-            onClick={() => setActiveTab("reports")}
-          >
+          <button className={`tab-btn ${activeTab === "reports" ? "active" : ""}`} onClick={() => setActiveTab("reports")}>
             <ShieldAlert size={18} /> Reports
-            {reports?.length > 0 && (
-              <span className="badge rounded-pill bg-danger ms-1">{reports.length}</span>
-            )}
+            {reports?.length > 0 && <span className="badge rounded-pill bg-danger ms-1">{reports.length}</span>}
           </button>
 
           {/* <button
@@ -320,8 +422,7 @@ const CourseDiscussions = () => {
                               <div>
                                 <h6 className="fw-bold text-dark mb-1">{q.title}</h6>
                                 <small className="text-muted d-block">
-                                  <User size={12} /> Asked by{" "}
-                                  {q.asker?.name || q.userId?.name || "User"}
+                                  <User size={12} /> Asked by {q.asker?.name || q.userId?.name || "User"}
                                 </small>
 
                                 <div className="mt-2 d-flex flex-wrap gap-2">
@@ -340,17 +441,11 @@ const CourseDiscussions = () => {
 
                               <div className="d-flex gap-2">
                                 {!q.isLocked ? (
-                                  <button
-                                    className="btn btn-sm btn-outline-warning"
-                                    onClick={() => toggleLock(q._id, true)}
-                                  >
+                                  <button className="btn btn-sm btn-outline-warning" onClick={() => toggleLock(q._id, true)}>
                                     <Lock size={14} className="me-1" /> Lock
                                   </button>
                                 ) : (
-                                  <button
-                                    className="btn btn-sm btn-outline-success"
-                                    onClick={() => toggleLock(q._id, false)}
-                                  >
+                                  <button className="btn btn-sm btn-outline-success" onClick={() => toggleLock(q._id, false)}>
                                     <Unlock size={14} className="me-1" /> Unlock
                                   </button>
                                 )}
@@ -373,8 +468,8 @@ const CourseDiscussions = () => {
                                   const boxClass = ans.isAccepted
                                     ? "answer-box accepted-box"
                                     : ans.isVerified
-                                    ? "answer-box verified-box"
-                                    : "answer-box";
+                                      ? "answer-box verified-box"
+                                      : "answer-box";
 
                                   const replyList = getRepliesForAnswer(q._id, ans._id);
 
@@ -419,12 +514,8 @@ const CourseDiscussions = () => {
                                         <div className="d-flex align-items-center gap-2 text-muted small fw-bold">
                                           <CornerDownRight size={14} />
                                           Replies ({replyList.length})
-                                          {/* If not prefetched/cached, allow manual fetch */}
                                           {!repliesByQuestionId[q._id] && (
-                                            <button
-                                              className="btn btn-sm py-0 px-2"
-                                              onClick={() => fetchRepliesForQuestion(q._id)}
-                                            >
+                                            <button className="btn btn-sm py-0 px-2" onClick={() => fetchRepliesForQuestion(q._id)}>
                                               Load
                                             </button>
                                           )}
@@ -439,9 +530,7 @@ const CourseDiscussions = () => {
                                             {replyList.map((rep) => (
                                               <div key={rep._id} className="reply-box">
                                                 <div className="reply-meta">
-                                                  <span className="small fw-bold text-primary">
-                                                    {safeName(rep.userId)}
-                                                  </span>
+                                                  <span className="small fw-bold text-primary">{safeName(rep.userId)}</span>
                                                   <span className="small text-muted">
                                                     {rep.createdAt ? new Date(rep.createdAt).toLocaleString() : ""}
                                                   </span>
@@ -459,7 +548,6 @@ const CourseDiscussions = () => {
                                 })}
                             </div>
 
-                            {/* Instructor posts answers (not replies) */}
                             {!isClosed ? (
                               <div className="mt-3 d-flex gap-2">
                                 <input
@@ -467,9 +555,7 @@ const CourseDiscussions = () => {
                                   className="form-control form-control-sm border-0 bg-light"
                                   placeholder="Reply to this student..."
                                   value={draftAnswers[q._id] || ""}
-                                  onChange={(e) =>
-                                    setDraftAnswers((prev) => ({ ...prev, [q._id]: e.target.value }))
-                                  }
+                                  onChange={(e) => setDraftAnswers((prev) => ({ ...prev, [q._id]: e.target.value }))}
                                 />
                                 <button className="btn btn-sm btn-post px-3" onClick={() => postAnswer(q._id)}>
                                   <Send size={14} />
@@ -491,15 +577,43 @@ const CourseDiscussions = () => {
           </>
         )}
 
-        {/* ------------------- TAB: REPORTS ------------------- */}
+        {/* ------------------- TAB: REPORTS (COMPACT + MODAL) ------------------- */}
         {activeTab === "reports" && (
           <>
+            <div className="d-flex flex-column flex-md-row gap-2 justify-content-between mb-3">
+              <div className="d-flex gap-2 flex-wrap">
+                <select
+                  className="form-select"
+                  style={{ maxWidth: 220 }}
+                  value={reportStatus}
+                  onChange={(e) => setReportStatus(e.target.value)}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="all">All</option>
+                </select>
+
+                <input
+                  className="form-control"
+                  style={{ maxWidth: 360 }}
+                  placeholder="Search by reason / reporter / target user / course / status / action..."
+                  value={reportSearch}
+                  onChange={(e) => setReportSearch(e.target.value)}
+                />
+              </div>
+
+              <div className="text-muted small d-flex align-items-center">
+                Showing <strong className="mx-1">{filteredReports.length}</strong> reports
+              </div>
+            </div>
+
             {loadingReports ? (
               <div className="d-flex justify-content-center py-5">
                 <div className="spinner-border text-primary" role="status" />
               </div>
-            ) : reports.length === 0 ? (
-              <div className="alert alert-success rounded-4 m-0">No pending reports for your courses.</div>
+            ) : filteredReports.length === 0 ? (
+              <div className="alert alert-success rounded-4 m-0">No reports found for selected status / search.</div>
             ) : (
               Object.entries(groupedReports).map(([type, list]) => (
                 <div key={type} className="mb-4">
@@ -507,43 +621,66 @@ const CourseDiscussions = () => {
 
                   <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
                     <div className="table-responsive">
-                      <table className="table mb-0 align-middle">
+                      <table className="table mb-0 align-middle report-table">
                         <thead className="table-light">
                           <tr>
+                            <th>Target</th>
                             <th>Reason</th>
+                            <th>Status</th>
                             <th>Reporter</th>
-                            <th>Note</th>
                             <th>Created</th>
+                            <th>Details</th>
                             <th className="text-end">Action</th>
                           </tr>
                         </thead>
+
                         <tbody>
-                          {list.map((r) => (
-                            <tr key={r._id}>
-                              <td className="fw-bold">{r.reason}</td>
-                              <td>{r.reporterId?.name || "User"}</td>
-                              <td className="text-muted">{r.note || "-"}</td>
-                              <td className="text-muted">{new Date(r.createdAt).toLocaleString()}</td>
-                              <td className="text-end">
-                                <div className="d-flex justify-content-end gap-2">
+                          {list.map((r) => {
+                            const status = (r.status || "pending").toLowerCase();
+
+                            return (
+                              <tr key={r._id}>
+                                <td className="text-capitalize">{r.targetType || "-"}</td>
+                                <td className="fw-bold text-capitalize">{r.reason || "-"}</td>
+                                <td>{renderStatusBadge(status)}</td>
+                                <td className="report-wrap">{r.reporterId?.name || "User"}</td>
+                                <td className="text-muted">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "-"}</td>
+
+                                <td>
                                   <button
-                                    className="btn btn-sm btn-success rounded-pill d-flex align-items-center gap-1"
-                                    disabled={actionId === r._id}
-                                    onClick={() => actOnReport(r._id, "resolved")}
+                                    className="btn btn-sm btn-outline-primary rounded-pill"
+                                    onClick={() => setSelectedReport(r)}
                                   >
-                                    <CheckCircle2 size={16} /> Resolve
+                                    View
                                   </button>
-                                  <button
-                                    className="btn btn-sm btn-outline-danger rounded-pill d-flex align-items-center gap-1"
-                                    disabled={actionId === r._id}
-                                    onClick={() => actOnReport(r._id, "rejected")}
-                                  >
-                                    <XCircle size={16} /> Reject
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                                </td>
+
+                                <td className="text-end">
+                                  {status === "pending" ? (
+                                    <div className="d-flex justify-content-end gap-2">
+                                      <button
+                                        className="btn btn-sm btn-success rounded-pill d-flex align-items-center gap-1"
+                                        disabled={actionId === r._id}
+                                        onClick={() => actOnReport(r._id, "resolved")}
+                                      >
+                                        <CheckCircle2 size={16} /> Resolve
+                                      </button>
+
+                                      <button
+                                        className="btn btn-sm btn-outline-danger rounded-pill d-flex align-items-center gap-1"
+                                        disabled={actionId === r._id}
+                                        onClick={() => actOnReport(r._id, "rejected")}
+                                      >
+                                        <XCircle size={16} /> Reject
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="badge bg-secondary rounded-pill">Closed</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -554,6 +691,127 @@ const CourseDiscussions = () => {
           </>
         )}
       </div>
+
+      {/* ------------------- Report Details Modal (State-based) ------------------- */}
+      {selectedReport && (
+        <>
+          <div className="modal-backdrop-custom" onClick={() => setSelectedReport(null)} />
+          <div className="modal-custom" role="dialog" aria-modal="true">
+            <div className="modal-card">
+              <div className="d-flex justify-content-between align-items-start p-3 border-bottom">
+                <div>
+                  <div className="fw-bolder" style={{ fontSize: "1.05rem" }}>
+                    Report Details
+                  </div>
+                  <div className="text-muted small">
+                    {selectedReport.targetType || "unknown"} • {selectedReport.reason || "-"} •{" "}
+                    {renderStatusBadge(selectedReport.status)}
+                  </div>
+                </div>
+
+                <button className="btn btn-sm btn-light" onClick={() => setSelectedReport(null)}>
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-3">
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <div className="text-muted small fw-bold text-uppercase">Reported User</div>
+                    <div className="fw-semibold">{selectedReport.targetUserId?.name || "-"}</div>
+                  </div>
+
+                  <div className="col-md-6">
+                    <div className="text-muted small fw-bold text-uppercase">Course</div>
+                    <div className="fw-semibold">{selectedReport.courseId?.title || "-"}</div>
+                  </div>
+
+                  <div className="col-md-6">
+                    <div className="text-muted small fw-bold text-uppercase">Reporter</div>
+                    <div className="fw-semibold">{selectedReport.reporterId?.name || "-"}</div>
+                  </div>
+
+                  <div className="col-md-6">
+                    <div className="text-muted small fw-bold text-uppercase">Created</div>
+                    <div className="fw-semibold">
+                      {selectedReport.createdAt ? new Date(selectedReport.createdAt).toLocaleString() : "-"}
+                    </div>
+                  </div>
+
+                  <div className="col-12">
+                    <div className="text-muted small fw-bold text-uppercase">Target Content</div>
+                    {selectedReport?.targetContent?.isDeleted ? (
+                      <div className="text-muted">Deleted content</div>
+                    ) : (
+                      <div className="bg-light rounded-3 p-3 border report-wrap">
+                        <div className="small fw-bold text-capitalize">
+                          {selectedReport?.targetContent?.kind || selectedReport?.targetType}
+                          {selectedReport?.targetContent?.questionTitle ? (
+                            <span className="text-muted"> • {selectedReport.targetContent.questionTitle}</span>
+                          ) : null}
+                        </div>
+                        <div className="small text-muted mt-2" style={{ whiteSpace: "pre-line" }}>
+                          {selectedReport?.targetContent?.text || "-"}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="col-12">
+                    <div className="text-muted small fw-bold text-uppercase">Reporter Note</div>
+                    <div className="report-wrap">{selectedReport.note?.trim() ? selectedReport.note : "-"}</div>
+                  </div>
+
+                  <div className="col-md-6">
+                    <div className="text-muted small fw-bold text-uppercase">Action By</div>
+                    <div className="fw-semibold">{selectedReport.actionBy?.name || "-"}</div>
+                  </div>
+
+                  <div className="col-md-6">
+                    <div className="text-muted small fw-bold text-uppercase">Action At</div>
+                    <div className="fw-semibold">
+                      {selectedReport.actionAt ? new Date(selectedReport.actionAt).toLocaleString() : "-"}
+                    </div>
+                  </div>
+
+                  <div className="col-12">
+                    <div className="text-muted small fw-bold text-uppercase">Action Note</div>
+                    <div className="report-wrap">{selectedReport.actionNote?.trim() ? selectedReport.actionNote : "-"}</div>
+                  </div>
+                </div>
+
+                <div className="d-flex justify-content-end gap-2 mt-3 pt-3 border-top">
+                  {(selectedReport.status || "pending").toLowerCase() === "pending" ? (
+                    <>
+                      <button
+                        className="btn btn-success rounded-pill d-flex align-items-center gap-1"
+                        disabled={actionId === selectedReport._id}
+                        onClick={() => actOnReport(selectedReport._id, "resolved")}
+                      >
+                        <CheckCircle2 size={16} /> Resolve
+                      </button>
+
+                      <button
+                        className="btn btn-outline-danger rounded-pill d-flex align-items-center gap-1"
+                        disabled={actionId === selectedReport._id}
+                        onClick={() => actOnReport(selectedReport._id, "rejected")}
+                      >
+                        <XCircle size={16} /> Reject
+                      </button>
+                    </>
+                  ) : (
+                    <span className="badge bg-secondary rounded-pill align-self-center">Closed</span>
+                  )}
+
+                  <button className="btn btn-light rounded-pill" onClick={() => setSelectedReport(null)}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

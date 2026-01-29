@@ -37,6 +37,12 @@ const ForumDiscussions = () => {
   const [loadingReports, setLoadingReports] = useState(true);
   const [reportActionId, setReportActionId] = useState(null);
 
+  const [reportStatus, setReportStatus] = useState("pending"); 
+  const [reportSearch, setReportSearch] = useState("");
+
+  // NEW: modal state for report details
+  const [selectedReport, setSelectedReport] = useState(null);
+
   const safeName = (u) => u?.name || "User";
 
   const getRepliesForAnswer = (questionId, answerId) => {
@@ -57,11 +63,10 @@ const ForumDiscussions = () => {
     }
   };
 
-  // ------------------- Fetch Reports -------------------
   const fetchReports = async () => {
     try {
       setLoadingReports(true);
-      const res = await api.get("/forum/admin/reports");
+      const res = await api.get(`/forum/admin/reports?status=${reportStatus}`);
       setReports(res.data || []);
     } catch (err) {
       console.error("Failed to fetch admin reports", err);
@@ -71,14 +76,17 @@ const ForumDiscussions = () => {
   };
 
   useEffect(() => {
+    if (activeTab === "reports") fetchReports();
+    // eslint-disable-next-line
+  }, [reportStatus, activeTab]);
+
+  useEffect(() => {
     fetchAllDiscussions();
-    fetchReports();
   }, []);
 
-  // ------------------- Fetch Replies (lazy, only when expanded) -------------------
   const fetchRepliesForQuestion = async (questionId) => {
     if (!questionId) return;
-    if (repliesByQuestionId[questionId]) return; // already cached
+    if (repliesByQuestionId[questionId]) return;
     if (repliesLoading[questionId]) return;
 
     try {
@@ -93,7 +101,6 @@ const ForumDiscussions = () => {
     }
   };
 
-  // ------------------- Discussion Actions -------------------
   const toggleLock = async (e, questionId, lockState) => {
     e.stopPropagation();
     try {
@@ -125,7 +132,6 @@ const ForumDiscussions = () => {
     }
   };
 
-  // ------------------- Reports Actions -------------------
   const actOnReport = async (reportId, action) => {
     const actionNote = window.prompt("Action note (optional):", "");
     try {
@@ -142,7 +148,6 @@ const ForumDiscussions = () => {
     }
   };
 
-  // ------------------- Derived UI -------------------
   const filteredQuestions = useMemo(() => {
     const s = searchTerm.toLowerCase();
     return (questions || []).filter(
@@ -160,17 +165,40 @@ const ForumDiscussions = () => {
     return { total, open, locked };
   }, [filteredQuestions]);
 
+  const filteredReports = useMemo(() => {
+    const s = reportSearch.trim().toLowerCase();
+    if (!s) return reports || [];
+
+    return (reports || []).filter((r) => {
+      const fields = [
+        r?.reason,
+        r?.targetType,
+        r?.status,
+        r?.reporterId?.name,
+        r?.targetUserId?.name,
+        r?.courseId?.title,
+        r?.actionBy?.name,
+        r?.actionNote,
+        r?.note,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return fields.includes(s);
+    });
+  }, [reports, reportSearch]);
+
   const groupedReports = useMemo(() => {
     const byType = {};
-    for (const r of reports) {
+    for (const r of filteredReports) {
       const k = r.targetType || "unknown";
       if (!byType[k]) byType[k] = [];
       byType[k].push(r);
     }
     return byType;
-  }, [reports]);
+  }, [filteredReports]);
 
-  // Expand handler (lazy fetch replies)
   const handleExpandRow = async (qid) => {
     const next = expandedId === qid ? null : qid;
     setExpandedId(next);
@@ -180,11 +208,21 @@ const ForumDiscussions = () => {
     }
   };
 
+  const renderStatusBadge = (statusRaw) => {
+    const status = (statusRaw || "pending").toLowerCase();
+    return (
+      <span
+        className={`badge rounded-pill ${
+          status === "pending" ? "bg-warning text-dark" : status === "resolved" ? "bg-success" : "bg-danger"
+        }`}
+      >
+        {status}
+      </span>
+    );
+  };
+
   return (
-    <div
-      className="container-fluid py-4 px-2 px-md-4"
-      style={{ backgroundColor: "#f8f9fd", minHeight: "100vh" }}
-    >
+    <div className="container-fluid py-4 px-2 px-md-4" style={{ backgroundColor: "#f8f9fd", minHeight: "100vh" }}>
       <style>{`
         .hub-card { background:#fff; border-radius:18px; border:1px solid #eef0f7; box-shadow:0 10px 30px rgba(82,63,105,0.05); overflow:hidden; }
         .tab-btn { border:0; background:transparent; font-weight:800; padding:12px 16px; border-radius:12px; color:#5e6278; display:inline-flex; align-items:center; gap:8px; }
@@ -218,6 +256,48 @@ const ForumDiscussions = () => {
           padding: 10px;
           margin-top: 8px;
         }
+
+        /* ---------------- Reports responsiveness ---------------- */
+        .report-table th, .report-table td { white-space: nowrap; }
+        .report-wrap { white-space: normal !important; word-break: break-word; overflow-wrap: anywhere; }
+
+        /* Make modal scroll-friendly */
+        .modal-backdrop-custom {
+          position: fixed; inset: 0;
+          background: rgba(0,0,0,0.5);
+          z-index: 1040;
+        }
+        .modal-custom {
+          position: fixed; inset: 0;
+          z-index: 1050;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+        }
+        .modal-card {
+          width: min(920px, 100%);
+          max-height: 90vh;
+          overflow: auto;
+          background: #fff;
+          border-radius: 16px;
+          border: 1px solid #eef0f7;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+        }
+
+        /* phones */
+        @media (max-width: 576px) {
+          .container-fluid { padding-left: 10px !important; padding-right: 10px !important; }
+          .hub-card { padding: 14px !important; }
+          .form-select, .form-control { width: 100% !important; max-width: 100% !important; }
+          .modal-custom { padding: 10px; }
+          .modal-card { border-radius: 14px; }
+        }
+
+        /* Add border helper for large screens only */
+        @media (min-width: 992px) {
+          .border-end-lg { border-right: 1px solid #e9ecef; }
+        }
       `}</style>
 
       {/* Header + Tabs */}
@@ -242,9 +322,7 @@ const ForumDiscussions = () => {
             onClick={() => setActiveTab("reports")}
           >
             <ShieldAlert size={18} /> Reports
-            {reports?.length > 0 && (
-              <span className="badge rounded-pill bg-danger ms-1">{reports.length}</span>
-            )}
+            {reports?.length > 0 && <span className="badge rounded-pill bg-danger ms-1">{reports.length}</span>}
           </button>
 
           {/* <button
@@ -281,11 +359,11 @@ const ForumDiscussions = () => {
                 </div>
               </div>
 
-              <div className="search-container d-flex align-items-center gap-2">
+              <div className="search-container d-flex align-items-center gap-2" style={{ width: "min(520px, 100%)" }}>
                 <Search size={18} className="text-muted" />
                 <input
                   className="border-0 shadow-none outline-none"
-                  style={{ outline: "none" }}
+                  style={{ outline: "none", width: "100%" }}
                   placeholder="Filter threads..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -325,24 +403,16 @@ const ForumDiscussions = () => {
                       ) : (
                         filteredQuestions.map((q) => (
                           <React.Fragment key={q._id}>
-                            <tr
-                              className="row-hover cursor-pointer"
-                              onClick={() => handleExpandRow(q._id)}
-                              style={{ cursor: "pointer" }}
-                            >
+                            <tr className="row-hover cursor-pointer" onClick={() => handleExpandRow(q._id)} style={{ cursor: "pointer" }}>
                               <td className="ps-4">
                                 <div className="d-flex align-items-center gap-3">
                                   <div
-                                    className={`p-2 rounded-3 ${
-                                      expandedId === q._id ? "bg-primary text-white" : "bg-light text-muted"
-                                    }`}
+                                    className={`p-2 rounded-3 ${expandedId === q._id ? "bg-primary text-white" : "bg-light text-muted"}`}
                                     style={{ transition: "0.3s" }}
                                   >
                                     <ChevronDown
                                       size={18}
-                                      style={{
-                                        transform: expandedId === q._id ? "rotate(180deg)" : "rotate(0)",
-                                      }}
+                                      style={{ transform: expandedId === q._id ? "rotate(180deg)" : "rotate(0)" }}
                                     />
                                   </div>
                                   <div>
@@ -396,17 +466,13 @@ const ForumDiscussions = () => {
                               </td>
                             </tr>
 
-                            {/* Expanded */}
                             {expandedId === q._id && (
                               <tr>
                                 <td colSpan="4" className="p-0 border-0">
                                   <div className="expanded-content-box">
                                     <div className="row g-4">
-                                      {/* Question */}
                                       <div className="col-lg-7 border-end-lg">
-                                        <h6 className="fw-bold text-uppercase small text-muted mb-3">
-                                          Question Description
-                                        </h6>
+                                        <h6 className="fw-bold text-uppercase small text-muted mb-3">Question Description</h6>
                                         <p className="text-dark lh-base mb-3" style={{ fontSize: "0.925rem" }}>
                                           {q.description || "No description provided."}
                                         </p>
@@ -417,23 +483,19 @@ const ForumDiscussions = () => {
                                           </div>
                                           <span className="small">
                                             Asked by{" "}
-                                            <strong className="text-dark">
-                                              {q.userId?.name || q.asker?.name || "Anonymous"}
-                                            </strong>
+                                            <strong className="text-dark">{q.userId?.name || q.asker?.name || "Anonymous"}</strong>
                                           </span>
                                         </div>
 
-                                        {/* Replies load status */}
                                         <div className="mt-3 small text-muted">
                                           {repliesLoading[q._id]
                                             ? "Loading replies..."
                                             : repliesByQuestionId[q._id]
-                                            ? `Replies loaded: ${(repliesByQuestionId[q._id] || []).length}`
-                                            : "Replies not loaded yet."}
+                                              ? `Replies loaded: ${(repliesByQuestionId[q._id] || []).length}`
+                                              : "Replies not loaded yet."}
                                         </div>
                                       </div>
 
-                                      {/* Answers + Replies */}
                                       <div className="col-lg-5">
                                         <h6 className="fw-bold text-uppercase small text-muted mb-3">
                                           Responses ({q.answers?.length || 0})
@@ -465,7 +527,6 @@ const ForumDiscussions = () => {
                                                   {ans.answerText}
                                                 </p>
 
-                                                {/* Replies under this answer (READ-ONLY) */}
                                                 <div className="mt-2">
                                                   <div className="d-flex align-items-center gap-2 text-muted small fw-bold">
                                                     <CornerDownRight size={14} />
@@ -480,9 +541,7 @@ const ForumDiscussions = () => {
                                                     repList.map((rep) => (
                                                       <div key={rep._id} className="reply-card">
                                                         <div className="d-flex justify-content-between align-items-center">
-                                                          <span className="small fw-bold text-primary">
-                                                            {safeName(rep.userId)}
-                                                          </span>
+                                                          <span className="small fw-bold text-primary">{safeName(rep.userId)}</span>
                                                           <span className="small text-muted">
                                                             {rep.createdAt ? new Date(rep.createdAt).toLocaleString() : ""}
                                                           </span>
@@ -502,24 +561,6 @@ const ForumDiscussions = () => {
                                             <div className="text-center py-4 text-muted small">No answers yet</div>
                                           )}
                                         </div>
-
-                                        {/*
-                                        <div className="mt-2 d-flex justify-content-end">
-                                          <button
-                                            className="btn btn-sm btn-outline-secondary"
-                                            onClick={() => {
-                                              // force refresh: clear cache and refetch
-                                              setRepliesByQuestionId((prev) => {
-                                                const next = { ...prev };
-                                                delete next[q._id];
-                                                return next;
-                                              });
-                                              fetchRepliesForQuestion(q._id);
-                                            }}
-                                          >
-                                            Reload Replies
-                                          </button>
-                                        </div> */}
                                       </div>
                                     </div>
                                   </div>
@@ -540,12 +581,40 @@ const ForumDiscussions = () => {
         {/* ------------------- TAB: REPORTS ------------------- */}
         {activeTab === "reports" && (
           <>
+            <div className="d-flex flex-column flex-md-row gap-2 justify-content-between mb-3">
+              <div className="d-flex gap-2 flex-wrap">
+                <select
+                  className="form-select"
+                  style={{ maxWidth: 220 }}
+                  value={reportStatus}
+                  onChange={(e) => setReportStatus(e.target.value)}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="all">All</option>
+                </select>
+
+                <input
+                  className="form-control"
+                  style={{ maxWidth: 360 }}
+                  placeholder="Search by reason / reporter / target user / course / status / action..."
+                  value={reportSearch}
+                  onChange={(e) => setReportSearch(e.target.value)}
+                />
+              </div>
+
+              <div className="text-muted small d-flex align-items-center">
+                Showing <strong className="mx-1">{filteredReports.length}</strong> reports
+              </div>
+            </div>
+
             {loadingReports ? (
               <div className="d-flex justify-content-center py-5">
                 <div className="spinner-border text-primary" role="status" />
               </div>
-            ) : reports.length === 0 ? (
-              <div className="alert alert-success rounded-4 m-0">No pending reports.</div>
+            ) : filteredReports.length === 0 ? (
+              <div className="alert alert-success rounded-4 m-0">No reports found for selected status / search.</div>
             ) : (
               Object.entries(groupedReports).map(([type, list]) => (
                 <div key={type} className="mb-4">
@@ -553,43 +622,73 @@ const ForumDiscussions = () => {
 
                   <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
                     <div className="table-responsive">
-                      <table className="table mb-0 align-middle">
+                      {/* Compact table (minimal fields) */}
+                      <table className="table mb-0 align-middle report-table">
                         <thead className="table-light">
                           <tr>
+                            <th>Target</th>
                             <th>Reason</th>
+                            <th>Status</th>
                             <th>Reporter</th>
-                            <th>Note</th>
                             <th>Created</th>
+                            <th>Details</th>
                             <th className="text-end">Action</th>
                           </tr>
                         </thead>
+
                         <tbody>
-                          {list.map((r) => (
-                            <tr key={r._id}>
-                              <td className="fw-bold">{r.reason}</td>
-                              <td>{r.reporterId?.name || "User"}</td>
-                              <td className="text-muted">{r.note || "-"}</td>
-                              <td className="text-muted">{new Date(r.createdAt).toLocaleString()}</td>
-                              <td className="text-end">
-                                <div className="d-flex justify-content-end gap-2">
+                          {list.map((r) => {
+                            const status = (r.status || "pending").toLowerCase();
+
+                            return (
+                              <tr key={r._id}>
+                                <td className="text-capitalize">{r.targetType || "-"}</td>
+
+                                <td className="fw-bold text-capitalize">{r.reason || "-"}</td>
+
+                                <td>{renderStatusBadge(status)}</td>
+
+                                <td className="report-wrap">{r.reporterId?.name || "User"}</td>
+
+                                <td className="text-muted">
+                                  {r.createdAt ? new Date(r.createdAt).toLocaleString() : "-"}
+                                </td>
+
+                                <td>
                                   <button
-                                    className="btn btn-sm btn-success rounded-pill d-flex align-items-center gap-1"
-                                    disabled={reportActionId === r._id}
-                                    onClick={() => actOnReport(r._id, "resolved")}
+                                    className="btn btn-sm btn-outline-primary rounded-pill"
+                                    onClick={() => setSelectedReport(r)}
                                   >
-                                    <CheckCircle2 size={16} /> Resolve
+                                    View
                                   </button>
-                                  <button
-                                    className="btn btn-sm btn-outline-danger rounded-pill d-flex align-items-center gap-1"
-                                    disabled={reportActionId === r._id}
-                                    onClick={() => actOnReport(r._id, "rejected")}
-                                  >
-                                    <XCircle size={16} /> Reject
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                                </td>
+
+                                <td className="text-end">
+                                  {status === "pending" ? (
+                                    <div className="d-flex justify-content-end gap-2">
+                                      <button
+                                        className="btn btn-sm btn-success rounded-pill d-flex align-items-center gap-1"
+                                        disabled={reportActionId === r._id}
+                                        onClick={() => actOnReport(r._id, "resolved")}
+                                      >
+                                        <CheckCircle2 size={16} /> Resolve
+                                      </button>
+
+                                      <button
+                                        className="btn btn-sm btn-outline-danger rounded-pill d-flex align-items-center gap-1"
+                                        disabled={reportActionId === r._id}
+                                        onClick={() => actOnReport(r._id, "rejected")}
+                                      >
+                                        <XCircle size={16} /> Reject
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="badge bg-secondary rounded-pill">Closed</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -600,6 +699,127 @@ const ForumDiscussions = () => {
           </>
         )}
       </div>
+
+      {/* ------------------- Report Details Modal (State-based) ------------------- */}
+      {selectedReport && (
+        <>
+          <div className="modal-backdrop-custom" onClick={() => setSelectedReport(null)} />
+          <div className="modal-custom" role="dialog" aria-modal="true">
+            <div className="modal-card">
+              <div className="d-flex justify-content-between align-items-start p-3 border-bottom">
+                <div>
+                  <div className="fw-bolder" style={{ fontSize: "1.05rem" }}>
+                    Report Details
+                  </div>
+                  <div className="text-muted small">
+                    {selectedReport.targetType || "unknown"} • {selectedReport.reason || "-"} •{" "}
+                    {renderStatusBadge(selectedReport.status)}
+                  </div>
+                </div>
+
+                <button className="btn btn-sm btn-light" onClick={() => setSelectedReport(null)}>
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-3">
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <div className="text-muted small fw-bold text-uppercase">Reported User</div>
+                    <div className="fw-semibold">{selectedReport.targetUserId?.name || "-"}</div>
+                  </div>
+
+                  <div className="col-md-6">
+                    <div className="text-muted small fw-bold text-uppercase">Course</div>
+                    <div className="fw-semibold">{selectedReport.courseId?.title || "-"}</div>
+                  </div>
+
+                  <div className="col-md-6">
+                    <div className="text-muted small fw-bold text-uppercase">Reporter</div>
+                    <div className="fw-semibold">{selectedReport.reporterId?.name || "-"}</div>
+                  </div>
+
+                  <div className="col-md-6">
+                    <div className="text-muted small fw-bold text-uppercase">Created</div>
+                    <div className="fw-semibold">
+                      {selectedReport.createdAt ? new Date(selectedReport.createdAt).toLocaleString() : "-"}
+                    </div>
+                  </div>
+
+                  <div className="col-12">
+                    <div className="text-muted small fw-bold text-uppercase">Target Content</div>
+                    {selectedReport?.targetContent?.isDeleted ? (
+                      <div className="text-muted">Deleted content</div>
+                    ) : (
+                      <div className="bg-light rounded-3 p-3 border report-wrap">
+                        <div className="small fw-bold text-capitalize">
+                          {selectedReport?.targetContent?.kind || selectedReport?.targetType}
+                          {selectedReport?.targetContent?.questionTitle ? (
+                            <span className="text-muted"> • {selectedReport.targetContent.questionTitle}</span>
+                          ) : null}
+                        </div>
+                        <div className="small text-muted mt-2" style={{ whiteSpace: "pre-line" }}>
+                          {selectedReport?.targetContent?.text || "-"}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="col-12">
+                    <div className="text-muted small fw-bold text-uppercase">Reporter Note</div>
+                    <div className="report-wrap">{selectedReport.note?.trim() ? selectedReport.note : "-"}</div>
+                  </div>
+
+                  <div className="col-md-6">
+                    <div className="text-muted small fw-bold text-uppercase">Action By</div>
+                    <div className="fw-semibold">{selectedReport.actionBy?.name || "-"}</div>
+                  </div>
+
+                  <div className="col-md-6">
+                    <div className="text-muted small fw-bold text-uppercase">Action At</div>
+                    <div className="fw-semibold">
+                      {selectedReport.actionAt ? new Date(selectedReport.actionAt).toLocaleString() : "-"}
+                    </div>
+                  </div>
+
+                  <div className="col-12">
+                    <div className="text-muted small fw-bold text-uppercase">Action Note</div>
+                    <div className="report-wrap">{selectedReport.actionNote?.trim() ? selectedReport.actionNote : "-"}</div>
+                  </div>
+                </div>
+
+                <div className="d-flex justify-content-end gap-2 mt-3 pt-3 border-top">
+                  {(selectedReport.status || "pending").toLowerCase() === "pending" ? (
+                    <>
+                      <button
+                        className="btn btn-success rounded-pill d-flex align-items-center gap-1"
+                        disabled={reportActionId === selectedReport._id}
+                        onClick={() => actOnReport(selectedReport._id, "resolved")}
+                      >
+                        <CheckCircle2 size={16} /> Resolve
+                      </button>
+
+                      <button
+                        className="btn btn-outline-danger rounded-pill d-flex align-items-center gap-1"
+                        disabled={reportActionId === selectedReport._id}
+                        onClick={() => actOnReport(selectedReport._id, "rejected")}
+                      >
+                        <XCircle size={16} /> Reject
+                      </button>
+                    </>
+                  ) : (
+                    <span className="badge bg-secondary rounded-pill align-self-center">Closed</span>
+                  )}
+
+                  <button className="btn btn-light rounded-pill" onClick={() => setSelectedReport(null)}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
