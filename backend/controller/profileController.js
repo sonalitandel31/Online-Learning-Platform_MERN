@@ -11,7 +11,9 @@ const getUserProfile = async (req, res) => {
     if (user.role === "student") {
       profile = await studentModel
         .findOne({ user: user._id })
-        .populate("enrolledCourses", "_id title");
+        .populate("enrolledCourses", "_id title")
+        .populate("xpByCourse.course", "_id title")
+        .populate("badges.course", "_id title");
 
       if (!profile) profile = await studentModel.create({ user: user._id });
     } else if (user.role === "instructor") {
@@ -39,6 +41,12 @@ const updateUserProfile = async (req, res) => {
 
     const { name, email, ...profileData } = req.body;
 
+    delete profileData.xpTotal;
+    delete profileData.xpByCourse;
+    delete profileData.streakCount;
+    delete profileData.lastStreakDate;
+    delete profileData.badges;
+
     if (name) user.name = name;
     if (email) user.email = email;
 
@@ -64,6 +72,7 @@ const updateUserProfile = async (req, res) => {
         profileData.enrolledCourses
       );
     }
+
     if (user.role === "instructor" && profileData.coursesCreated) {
       profileData.coursesCreated = sanitizeObjectIdArray(
         profileData.coursesCreated
@@ -77,15 +86,20 @@ const updateUserProfile = async (req, res) => {
         { $set: profileData },
         { new: true, upsert: true }
       );
+
       profile = await studentModel
         .findOne({ user: user._id })
-        .populate("enrolledCourses", "_id title");
+        .populate("enrolledCourses", "_id title")
+        .populate("xpByCourse.course", "_id title")
+        .populate("badges.course", "_id title");
+
     } else if (user.role === "instructor") {
       await instructorModel.findOneAndUpdate(
         { user: user._id },
         { $set: profileData },
         { new: true, upsert: true }
       );
+
       profile = await instructorModel
         .findOne({ user: user._id })
         .populate("coursesCreated", "_id title");

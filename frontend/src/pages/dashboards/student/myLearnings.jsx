@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api/api";
 
@@ -7,19 +7,58 @@ function MyLearnings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [width, setWidth] = useState(window.innerWidth);
+
+  // ✅ timer state
+  const [nowTs, setNowTs] = useState(Date.now());
+  const timerRef = useRef(null);
+
+  // ✅ gamification summary
+  const [gamiLoading, setGamiLoading] = useState(true);
+  const [gami, setGami] = useState({ xpTotal: 0, streakCount: 0, xpByCourse: [] });
+
+  // ✅ badges overall + course-wise cache
+  const [badgeLoading, setBadgeLoading] = useState(true);
+  const [badges, setBadges] = useState([]); // global badges
+  const [courseBadgesMap, setCourseBadgesMap] = useState({}); // { courseId: badges[] }
+
   const navigate = useNavigate();
 
   const loggedInUser = JSON.parse(localStorage.getItem("user"));
   const studentId = loggedInUser?._id;
   const BASE_URL = import.meta.env.VITE_BASE_URL || "http://localhost:3000";
 
-  // Handle Responsiveness
+  // ✅ responsive
   useEffect(() => {
     const handleResize = () => setWidth(window.innerWidth);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // ✅ stable ticking timer (handles strict mode safely)
+  useEffect(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    timerRef.current = setInterval(() => {
+      setNowTs(Date.now());
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  // ✅ update immediately when tab becomes visible
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        setNowTs(Date.now());
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  // ✅ fetch enrollments
   useEffect(() => {
     if (!studentId) {
       setError("User not logged in.");
@@ -30,18 +69,31 @@ function MyLearnings() {
     const fetchEnrollments = async () => {
       try {
         setLoading(true);
+
         const res = await api.get(`/enrollments`);
-        let enrollmentsArray = Array.isArray(res.data)
+        const enrollmentsArray = Array.isArray(res.data)
           ? res.data
           : res.data.enrollments || res.data.data || [];
 
-        const formattedCourses = enrollmentsArray.map((enrollment) => ({
-          ...enrollment.course,
-          progress: enrollment.progress || 0,
-          certificate: enrollment.certificate || null,
+        const formatted = enrollmentsArray.map((enrollment) => ({
+          enrollmentId: enrollment._id,
+          enrollmentStatus: enrollment.status,
+          expiryDate: enrollment.expiryDate,
+          progress: enrollment.progress ?? 0,
+          certificate: enrollment.certificate ?? null,
+
+          amount: enrollment.amount ?? 0,
+          paymentStatus: enrollment.paymentStatus,
+          paymentId: enrollment.paymentId || null,
+          orderId: enrollment.orderId || null,
+          paymentDate: enrollment.paymentDate || null,
+
+          receiptUrl: enrollment.receiptUrl || null,
+
+          ...(enrollment.course || {}),
         }));
 
-        setCourses(formattedCourses);
+        setCourses(formatted);
       } catch (err) {
         setError("Failed to load your courses.");
       } finally {
@@ -52,8 +104,82 @@ function MyLearnings() {
     fetchEnrollments();
   }, [studentId]);
 
-  const handleDownloadCertificate = async (certificateUrl) => {
+  // ✅ fetch gamification overall
+  useEffect(() => {
+    const loadGamification = async () => {
+      try {
+        setGamiLoading(true);
+        const res = await api.get("/gamification/me");
+        setGami({
+          xpTotal: res.data?.xpTotal ?? 0,
+          streakCount: res.data?.streakCount ?? 0,
+          xpByCourse: res.data?.xpByCourse ?? [],
+        });
+      } catch (e) {
+        console.error("Gamification load failed:", e);
+        setGami({ xpTotal: 0, streakCount: 0, xpByCourse: [] });
+      } finally {
+        setGamiLoading(false);
+      }
+    };
+
+    loadGamification();
+  }, []);
+
+  // ✅ fetch global badges
+  useEffect(() => {
+    const loadBadges = async () => {
+      try {
+        setBadgeLoading(true);
+        const res = await api.get("/gamification/badges");
+        setBadges(Array.isArray(res.data?.badges) ? res.data.badges : []);
+      } catch (e) {
+        console.error("Badges load failed:", e);
+        setBadges([]);
+      } finally {
+        setBadgeLoading(false);
+      }
+    };
+
+    loadBadges();
+  }, []);
+
+  // ✅ fetch course badges on-demand (cache)
+  const loadCourseBadges = async (courseId) => {
+    try {
+      if (!courseId) return;
+      if (courseBadgesMap[String(courseId)]) return; // cached
+
+      const res = await api.get(`/gamification/badges?courseId=${courseId}`);
+      const list = Array.isArray(res.data?.badges) ? res.data.badges : [];
+
+      setCourseBadgesMap((prev) => ({
+        ...prev,
+        [String(courseId)]: list,
+      }));
+    } catch (e) {
+      console.error("Course badges fetch failed:", e);
+      setCourseBadgesMap((prev) => ({
+        ...prev,
+        [String(courseId)]: [],
+      }));
+    }
+  };
+
+  // ✅ map courseId -> xp
+  const xpMap = useMemo(() => {
+    const map = {};
+    (gami.xpByCourse || []).forEach((x) => {
+      const courseId = x?.course?._id || x?.course;
+      if (courseId) map[String(courseId)] = x?.xp ?? 0;
+    });
+    return map;
+  }, [gami]);
+
+  // ✅ certificate download
+  const handleDownloadCertificate = (certificateUrl) => {
     if (!certificateUrl) return alert("No certificate available yet.");
+
     const link = document.createElement("a");
     link.href = `${BASE_URL}${certificateUrl}`;
     link.setAttribute("download", "certificate.pdf");
@@ -62,7 +188,110 @@ function MyLearnings() {
     link.remove();
   };
 
-  // Inline Style Objects (No Blue)
+  // ✅ receipt: direct download (blob)
+  const handleDownloadReceipt = async (course) => {
+    try {
+      const amount = Number(course.amount || 0);
+      if (amount <= 0) return;
+
+      const receiptEndpoint = course.receiptUrl
+        ? course.receiptUrl.startsWith("http")
+          ? course.receiptUrl
+          : `${BASE_URL}${course.receiptUrl}`
+        : null;
+
+      if (receiptEndpoint) {
+        const res = await fetch(receiptEndpoint, { credentials: "include" });
+        if (!res.ok) throw new Error("Receipt fetch failed");
+        const blob = await res.blob();
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `payment-receipt-${course.enrollmentId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        return;
+      }
+
+      const res = await api.get(`/enrollments/${course.enrollmentId}/receipt`, {
+        responseType: "blob",
+      });
+
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `payment-receipt-${course.enrollmentId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Receipt download failed.");
+    }
+  };
+
+  // ✅ badge status (priority)
+  const getBadgeInfo = (course) => {
+    const exp = course.expiryDate ? new Date(course.expiryDate) : null;
+    const status = course.enrollmentStatus;
+    const progress = course.progress ?? 0;
+    const isExpired = exp ? exp.getTime() < nowTs : false;
+
+    if (status === "cancelled") {
+      return { label: "Cancelled", bg: "#F3F4F6", color: "#374151", border: "#9CA3AF" };
+    }
+    if (isExpired) {
+      return { label: "Expired", bg: "#FEF2F2", color: "#B91C1C", border: "#FCA5A5" };
+    }
+    if (status === "completed" || progress >= 100) {
+      return { label: "Completed", bg: "#ECFDF5", color: "#047857", border: "#6EE7B7" };
+    }
+    return { label: "Active", bg: "#EFF6FF", color: "#1D4ED8", border: "#93C5FD" };
+  };
+
+  // ✅ timer helpers
+  const formatRemaining = (ms) => {
+    if (ms <= 0) return "Expired";
+    const totalSeconds = Math.floor(ms / 1000);
+
+    const days = Math.floor(totalSeconds / (3600 * 24));
+    const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+    return `${minutes}m ${seconds}s`;
+  };
+
+  const getExpiryText = (course) => {
+    if (!course.expiryDate) return null;
+
+    const exp = new Date(course.expiryDate).getTime();
+    if (Number.isNaN(exp)) return "Invalid expiry date";
+
+    const remaining = exp - nowTs;
+    if (remaining <= 0) return "Expired";
+    return `Expires in ${formatRemaining(remaining)}`;
+  };
+
+  // ✅ paid check
+  const hasPaid = useMemo(
+    () => (course) => {
+      const amount = Number(course.amount || 0);
+      if (amount <= 0) return false;
+      return course.paymentStatus === "complete" || !!(course.paymentId || course.orderId);
+    },
+    []
+  );
+
+  // styles
   const styles = {
     container: {
       maxWidth: "1200px",
@@ -75,13 +304,19 @@ function MyLearnings() {
       fontSize: "2rem",
       fontWeight: "800",
       marginBottom: "30px",
-      borderLeft: "6px solid #059669", // Emerald Green
+      borderLeft: "6px solid #059669",
       paddingLeft: "15px",
       color: "#111827",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "12px",
+      flexWrap: "wrap",
     },
     grid: {
       display: "grid",
-      gridTemplateColumns: width > 992 ? "1fr 1fr 1fr" : width > 600 ? "1fr 1fr" : "1fr",
+      gridTemplateColumns:
+        width > 992 ? "1fr 1fr 1fr" : width > 600 ? "1fr 1fr" : "1fr",
       gap: "25px",
     },
     card: {
@@ -93,6 +328,7 @@ function MyLearnings() {
       display: "flex",
       flexDirection: "column",
       transition: "transform 0.2s ease",
+      position: "relative",
     },
     thumbnail: (url) => ({
       height: "180px",
@@ -100,9 +336,38 @@ function MyLearnings() {
       backgroundImage: `url(${url})`,
       backgroundPosition: "center center",
       backgroundRepeat: "no-repeat",
-      backgroundSize: "cover",     
+      backgroundSize: "cover",
       overflow: "hidden",
       borderBottom: "1px solid #f3f4f6",
+    }),
+    badge: (info) => ({
+      position: "absolute",
+      top: "12px",
+      left: "12px",
+      background: info.bg,
+      color: info.color,
+      border: `1px solid ${info.border}`,
+      padding: "6px 10px",
+      borderRadius: "999px",
+      fontSize: "0.78rem",
+      fontWeight: "700",
+      letterSpacing: "0.2px",
+      backdropFilter: "blur(6px)",
+    }),
+    timerPill: (isDanger) => ({
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "6px",
+      padding: "6px 10px",
+      borderRadius: "999px",
+      border: `1px solid ${isDanger ? "#FCA5A5" : "#D1D5DB"}`,
+      background: isDanger ? "#FEF2F2" : "#F9FAFB",
+      color: isDanger ? "#B91C1C" : "#374151",
+      fontSize: "0.78rem",
+      fontWeight: "700",
+      width: "fit-content",
+      marginTop: "10px",
+      marginBottom: "10px",
     }),
     details: {
       padding: "20px",
@@ -120,10 +385,37 @@ function MyLearnings() {
       fontSize: "0.9rem",
       color: "#6b7280",
       lineHeight: "1.5",
-      marginBottom: "20px",
+      marginBottom: "10px",
+    },
+    xpLine: {
+      fontSize: "0.85rem",
+      fontWeight: "800",
+      color: "#111827",
+      marginTop: "6px",
+      marginBottom: "6px",
+    },
+    badgeRow: {
+      display: "flex",
+      gap: "6px",
+      flexWrap: "wrap",
+      marginTop: "6px",
+      marginBottom: "8px",
+    },
+    badgeChip: {
+      fontSize: "11px",
+      padding: "5px 10px",
+      borderRadius: "999px",
+      border: "1px solid #FDE68A",
+      background: "#FFFBEB",
+      fontWeight: 800,
+      color: "#92400E",
+      maxWidth: "100%",
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
     },
     progressWrapper: {
-      marginBottom: "20px",
+      marginBottom: "16px",
       marginTop: "auto",
     },
     progressBg: {
@@ -137,7 +429,8 @@ function MyLearnings() {
       width: `${percent}%`,
       height: "100%",
       transition: "width 0.5s ease-out",
-      backgroundColor: percent < 40 ? "#ef4444" : percent < 75 ? "#f59e0b" : "#10b981",
+      backgroundColor:
+        percent < 40 ? "#ef4444" : percent < 75 ? "#f59e0b" : "#10b981",
     }),
     progressText: {
       fontSize: "0.8rem",
@@ -146,19 +439,30 @@ function MyLearnings() {
     },
     btnContainer: {
       display: "flex",
-      flexDirection: width < 400 ? "column" : "row",
+      flexDirection: width < 420 ? "column" : "row",
       gap: "10px",
+      marginTop: "12px",
     },
     primaryBtn: {
       flex: 1,
       padding: "8px",
-      backgroundColor: "#232833", // Deep Obsidian
+      backgroundColor: "#232833",
       color: "white",
       border: "none",
       borderRadius: "8px",
       fontWeight: "600",
       cursor: "pointer",
       textAlign: "center",
+    },
+    receiptBtn: {
+      flex: 1,
+      padding: "8px",
+      backgroundColor: "transparent",
+      color: "#111827",
+      border: "2px solid #111827",
+      borderRadius: "8px",
+      fontWeight: "600",
+      cursor: "pointer",
     },
     certBtn: {
       flex: 1,
@@ -172,34 +476,137 @@ function MyLearnings() {
     },
   };
 
-  if (loading) return (
-    <div className="d-flex justify-content-center align-items-center vh-100">
-      <div className="spinner-border text-warning"></div>
-      <h5 className="text-secondary fw-light">Loading your learnings...</h5>
-    </div>
-  );
+  if (loading)
+    return (
+      <div className="d-flex justify-content-center align-items-center vh-100">
+        <div className="spinner-border text-warning"></div>
+        <h5 className="text-secondary fw-light ms-2">Loading your learnings...</h5>
+      </div>
+    );
 
-  if (error) return <p style={{ textAlign: "center", color: "#ef4444", marginTop: "100px" }}>{error}</p>;
+  if (error)
+    return (
+      <p style={{ textAlign: "center", color: "#ef4444", marginTop: "100px" }}>
+        {error}
+      </p>
+    );
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.title}>My Learnings</h2>
+      <h2 style={styles.title}>
+        <span>My Learnings</span>
+
+        <span style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <span
+            style={{
+              fontSize: "0.9rem",
+              padding: "6px 10px",
+              borderRadius: "999px",
+              border: "1px solid #e5e7eb",
+              background: "#fff",
+              fontWeight: 800,
+            }}
+          >
+            ⭐ Total XP: {gamiLoading ? "..." : gami.xpTotal}
+          </span>
+
+          <span
+            style={{
+              fontSize: "0.9rem",
+              padding: "6px 10px",
+              borderRadius: "999px",
+              border: "1px solid #e5e7eb",
+              background: "#fff",
+              fontWeight: 800,
+            }}
+          >
+            🔥 Streak: {gamiLoading ? "..." : `${gami.streakCount} days`}
+          </span>
+
+          <span
+            style={{
+              fontSize: "0.9rem",
+              padding: "6px 10px",
+              borderRadius: "999px",
+              border: "1px solid #e5e7eb",
+              background: "#fff",
+              fontWeight: 800,
+            }}
+            title="Badges earned across all courses"
+          >
+            🏅 Badges: {badgeLoading ? "..." : badges.length}
+          </span>
+        </span>
+      </h2>
+
       <div style={styles.grid}>
         {courses.map((course, idx) => {
           const progressPercent = course.progress ?? 0;
+
           const thumb = course.thumbnail
-            ? (course.thumbnail.startsWith("http") ? course.thumbnail : `${BASE_URL}${course.thumbnail}`)
+            ? course.thumbnail.startsWith("http")
+              ? course.thumbnail
+              : `${BASE_URL}${course.thumbnail}`
             : "/placeholder.png";
 
+          const badge = getBadgeInfo(course);
+          const isExpired = badge.label === "Expired";
+          const isCancelled = badge.label === "Cancelled";
+          const primaryLabel = isExpired || isCancelled ? "View Details" : "Continue";
+
+          const expiryText = getExpiryText(course);
+          const expDanger =
+            expiryText &&
+            expiryText !== "Expired" &&
+            course.expiryDate &&
+            new Date(course.expiryDate).getTime() - nowTs <= 24 * 60 * 60 * 1000;
+
+          const courseXp = xpMap[String(course._id)] ?? 0;
+          const courseBadges = courseBadgesMap[String(course._id)];
+
           return (
-            <div key={course._id || idx} style={styles.card}>
+            <div
+              key={course._id || idx}
+              style={styles.card}
+              onMouseEnter={() => loadCourseBadges(course._id)}
+            >
+              <span style={styles.badge(badge)}>{badge.label}</span>
+
               <div style={styles.thumbnail(thumb)} />
 
               <div style={styles.details}>
                 <h3 style={styles.courseTitle}>{course.title || "Untitled Course"}</h3>
+
                 <p style={styles.description}>
                   {course.description?.substring(0, 100) || "No description available."}...
                 </p>
+
+                <div style={styles.xpLine}>
+                  ⭐ XP Earned: {gamiLoading ? "..." : courseXp}
+                </div>
+
+                {Array.isArray(courseBadges) && courseBadges.length > 0 && (
+                  <div style={styles.badgeRow}>
+                    {courseBadges.slice(0, 3).map((b, i) => (
+                      <span
+                        key={`${b.key}-${i}`}
+                        style={styles.badgeChip}
+                        title={b.description || b.title}
+                      >
+                        {b.icon || "🏅"} {b.title || b.key}
+                      </span>
+                    ))}
+                    {courseBadges.length > 3 && (
+                      <span style={{ ...styles.badgeChip, borderColor: "#E5E7EB", background: "#F9FAFB", color: "#111827" }}>
+                        +{courseBadges.length - 3} more
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {course.expiryDate && (
+                  <div style={styles.timerPill(expDanger || isExpired)}>{expiryText}</div>
+                )}
 
                 <div style={styles.progressWrapper}>
                   <div style={styles.progressBg}>
@@ -213,17 +620,28 @@ function MyLearnings() {
                     onClick={() => navigate(`/courses/${course._id}`)}
                     style={styles.primaryBtn}
                   >
-                    Continue
+                    {primaryLabel}
                   </button>
 
-                  {progressPercent === 100 && course.certificate && (
+                  {hasPaid(course) && (
                     <button
-                      onClick={() => handleDownloadCertificate(course.certificate)}
-                      style={styles.certBtn}
+                      onClick={() => handleDownloadReceipt(course)}
+                      style={styles.receiptBtn}
+                      title="Download payment receipt"
                     >
-                      Certificate
+                      Receipt
                     </button>
                   )}
+
+                  {(progressPercent >= 100 || course.enrollmentStatus === "completed") &&
+                    course.certificate && (
+                      <button
+                        onClick={() => handleDownloadCertificate(course.certificate)}
+                        style={styles.certBtn}
+                      >
+                        Certificate
+                      </button>
+                    )}
                 </div>
               </div>
             </div>

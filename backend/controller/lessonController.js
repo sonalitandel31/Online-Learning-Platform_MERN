@@ -7,6 +7,9 @@ const path = require("path");
 const { generateCertificate, sendCompletionEmail } = require("../utils/sendCompletionEmail");
 const { v4: uuidv4 } = require("uuid");
 
+const studentModel = require("../models/studentModel");
+const { awardXpOnce } = require("../services/gamificationService");
+
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 
 exports.addLesson = async (req, res) => {
@@ -173,7 +176,8 @@ exports.saveLessonProgress = async (req, res) => {
   }
 };
 
-exports.markLessonAsWatched = async (req, res) => {
+/* exports.markLessonAsWatched = async (req, res) => {
+
   try {
     const { lessonId } = req.params;
     const { studentId, courseId } = req.body;
@@ -252,5 +256,121 @@ exports.markLessonAsWatched = async (req, res) => {
   } catch (error) {
     console.error("Mark Lesson Watched Error:", error);
     res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+}; */
+
+exports.markLessonAsWatched = async (req, res) => {
+  try {
+    const { lessonId } = req.params;
+    const { studentId, courseId } = req.body;
+
+    if (!studentId || !courseId) {
+      return res.status(400).json({ message: "Student ID and Course ID required" });
+    }
+
+    // enrollment.student === USER ID
+    const enrollment = await enrollmentModel
+      .findOne({ student: studentId, course: courseId })
+      .populate("student") // user
+      .populate("course");
+
+    if (!enrollment) {
+      return res.status(404).json({ message: "Enrollment not found" });
+    }
+
+    // ✅ GET STUDENT DOCUMENT (THIS IS THE LINE YOU ASKED ABOUT)
+    const studentDoc = await studentModel.findOne({
+      user: enrollment.student._id || enrollment.student,
+    });
+
+    if (!studentDoc) {
+      return res.status(404).json({ message: "Student profile not found" });
+    }
+
+    // ✅ check if lesson already completed
+    const alreadyCompleted = enrollment.completedLessons.some(
+      (id) => id.toString() === lessonId
+    );
+
+    if (!alreadyCompleted) {
+      enrollment.completedLessons.push(lessonId);
+    }
+
+    enrollment.lastLessonId = lessonId;
+
+    // progress calculation
+    const totalLessons = await lessonModel.countDocuments({ course: courseId });
+    const totalExams = await examModel.countDocuments({ course: courseId });
+
+    const completedLessonsCount = enrollment.completedLessons.length;
+    const completedExamsCount = enrollment.examProgress.filter(e => e.isCompleted).length;
+
+    const totalItems = totalLessons + totalExams;
+    const totalCompleted = completedLessonsCount + completedExamsCount;
+
+    enrollment.progress = totalItems === 0
+      ? 0
+      : Math.min(100, Math.round((totalCompleted / totalItems) * 100));
+
+    const wasCourseCompleted = enrollment.status === "completed";
+    const isCourseCompletedNow = enrollment.progress >= 100 && !wasCourseCompleted;
+
+    // 🎮 XP AWARDS
+    const xpAwards = [];
+
+    // ✅ Lesson XP (only once)
+    if (!alreadyCompleted) {
+      const xpRes = await awardXpOnce({
+        studentId: studentDoc._id,
+        courseId,
+        event: "LESSON_COMPLETE",
+        refId: lessonId,
+        xp: 10,
+      });
+      if (xpRes.awarded) xpAwards.push(xpRes);
+    }
+
+    // ✅ Course completion XP (only once)
+    if (isCourseCompletedNow) {
+      const xpRes = await awardXpOnce({
+        studentId: studentDoc._id,
+        courseId,
+        event: "COURSE_COMPLETE",
+        refId: courseId,
+        xp: 100,
+      });
+      if (xpRes.awarded) xpAwards.push(xpRes);
+
+      enrollment.status = "completed";
+
+      // certificate
+      const course = await courseModel
+        .findById(courseId)
+        .populate("instructor", "name");
+
+      const certId = uuidv4();
+      const certPath = await generateCertificate(
+        enrollment.student.name,
+        course.title,
+        course.instructor?.name || "Instructor",
+        certId
+      );
+
+      enrollment.certificate = `/uploads/certificates/${certId}.pdf`;
+      await sendCompletionEmail(enrollment.student, course, certPath);
+    }
+
+    await enrollment.save();
+
+    return res.json({
+      message: "Lesson marked as watched",
+      progress: enrollment.progress,
+      status: enrollment.status,
+      xpAwards,
+    });
+
+  } catch (err) {
+    console.error("markLessonAsWatched error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

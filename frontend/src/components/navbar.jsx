@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { FaUserCircle, FaSearch, FaBars, FaTimes } from "react-icons/fa";
 import "../styles/home.css";
@@ -9,6 +9,16 @@ const Navbar = ({ user, setUser }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const BASE_URL = import.meta.env.VITE_BASE_URL || "";
+
+  // role from localStorage (e.g. "admin" | "instructor" | "student")
+  const role = useMemo(() => (localStorage.getItem("role") || "").toLowerCase(), [user]);
+
+  // dashboard route by role
+  const dashboardPath = useMemo(() => {
+    if (role === "admin") return "/admin-dashboard";
+    if (role === "instructor") return "/instructor-dashboard";
+    return null;
+  }, [role]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -29,7 +39,14 @@ const Navbar = ({ user, setUser }) => {
   const handleSearch = (e) => {
     e.preventDefault();
     closeMenu();
-    navigate(`/courses${searchQuery.trim() ? `?search=${encodeURIComponent(searchQuery)}` : ""}`);
+    navigate(
+      `/courses${searchQuery.trim() ? `?search=${encodeURIComponent(searchQuery)}` : ""}`
+    );
+  };
+
+  // ✅ Mobile: profile click pe collapse close kar do (dropdown conflict reduce)
+  const handleProfileClick = () => {
+    if (isOpen) setIsOpen(false);
   };
 
   return (
@@ -111,6 +128,7 @@ const Navbar = ({ user, setUser }) => {
             border: 1px solid #eee !important;
             box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
             animation: fadeIn 0.2s ease-out;
+            z-index: 2000 !important; /* ✅ overlay conflict fix */
           }
 
           @keyframes fadeIn {
@@ -138,21 +156,21 @@ const Navbar = ({ user, setUser }) => {
           body { padding-top: 80px; }
           
           .dropdown-item:active {
-              background-color: #f3effb !important; 
-              color: #c635dc !important;
+            background-color: #f3effb !important; 
+            color: #c635dc !important;
           }
 
           .dropdown-item:hover {
-              background-color: #f6eff6; 
+            background-color: #f6eff6; 
           }
 
           .dropdown-item.text-danger:active {
-              background-color: #f3effb !important;
-              color: #dc4935 !important;
+            background-color: #f3effb !important;
+            color: #dc4935 !important;
           }
 
           .dropdown-item.text-danger:hover {
-              background-color: #fff4e6; 
+            background-color: #fff4e6; 
           }
         `}
       </style>
@@ -186,10 +204,14 @@ const Navbar = ({ user, setUser }) => {
 
             <ul className="navbar-nav ms-auto align-items-lg-center">
               <li className="nav-item">
-                <Link className="nav-link text-white" to="/" onClick={closeMenu}>Home</Link>
+                <Link className="nav-link text-white" to="/" onClick={closeMenu}>
+                  Home
+                </Link>
               </li>
               <li className="nav-item">
-                <Link className="nav-link text-white" to="/courses" onClick={closeMenu}>Courses</Link>
+                <Link className="nav-link text-white" to="/courses" onClick={closeMenu}>
+                  Courses
+                </Link>
               </li>
 
               {!user ? (
@@ -205,40 +227,93 @@ const Navbar = ({ user, setUser }) => {
                 </li>
               ) : (
                 <li className="nav-item dropdown ms-lg-3">
-                  <Link
-                    className="nav-link dropdown-toggle d-flex align-items-center"
-                    to="#"
+                  {/* ✅ IMPORTANT FIX: Link -> button (Bootstrap dropdown reliable) */}
+                  <button
+                    type="button"
+                    className="nav-link dropdown-toggle d-flex align-items-center bg-transparent border-0 p-0"
                     id="profileDropdown"
-                    role="button"
                     data-bs-toggle="dropdown"
                     aria-expanded="false"
+                    onClick={handleProfileClick}
+                    style={{ cursor: "pointer" }}
                   >
                     {user.profilePic ? (
                       <img
-                        src={user.profilePic.startsWith("http") ? user.profilePic : `${BASE_URL}${user.profilePic}`}
+                        src={
+                          user.profilePic.startsWith("http")
+                            ? user.profilePic
+                            : `${BASE_URL}${user.profilePic}`
+                        }
                         alt="Profile"
                         style={{
                           width: 38,
                           height: 38,
                           borderRadius: "50%",
                           border: "2px solid rgba(255,255,255,0.8)",
-                          objectFit: "cover"
+                          objectFit: "cover",
                         }}
                       />
                     ) : (
                       <FaUserCircle size={32} className="text-white" />
                     )}
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-2 border-0 shadow-lg" aria-labelledby="profileDropdown">
-                    <div className="px-3 py-2 mb-1 d-lg-none" style={{ borderBottom: '1px solid #eee' }}>
+                  </button>
+
+                  <ul
+                    className="dropdown-menu dropdown-menu-end p-2 border-0 shadow-lg"
+                    aria-labelledby="profileDropdown"
+                  >
+                    <div
+                      className="px-3 py-2 mb-1 d-lg-none"
+                      style={{ borderBottom: "1px solid #eee" }}
+                    >
                       <p className="mb-0 fw-bold text-dark">{user.name}</p>
                       <small className="text-muted">{user.email}</small>
                     </div>
-                    <li><Link className="dropdown-item rounded-2 py-2" to="/profile" onClick={closeMenu}>My Profile</Link></li>
-                    <li><Link className="dropdown-item rounded-2 py-2" to="/learning" onClick={closeMenu}>My Learnings</Link></li>
-                    <li><hr className="dropdown-divider" /></li>
+
+                    {/* ✅ Dashboard link only for admin/instructor */}
+                    {dashboardPath && (
+                      <>
+                        <li>
+                          <Link
+                            className="dropdown-item rounded-2 py-2 fw-semibold"
+                            to={dashboardPath}
+                            onClick={closeMenu}
+                          >
+                            Dashboard
+                          </Link>
+                        </li>
+                        <li>
+                          <hr className="dropdown-divider" />
+                        </li>
+                      </>
+                    )}
+
                     <li>
-                      <button className="dropdown-item text-danger rounded-2 py-2 fw-500" onClick={handleLogout}>
+                      <Link
+                        className="dropdown-item rounded-2 py-2"
+                        to="/profile"
+                        onClick={closeMenu}
+                      >
+                        My Profile
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
+                        className="dropdown-item rounded-2 py-2"
+                        to="/learning"
+                        onClick={closeMenu}
+                      >
+                        My Learnings
+                      </Link>
+                    </li>
+                    <li>
+                      <hr className="dropdown-divider" />
+                    </li>
+                    <li>
+                      <button
+                        className="dropdown-item text-danger rounded-2 py-2 fw-500"
+                        onClick={handleLogout}
+                      >
                         Logout
                       </button>
                     </li>

@@ -1,9 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../../api/api";
-import { 
-  ChevronLeft, Menu, X, Timer, Award, 
-  RotateCcw, CheckCircle, AlertCircle, Bookmark, PlayCircle
+import {
+  ChevronLeft,
+  Menu,
+  X,
+  Timer,
+  Award,
+  CheckCircle,
+  Bookmark,
+  PlayCircle,
 } from "lucide-react";
 
 export default function Exams() {
@@ -13,14 +19,18 @@ export default function Exams() {
   const [course, setCourse] = useState(null);
   const [exams, setExams] = useState([]);
   const [exam, setExam] = useState(null);
+
   const [answers, setAnswers] = useState({});
   const [timeLeft, setTimeLeft] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+
   const [result, setResult] = useState(null);
   const [attemptNumber, setAttemptNumber] = useState(0);
   const [examStatuses, setExamStatuses] = useState({});
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const [toast, setToast] = useState("");
 
   const loggedInUser = JSON.parse(localStorage.getItem("user"));
   const studentId = loggedInUser?._id;
@@ -28,24 +38,62 @@ export default function Exams() {
   const primaryPurple = "#6f42c1";
   const accentOrange = "#fcb269";
 
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
+  };
+
+  const loadResult = async (eid) => {
+    try {
+      const attemptRes = await api.get(`/exams/${eid}/result/${studentId}`);
+      if (attemptRes.data) {
+        setAttemptNumber(attemptRes.data.attemptNumber || 0);
+        setResult(attemptRes.data);
+
+        if (attemptRes.data?.isCompleted) {
+          setExamStatuses((prev) => ({ ...prev, [eid]: "completed" }));
+        } else {
+          setExamStatuses((prev) => ({ ...prev, [eid]: "pending" }));
+        }
+      }
+    } catch (err) {
+      if (err.response?.status === 404) {
+        setAttemptNumber(0);
+        setResult(null);
+        setExamStatuses((prev) => ({ ...prev, [eid]: "pending" }));
+      } else {
+        console.error("loadResult error:", err);
+      }
+    }
+  };
+
   useEffect(() => {
     const fetchExams = async () => {
       try {
         setLoading(true);
+
+        if (!studentId) {
+          showToast("User not logged in.");
+          setLoading(false);
+          return;
+        }
+
         const [courseRes, examsRes] = await Promise.all([
           api.get(`/courses/${courseId}`),
           api.get(`/exams/course/${courseId}`),
         ]);
 
         setCourse(courseRes.data);
-        setExams(examsRes.data);
+        setExams(examsRes.data || []);
 
+        // ✅ load status for each exam (completed/pending)
         const progressStatuses = {};
         await Promise.all(
-          examsRes.data.map(async (ex) => {
+          (examsRes.data || []).map(async (ex) => {
             try {
               const res = await api.get(`/exams/${ex._id}/result/${studentId}`);
               if (res.data?.isCompleted) progressStatuses[ex._id] = "completed";
+              else progressStatuses[ex._id] = "pending";
             } catch {
               progressStatuses[ex._id] = "pending";
             }
@@ -56,25 +104,27 @@ export default function Exams() {
         if (examId) {
           const singleExamRes = await api.get(`/exams/${examId}`);
           setExam(singleExamRes.data);
-          setTimeLeft(singleExamRes.data.duration * 60);
+          setAnswers({});
+          setSubmitted(false);
+          setTimeLeft((singleExamRes.data?.duration || 0) * 60);
 
-          try {
-            const attemptRes = await api.get(`/exams/${examId}/result/${studentId}`);
-            if (attemptRes.data) {
-              setAttemptNumber(attemptRes.data.attemptNumber || 0);
-              setResult(attemptRes.data);
-            }
-          } catch (err) {
-            if (err.response?.status === 404) setAttemptNumber(0);
-          }
+          // ✅ load result for this exam
+          await loadResult(examId);
+        } else {
+          setExam(null);
+          setResult(null);
+          setAttemptNumber(0);
         }
       } catch (err) {
         console.error(err);
+        showToast("Failed to load exam data.");
       } finally {
         setLoading(false);
       }
     };
+
     fetchExams();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, examId, studentId]);
 
   useEffect(() => {
@@ -83,13 +133,15 @@ export default function Exams() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          handleSubmit();
+          handleSubmit(true); // auto-submit
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
+
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft, submitted]);
 
   const handleAnswerChange = (questionId, option) => {
@@ -102,38 +154,70 @@ export default function Exams() {
     return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
-  const handleSubmit = async () => {
-    if (submitted || attemptNumber >= 3) return;
+  const canAttempt = useMemo(() => {
+    const passed = result?.isCompleted;
+    if (passed) return false;
+    if (attemptNumber >= 3) return false;
+    return true;
+  }, [result, attemptNumber]);
+
+  const handleSubmit = async (isAuto = false) => {
+    if (!examId || !exam) return;
+    if (submitted) return;
+    if (!canAttempt) {
+      showToast("You can't submit: completed or attempts limit reached.");
+      return;
+    }
+
     setSubmitted(true);
+
     try {
       let correct = 0;
-      exam.questions.forEach((q) => {
+      (exam.questions || []).forEach((q) => {
         if (answers[q._id] === q.correctAnswer) correct++;
       });
-      const score = Math.round((correct / exam.questions.length) * 100);
-      const res = await api.post(`/exams/submit`, { studentId, courseId, examId, score });
-      setResult(res.data);
-      setAttemptNumber(res.data.attemptNumber || attemptNumber + 1);
-      if (res.data.isCompleted) setExamStatuses(prev => ({ ...prev, [examId]: "completed" }));
+
+      const score = exam.questions?.length
+        ? Math.round((correct / exam.questions.length) * 100)
+        : 0;
+
+      // ✅ backend returns { message, progress, xpAwards }
+      const res = await api.post(`/exams/submit`, {
+        studentId,
+        courseId,
+        examId,
+        score,
+        answers, // optional: if you want to store answers in backend
+      });
+
+      const earnedXp = (res.data?.xpAwards || []).reduce(
+        (sum, x) => sum + Number(x?.xp || 0),
+        0
+      );
+      if (earnedXp > 0) showToast(`+${earnedXp} XP earned ✅`);
+      else if (isAuto) showToast("Time up! Exam submitted.");
+
+      // ✅ NOW fetch latest result (attemptNumber / bestScore / isCompleted)
+      await loadResult(examId);
     } catch (err) {
+      console.error(err);
       setSubmitted(false);
-      alert("Submission failed.");
+      showToast("Submission failed.");
     }
   };
 
-  if (loading) return (
-    <div className="d-flex justify-content-center align-items-center vh-100">
-      <div className="spinner-border text-warning"></div>
-      <h5 className="ms-3 text-secondary fw-light">Loading exam...</h5>  
-    </div>
-  );
+  if (loading)
+    return (
+      <div className="d-flex justify-content-center align-items-center vh-100">
+        <div className="spinner-border text-warning"></div>
+        <h5 className="ms-3 text-secondary fw-light">Loading exam...</h5>
+      </div>
+    );
 
   return (
     <div className="exam-page-root">
       <style>{`
         .exam-page-root { display: flex; height: 100vh; background: #fff; overflow: hidden; position: relative; }
-        
-        /* Sidebar Responsive Fix */
         .exam-sidebar { 
           width: 350px; background: #fdfdfd; border-right: 1px solid #eee; 
           display: flex; flex-direction: column; transition: all 0.3s ease-in-out;
@@ -153,7 +237,6 @@ export default function Exams() {
           border-left: 5px solid ${primaryPurple}; 
         }
 
-        /* Overlay */
         .overlay {
           position: fixed; inset: 0; background: rgba(0,0,0,0.5); 
           z-index: 1500; display: none;
@@ -183,46 +266,62 @@ export default function Exams() {
         .btn-purple { background: ${primaryPurple}; color: white; border: none; }
         .btn-purple:hover { background: #5a32a3; color: white; }
 
-        /* Mobile View Styles */
         @media (max-width: 991px) {
           .exam-sidebar { 
             position: fixed; left: 0; top: 0; 
-            transform: ${sidebarOpen ? 'translateX(0)' : 'translateX(-100%)'};
-            box-shadow: ${sidebarOpen ? '10px 0 30px rgba(0,0,0,0.1)' : 'none'};
+            transform: ${sidebarOpen ? "translateX(0)" : "translateX(-100%)"};
+            box-shadow: ${sidebarOpen ? "10px 0 30px rgba(0,0,0,0.1)" : "none"};
           }
-          .overlay { display: ${sidebarOpen ? 'block' : 'none'}; }
+          .overlay { display: ${sidebarOpen ? "block" : "none"}; }
           .sticky-top-bar { padding: 10px 15px; }
           .question-container { margin-top: 10px; }
           .q-card { padding: 15px; }
         }
+
+        .toast {
+          position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+          background: ${primaryPurple}; color: #fff;
+          padding: 10px 18px; border-radius: 999px; z-index: 9999;
+          box-shadow: 0 10px 25px rgba(111, 66, 193, 0.25);
+          font-weight: 700;
+        }
       `}</style>
 
-      {/* Click overlay to close sidebar on mobile */}
+      {toast && <div className="toast">{toast}</div>}
+
       <div className="overlay" onClick={() => setSidebarOpen(false)}></div>
 
-      {/* Sidebar */}
       <aside className="exam-sidebar shadow-sm">
         <div className="sidebar-header d-flex justify-content-between align-items-center">
           <div>
-            <button className="btn btn-link p-0 text-muted text-decoration-none small mb-2" onClick={() => navigate(`/courses/${courseId}`)}>
-                <ChevronLeft size={16}/> Back to Course
+            <button
+              className="btn btn-link p-0 text-muted text-decoration-none small mb-2"
+              onClick={() => navigate(`/courses/${courseId}`)}
+            >
+              <ChevronLeft size={16} /> Back to Course
             </button>
             <h5 className="fw-bold d-flex align-items-center gap-2 mb-0">
-              <Bookmark size={20} className="text-purple"/> Assessments
+              <Bookmark size={20} className="text-purple" /> Assessments
             </h5>
           </div>
           <button className="btn d-lg-none p-0" onClick={() => setSidebarOpen(false)}>
             <X size={24} className="text-muted" />
           </button>
         </div>
+
         <div className="exam-scroll-area">
           {exams.map((ex, i) => (
-            <div 
-              key={ex._id} 
-              className={`exam-nav-item ${ex._id === examId ? 'active' : ''}`}
-              onClick={() => { navigate(`/course/${courseId}/exam/${ex._id}`); setSidebarOpen(false); }}
+            <div
+              key={ex._id}
+              className={`exam-nav-item ${ex._id === examId ? "active" : ""}`}
+              onClick={() => {
+                navigate(`/course/${courseId}/exam/${ex._id}`);
+                setSidebarOpen(false);
+              }}
             >
-              <div className="fw-bold" style={{ opacity: 0.4 }}>{i + 1 < 10 ? `0${i + 1}` : i + 1}</div>
+              <div className="fw-bold" style={{ opacity: 0.4 }}>
+                {i + 1 < 10 ? `0${i + 1}` : i + 1}
+              </div>
               <div className="flex-grow-1 text-truncate small">{ex.title}</div>
               {examStatuses[ex._id] === "completed" && <CheckCircle size={18} className="text-success" />}
             </div>
@@ -230,21 +329,29 @@ export default function Exams() {
         </div>
       </aside>
 
-      {/* Content Area */}
       <main className="exam-main-content">
         <div className="sticky-top-bar">
           <div className="d-flex align-items-center gap-2">
             <button className="btn btn-light d-lg-none p-2" onClick={() => setSidebarOpen(true)}>
-              <Menu size={20}/>
+              <Menu size={20} />
             </button>
+
             {exam && (
               <div className="d-flex align-items-center gap-2 bg-light px-3 py-1 rounded-pill">
-                <Timer size={16} className={timeLeft < 60 ? "text-danger" : "text-purple"}/>
-                <span className={`fw-bold small ${timeLeft < 60 ? 'text-danger' : 'text-purple'}`}>{formatTime(timeLeft)}</span>
+                <Timer size={16} className={timeLeft < 60 ? "text-danger" : "text-purple"} />
+                <span className={`fw-bold small ${timeLeft < 60 ? "text-danger" : "text-purple"}`}>
+                  {formatTime(timeLeft)}
+                </span>
               </div>
             )}
           </div>
-          <button className="btn btn-purple rounded-pill px-3 py-1 btn-sm fw-bold shadow-sm" onClick={handleSubmit} disabled={submitted}>
+
+          <button
+            className="btn btn-purple rounded-pill px-3 py-1 btn-sm fw-bold shadow-sm"
+            onClick={() => handleSubmit(false)}
+            disabled={submitted || !canAttempt}
+            title={!canAttempt ? "Completed or attempts limit reached" : ""}
+          >
             Submit Exam
           </button>
         </div>
@@ -252,31 +359,37 @@ export default function Exams() {
         <div className="question-container">
           {!examId || !exam ? (
             <div className="text-center py-5">
-              <PlayCircle size={60} className="text-purple opacity-25 mb-4"/>
+              <PlayCircle size={60} className="text-purple opacity-25 mb-4" />
               <h2 className="fw-bold">Ready to Start?</h2>
               <p className="text-muted px-3">Select an assessment module from the list to begin.</p>
             </div>
-          ) : (attemptNumber >= 3 || result?.isCompleted) && !submitted ? (
+          ) : (!canAttempt && !submitted) ? (
             <div className="card border-0 shadow-sm p-4 p-md-5 text-center rounded-4">
-              <Award size={60} className="text-purple mb-4 mx-auto"/>
+              <Award size={60} className="text-purple mb-4 mx-auto" />
               <h2 className="fw-bold h4">Assessment View</h2>
-              <p className="text-muted small mb-4">You have already completed this exam or reached the attempt limit.</p>
-              
+              <p className="text-muted small mb-4">
+                You have already completed this exam or reached the attempt limit.
+              </p>
+
               <div className="row g-3 justify-content-center mb-4">
                 <div className="col-6 col-sm-auto">
-                   <div className="p-2 p-md-3 border rounded-3">
-                     <small className="d-block text-muted" style={{ fontSize: '11px' }}>Your Best Score</small>
-                     <span className="h5 fw-bold text-purple">{result?.bestScore}%</span>
-                   </div>
+                  <div className="p-2 p-md-3 border rounded-3">
+                    <small className="d-block text-muted" style={{ fontSize: "11px" }}>
+                      Your Best Score
+                    </small>
+                    <span className="h5 fw-bold text-purple">{result?.bestScore ?? 0}%</span>
+                  </div>
                 </div>
                 <div className="col-6 col-sm-auto">
-                   <div className="p-2 p-md-3 border rounded-3">
-                     <small className="d-block text-muted" style={{ fontSize: '11px' }}>Attempts Used</small>
-                     <span className="h5 fw-bold text-orange">{attemptNumber}/3</span>
-                   </div>
+                  <div className="p-2 p-md-3 border rounded-3">
+                    <small className="d-block text-muted" style={{ fontSize: "11px" }}>
+                      Attempts Used
+                    </small>
+                    <span className="h5 fw-bold text-orange">{attemptNumber}/3</span>
+                  </div>
                 </div>
               </div>
-              
+
               <button className="btn btn-purple px-4 py-2 rounded-pill fw-bold" onClick={() => navigate(`/courses/${courseId}`)}>
                 Back to Lessons
               </button>
@@ -286,28 +399,41 @@ export default function Exams() {
               <div className="mb-4 border-bottom pb-3">
                 <h2 className="fw-bold text-dark h4">{exam.title}</h2>
                 <div className="d-flex gap-3 mt-2">
-                  <span className="small text-muted d-flex align-items-center"><Bookmark size={14} className="text-orange me-1"/> {exam.questions.length} Qs</span>
-                  <span className="small text-muted d-flex align-items-center"><Timer size={14} className="text-orange me-1"/> {exam.duration} Min</span>
+                  <span className="small text-muted d-flex align-items-center">
+                    <Bookmark size={14} className="text-orange me-1" /> {exam.questions.length} Qs
+                  </span>
+                  <span className="small text-muted d-flex align-items-center">
+                    <Timer size={14} className="text-orange me-1" /> {exam.duration} Min
+                  </span>
                 </div>
               </div>
 
               {exam.questions.map((q, index) => (
                 <div key={q._id || index} className="q-card">
                   <div className="d-flex gap-2 mb-3">
-                    <span className="badge p-2 px-3 rounded-pill d-flex align-items-center" style={{ background: '#f3eeff', color: primaryPurple, height: '30px' }}>
+                    <span
+                      className="badge p-2 px-3 rounded-pill d-flex align-items-center"
+                      style={{ background: "#f3eeff", color: primaryPurple, height: "30px" }}
+                    >
                       {index + 1}
                     </span>
                     <h6 className="fw-bold lh-base m-0 pt-1">{q.questionText}</h6>
                   </div>
+
                   <div className="options-grid">
                     {q.options.map((opt, i) => (
-                      <div 
-                        key={i} 
-                        className={`option-tile ${answers[q._id] === opt ? 'selected' : ''}`}
+                      <div
+                        key={i}
+                        className={`option-tile ${answers[q._id] === opt ? "selected" : ""}`}
                         onClick={() => handleAnswerChange(q._id, opt)}
                       >
-                        <div className="dot border rounded-circle d-flex align-items-center justify-content-center" style={{ width: 16, height: 16, flexShrink: 0 }}>
-                           {answers[q._id] === opt && <div className="rounded-circle" style={{ width: 8, height: 8, background: primaryPurple }}></div>}
+                        <div
+                          className="dot border rounded-circle d-flex align-items-center justify-content-center"
+                          style={{ width: 16, height: 16, flexShrink: 0 }}
+                        >
+                          {answers[q._id] === opt && (
+                            <div className="rounded-circle" style={{ width: 8, height: 8, background: primaryPurple }}></div>
+                          )}
                         </div>
                         <span className="small fw-medium">{opt}</span>
                       </div>
@@ -315,10 +441,10 @@ export default function Exams() {
                   </div>
                 </div>
               ))}
-              
+
               <div className="text-center mt-4 pb-5">
-                <button className="btn btn-purple btn-lg px-5 rounded-pill fw-bold shadow" onClick={handleSubmit}>
-                   Complete & Submit
+                <button className="btn btn-purple btn-lg px-5 rounded-pill fw-bold shadow" onClick={() => handleSubmit(false)} disabled={submitted}>
+                  Complete & Submit
                 </button>
               </div>
             </>

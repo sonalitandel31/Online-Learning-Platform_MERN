@@ -4,8 +4,8 @@ import api from "../../../api/api";
 import {
   Eye, Download, PlayCircle, BookOpen, FileText,
   CheckCircle, Lock, Award, Info, AlertTriangle,
-  ChevronRight, Clock, User, BarChart, X,
-  MessageCircle, ShieldAlert
+  ChevronRight, Clock, User, BarChart,
+  MessageCircle, ShieldAlert, Trophy
 } from "lucide-react";
 
 function CourseDetail() {
@@ -30,6 +30,14 @@ function CourseDetail() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [discussionCount, setDiscussionCount] = useState(0);
 
+  // ✅ Gamification State
+  const [gamiLoading, setGamiLoading] = useState(true);
+  const [gami, setGami] = useState({ xpTotal: 0, xpInCourse: 0, streakCount: 0 });
+
+  // ✅ Badges (course-wise)
+  const [badgeLoading, setBadgeLoading] = useState(true);
+  const [badges, setBadges] = useState([]);
+
   // Notification State
   const [notification, setNotification] = useState({ show: false, message: "", type: "info" });
 
@@ -42,6 +50,40 @@ function CourseDetail() {
   const showAlert = (message, type = "info") => {
     setNotification({ show: true, message, type });
     setTimeout(() => setNotification({ show: false, message: "", type: "info" }), 5000);
+  };
+
+  // ✅ Fetch gamification summary
+  const fetchGamification = async (courseId) => {
+    try {
+      if (!courseId) return;
+      setGamiLoading(true);
+      const res = await api.get(`/gamification/me?courseId=${courseId}`);
+      setGami({
+        xpTotal: res.data?.xpTotal ?? 0,
+        xpInCourse: res.data?.xpInCourse ?? 0,
+        streakCount: res.data?.streakCount ?? 0,
+      });
+    } catch (e) {
+      console.error("Gamification fetch failed:", e);
+      setGami({ xpTotal: 0, xpInCourse: 0, streakCount: 0 });
+    } finally {
+      setGamiLoading(false);
+    }
+  };
+
+  // ✅ Fetch badges (course-wise)
+  const fetchBadges = async (courseId) => {
+    try {
+      if (!courseId) return;
+      setBadgeLoading(true);
+      const res = await api.get(`/gamification/badges?courseId=${courseId}`);
+      setBadges(Array.isArray(res.data?.badges) ? res.data.badges : []);
+    } catch (e) {
+      console.error("Badges fetch failed:", e);
+      setBadges([]);
+    } finally {
+      setBadgeLoading(false);
+    }
   };
 
   // Auth Check
@@ -64,6 +106,14 @@ function CourseDetail() {
         setLessons(courseLessons);
         setExams(Array.isArray(courseData.exams) ? courseData.exams : []);
 
+        // ✅ Gamification + Badges fetch
+        if (studentId && courseData?._id) {
+          await Promise.all([
+            fetchGamification(courseData._id),
+            fetchBadges(courseData._id),
+          ]);
+        }
+
         if (studentId && courseData?._id) {
           try {
             const enrollRes = await api.get(`/enrollments/student/${studentId}/course/${courseData._id}`);
@@ -76,7 +126,10 @@ function CourseDetail() {
               setExamProgress(enrollData.examProgress || []);
               setCertificateUrl(enrollData.certificate || null);
 
-              if (enrollData.status === "cancelled" || (enrollData.expiryDate && new Date() > new Date(enrollData.expiryDate))) {
+              if (
+                enrollData.status === "cancelled" ||
+                (enrollData.expiryDate && new Date() > new Date(enrollData.expiryDate))
+              ) {
                 setIsExpired(true);
                 setIsEnrolled(false);
               }
@@ -106,129 +159,124 @@ function CourseDetail() {
   const handleDiscussionAccess = () => {
     if (!isEnrolled) {
       showAlert("Discussion forum is only available for enrolled students.", "warning");
-      setSelectedTab("lessons"); // Redirect tab view
+      setSelectedTab("lessons");
       return;
     }
     navigate(`/course/${id}/discussion`);
   };
 
   const loadRazorpayScript = () => {
-  return new Promise((resolve) => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-};
+    return new Promise((resolve) => {
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
 
   // Handlers
   const handleEnroll = async () => {
-  if (!course) return;
-  if (course.status !== "approved") {
-    showAlert("This course is currently under review.", "info");
-    return;
-  }
-
-  const token = localStorage.getItem("token");
-
-  // --- CASE 1: FREE COURSE ---
-  if (Number(course.price) === 0) {
-    try {
-      setEnrollLoading(true);
-      const res = await api.post("/enrollments", 
-        { courseId: id, studentId, amount: 0 },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (res.data.success) {
-        showAlert("Successfully Enrolled!", "success");
-        setIsEnrolled(true);
-        window.location.reload(); 
-      }
-    } catch (err) {
-      showAlert("Enrollment failed.", "danger");
-    } finally {
-      setEnrollLoading(false);
-    }
-    return;
-  }
-
-  // --- CASE 2: PAID COURSE (RAZORPAY) ---
-  try {
-    setEnrollLoading(true);
-
-    // FIX 1: LOAD THE SCRIPT FIRST
-    const isScriptLoaded = await loadRazorpayScript();
-    if (!isScriptLoaded) {
-      showAlert("Razorpay SDK failed to load. Please check your internet.", "danger");
+    if (!course) return;
+    if (course.status !== "approved") {
+      showAlert("This course is currently under review.", "info");
       return;
     }
 
-    // Step 1: Create Order on Backend 
-    const orderRes = await api.post(
-      "/payment/create-order",
-      { courseId: id, studentId: studentId }, // Ensure studentId is defined
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    const token = localStorage.getItem("token");
 
-    if (!orderRes.data.success) {
-      throw new Error(orderRes.data.message || "Failed to create order");
+    // --- CASE 1: FREE COURSE ---
+    if (Number(course.price) === 0) {
+      try {
+        setEnrollLoading(true);
+        const res = await api.post(
+          "/enrollments",
+          { courseId: id, studentId, amount: 0 },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.data.success) {
+          showAlert("Successfully Enrolled!", "success");
+          setIsEnrolled(true);
+          window.location.reload();
+        }
+      } catch (err) {
+        showAlert("Enrollment failed.", "danger");
+      } finally {
+        setEnrollLoading(false);
+      }
+      return;
     }
 
-    // FIX 2: Check your backend response keys. 
-    // Your controller sends: { key, orderId, amount, currency }
-    const { key, orderId, amount, currency } = orderRes.data;
+    // --- CASE 2: PAID COURSE (RAZORPAY) ---
+    try {
+      setEnrollLoading(true);
 
-    // Step 2: Open Razorpay Checkout
-    const options = {
-      key: key, 
-      amount: amount * 100, // Razorpay expects paise
-      currency: currency,
-      name: "LearnX Platform",
-      description: `Enrolling in ${course.title}`,
-      image: course.thumbnail?.startsWith("http") ? course.thumbnail : `${BASE_URL}${course.thumbnail}`,
-      order_id: orderId, 
-      handler: async function (response) {
-        // Step 3: Verify Payment
-        try {
-          const verifyRes = await api.post(
-            "/payment/verify-payment",
-            {
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              courseId: id,
-              studentId: studentId,
-            },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
+      const isScriptLoaded = await loadRazorpayScript();
+      if (!isScriptLoaded) {
+        showAlert("Razorpay SDK failed to load. Please check your internet.", "danger");
+        return;
+      }
 
-          if (verifyRes.data.success) {
-            showAlert("Payment Successful! Welcome to the course.", "success");
-            setIsEnrolled(true);
-            window.location.reload();
+      const orderRes = await api.post(
+        "/payment/create-order",
+        { courseId: id, studentId: studentId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!orderRes.data.success) {
+        throw new Error(orderRes.data.message || "Failed to create order");
+      }
+
+      const { key, orderId, amount, currency } = orderRes.data;
+
+      const options = {
+        key: key,
+        amount: amount * 100,
+        currency: currency,
+        name: "LearnX Platform",
+        description: `Enrolling in ${course.title}`,
+        image: course.thumbnail?.startsWith("http") ? course.thumbnail : `${BASE_URL}${course.thumbnail}`,
+        order_id: orderId,
+        handler: async function (response) {
+          try {
+            const verifyRes = await api.post(
+              "/payment/verify-payment",
+              {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                courseId: id,
+                studentId: studentId,
+              },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (verifyRes.data.success) {
+              showAlert("Payment Successful! Welcome to the course.", "success");
+              setIsEnrolled(true);
+              window.location.reload();
+            }
+          } catch (err) {
+            showAlert("Payment verification failed.", "danger");
           }
-        } catch (err) {
-          showAlert("Payment verification failed.", "danger");
-        }
-      },
-      prefill: {
-        name: loggedInUser?.name,
-        email: loggedInUser?.email,
-      },
-      theme: { color: "#9f64f7" },
-    };
+        },
+        prefill: {
+          name: loggedInUser?.name,
+          email: loggedInUser?.email,
+        },
+        theme: { color: "#9f64f7" },
+      };
 
-    const rzp = new window.Razorpay(options);
-    rzp.open();
+      const rzp = new window.Razorpay(options);
+      rzp.open();
 
-  } catch (err) {
-    console.error("Enrollment error:", err);
-    showAlert(err.message || "Failed to initialize payment.", "danger");
-  } finally {
-    setEnrollLoading(false);
-  }
-};
+    } catch (err) {
+      console.error("Enrollment error:", err);
+      showAlert(err.message || "Failed to initialize payment.", "danger");
+    } finally {
+      setEnrollLoading(false);
+    }
+  };
 
   const executeUnenroll = async () => {
     try {
@@ -279,7 +327,7 @@ function CourseDetail() {
     }
   };
 
-  // Video and Completion Logic
+  // Video progress tracking
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -291,6 +339,7 @@ function CourseDetail() {
     return () => video.removeEventListener("timeupdate", handleTimeUpdate);
   }, [selectedLesson]);
 
+  // Mark completion
   useEffect(() => {
     if (!selectedLesson || !studentId || !isEnrolled) return;
 
@@ -301,12 +350,21 @@ function CourseDetail() {
           studentId,
           courseId: course?._id,
         });
+
         setCompletedLessons((prev) => [...prev, selectedLesson._id]);
+
         const updatedEnroll = await api.get(`/enrollments/student/${studentId}/course/${course._id}`);
         setProgress(updatedEnroll.data.progress || 0);
         setCertificateUrl(updatedEnroll.data.certificateUrl || null);
 
-        showAlert(`${selectedLesson.title} completed!`, "success");
+        // ✅ refresh XP + badges + toast
+        await Promise.all([
+          fetchGamification(course?._id),
+          fetchBadges(course?._id),
+        ]);
+
+        showAlert(`+10 XP earned ✅ (${selectedLesson.title} completed!)`, "success");
+
       } catch (err) {
         console.error("Mark watched error:", err);
       }
@@ -434,10 +492,70 @@ function CourseDetail() {
                     <span className="fw-bold text-dark">Course Mastery</span>
                     <span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3">{progress}% Complete</span>
                   </div>
+
                   <div className="progress bg-light" style={{ height: "12px", borderRadius: "10px" }}>
                     <div className="progress-bar progress-bar-striped progress-bar-animated bg-success shadow-sm"
                       role="progressbar" style={{ width: `${progress}%` }}></div>
                   </div>
+
+                  {/* ✅ Gamification UI */}
+                  <div className="mt-3 pt-3 border-top">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="fw-semibold text-dark">XP (This course)</span>
+                      <span className="badge bg-dark bg-opacity-10 text-dark rounded-pill px-3">
+                        {gamiLoading ? "..." : gami.xpInCourse}
+                      </span>
+                    </div>
+
+                    <div className="d-flex justify-content-between align-items-center mt-2">
+                      <span className="text-muted small">Total XP</span>
+                      <span className="text-muted small">{gamiLoading ? "..." : gami.xpTotal}</span>
+                    </div>
+
+                    <div className="d-flex justify-content-between align-items-center mt-1">
+                      <span className="text-muted small">🔥 Streak</span>
+                      <span className="text-muted small">{gamiLoading ? "..." : `${gami.streakCount} days`}</span>
+                    </div>
+
+                    <div className="mt-2 small text-secondary">
+                      Next reward: complete 1 lesson to earn <b>+10 XP</b>
+                    </div>
+
+                    {/* ✅ Badges UI */}
+                    <div className="mt-3 pt-3 border-top">
+                      <div className="d-flex align-items-center justify-content-between mb-2">
+                        <div className="fw-bold small text-dark d-flex align-items-center gap-2">
+                          <Trophy size={16} className="text-warning" />
+                          Badges (This course)
+                        </div>
+                        <span className="small text-muted">
+                          {badgeLoading ? "..." : badges.length}
+                        </span>
+                      </div>
+
+                      {badgeLoading ? (
+                        <div className="text-muted small">Loading badges...</div>
+                      ) : badges.length === 0 ? (
+                        <div className="text-muted small">
+                          No badges yet. Complete lessons/exams to unlock!
+                        </div>
+                      ) : (
+                        <div className="d-flex flex-wrap gap-2">
+                          {badges.slice(0, 8).map((b, idx) => (
+                            <span
+                              key={`${b.key}-${idx}`}
+                              className="badge bg-warning bg-opacity-10 text-dark border border-warning rounded-pill px-3 py-2"
+                              title={b.description || b.title}
+                              style={{ fontSize: "11px" }}
+                            >
+                              {b.icon || "🏅"} {b.title || b.key}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   {progress === 100 && (
                     <div className="mt-3 text-center animate-bounce py-2 bg-warning bg-opacity-10 rounded-3">
                       <Award size={18} className="text-warning me-2" />
@@ -586,9 +704,6 @@ function CourseDetail() {
                         </>
                       )}
                     </button>
-                    <div className="d-flex align-items-center justify-content-center gap-2 text-muted small">
-                      {/* <Lock size={14} /> <span>SSL Secured & Lifetime Access</span> */}
-                    </div>
                   </div>
                 ) : (
                   <div className="d-grid gap-3">

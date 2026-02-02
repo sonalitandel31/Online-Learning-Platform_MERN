@@ -1,16 +1,19 @@
+const mongoose = require("mongoose");
 const Exam = require("../models/examModel");
 const Result = require("../models/resultModel");
 const Enrollment = require("../models/enrollmentModel");
-const mongoose = require("mongoose");
 const courseModel = require("../models/courseModel");
 const resultModel = require("../models/resultModel");
-
-const { generateCertificate, sendCompletionEmail } = require("../utils/sendCompletionEmail");
-const { v4: uuidv4 } = require("uuid");
-const path = require("path");
-const fs = require("fs");
 const lessonModel = require("../models/lessonModel");
 const examModel = require("../models/examModel");
+
+const path = require("path");
+const fs = require("fs");
+const { generateCertificate, sendCompletionEmail } = require("../utils/sendCompletionEmail");
+const { v4: uuidv4 } = require("uuid");
+
+const studentModel = require("../models/studentModel");
+const { awardXpOnce } = require("../services/gamificationService");
 
 exports.getExamsByCourse = async (req, res) => {
     try {
@@ -101,7 +104,8 @@ exports.getExamProgress = async (req, res) => {
   }
 };
 
-exports.submitExam = async (req, res) => {
+/* exports.submitExam = async (req, res) => {
+
   try {
     const { studentId, courseId, examId, score, answers } = req.body;
 
@@ -204,5 +208,131 @@ exports.submitExam = async (req, res) => {
   } catch (error) {
     console.error("Submit Exam Error:", error);
     res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+}; */
+
+exports.submitExam = async (req, res) => {
+  try {
+    const { studentId, courseId, examId, score, answers } = req.body;
+
+    const enrollment = await Enrollment.findOne({
+      student: studentId,
+      course: courseId,
+    })
+      .populate("student")
+      .populate("course");
+
+    if (!enrollment) {
+      return res.status(404).json({ message: "Enrollment not found" });
+    }
+
+    // ✅ GET STUDENT DOCUMENT (SAME PLACE AS LESSON)
+    const studentDoc = await studentModel.findOne({
+      user: enrollment.student._id || enrollment.student,
+    });
+
+    if (!studentDoc) {
+      return res.status(404).json({ message: "Student profile not found" });
+    }
+
+    const isPassed = score >= 60;
+
+    let examProgress = enrollment.examProgress.find(
+      (e) => e.examId.toString() === examId
+    );
+
+    const wasPassedBefore = examProgress?.isCompleted || false;
+
+    if (!examProgress) {
+      examProgress = {
+        examId,
+        attempts: 1,
+        bestScore: score,
+        isCompleted: isPassed,
+      };
+      enrollment.examProgress.push(examProgress);
+    } else {
+      if (examProgress.attempts >= 3) {
+        return res.status(400).json({ message: "Max attempts reached" });
+      }
+      examProgress.attempts += 1;
+      examProgress.bestScore = Math.max(examProgress.bestScore, score);
+      examProgress.isCompleted = examProgress.bestScore >= 60;
+    }
+
+    const becamePassedNow = !wasPassedBefore && examProgress.isCompleted;
+
+    await new Result({
+      exam: examId,
+      student: studentId,
+      score,
+      answers,
+      attemptNumber: examProgress.attempts,
+    }).save();
+
+    // progress
+    const totalLessons = await lessonModel.countDocuments({ course: courseId });
+    const totalExams = await Exam.countDocuments({ course: courseId });
+
+    const completedLessons = enrollment.completedLessons.length;
+    const completedExams = enrollment.examProgress.filter(e => e.isCompleted).length;
+
+    enrollment.progress = Math.min(
+      100,
+      Math.round(((completedLessons + completedExams) / (totalLessons + totalExams)) * 100)
+    );
+
+    const wasCourseCompleted = enrollment.status === "completed";
+    const isCourseCompletedNow = enrollment.progress >= 100 && !wasCourseCompleted;
+
+    // 🎮 XP
+    const xpAwards = [];
+
+    if (becamePassedNow) {
+      const xpRes = await awardXpOnce({
+        studentId: studentDoc._id,
+        courseId,
+        event: "EXAM_PASS",
+        refId: examId,
+        xp: 30,
+      });
+      if (xpRes.awarded) xpAwards.push(xpRes);
+    }
+
+    if (isCourseCompletedNow) {
+      const xpRes = await awardXpOnce({
+        studentId: studentDoc._id,
+        courseId,
+        event: "COURSE_COMPLETE",
+        refId: courseId,
+        xp: 100,
+      });
+      if (xpRes.awarded) xpAwards.push(xpRes);
+
+      enrollment.status = "completed";
+
+      const certId = uuidv4();
+      const certPath = await generateCertificate(
+        enrollment.student.name,
+        enrollment.course.title,
+        enrollment.course.instructor?.name || "Instructor",
+        certId
+      );
+
+      enrollment.certificate = `/uploads/certificates/${certId}.pdf`;
+      await sendCompletionEmail(enrollment.student, enrollment.course, certPath);
+    }
+
+    await enrollment.save();
+
+    res.json({
+      message: examProgress.isCompleted ? "Exam passed" : "Exam submitted",
+      progress: enrollment.progress,
+      xpAwards,
+    });
+
+  } catch (err) {
+    console.error("submitExam error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

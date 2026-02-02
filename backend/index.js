@@ -20,6 +20,7 @@ const auth = require("./routes/authRoute");
 const payment = require("./routes/enrollmentPaymentRoute");
 const contact = require("./routes/contactusRoute");
 const forum = require("./routes/forumRoute");
+const gamification = require("./routes/gamificationRoutes");
 
 const app = express();
 app.use(express.json());
@@ -48,6 +49,8 @@ app.use("/auth", auth);
 app.use("/payment", payment);
 app.use("/contact", contact);
 app.use("/forum", forum);
+app.use("/gamification", gamification);
+
 
 app.listen(process.env.PORT, () => {
     console.log("Server is running on port 3000");

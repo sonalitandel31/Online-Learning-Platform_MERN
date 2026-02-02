@@ -81,6 +81,15 @@ const enrollmentSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  receiptUrl: {
+    type: String,
+    default: null,
+  },
+  receiptNo: {
+    type: String,
+    default: null,
+  },
+
 }, { timestamps: true });
 
 enrollmentSchema.index({ student: 1, course: 1 }, { unique: true });
