@@ -20,7 +20,7 @@ export default function DashboardLayout({ sidebarLinks, children }) {
   // Mobile par default false (close) rahega
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 992);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 992);
-  
+
   const location = useLocation();
   const navigate = useNavigate();
   const userRole = localStorage.getItem("role") || "instructor";
@@ -124,15 +124,16 @@ export default function DashboardLayout({ sidebarLinks, children }) {
     }
   };
 
-  const isActive = (path) => location.pathname === path;
+  // const isActive = (path) => location.pathname === path;
+  const isActive = (path) => location.pathname.startsWith(path);
 
   return (
     <div style={{ display: "flex", position: "relative" }}>
-      
+
       <div style={styles.mobileHeader}>
         <h5 className="m-0 fw-bold">Dashboard</h5>
-        <button 
-          className="btn text-white p-0" 
+        <button
+          className="btn text-white p-0"
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
         >
           {isSidebarOpen ? <FaTimes size={24} /> : <FaBars size={24} />}
@@ -140,7 +141,7 @@ export default function DashboardLayout({ sidebarLinks, children }) {
       </div>
 
       {isMobile && isSidebarOpen && (
-        <div 
+        <div
           onClick={() => setIsSidebarOpen(false)}
           style={{
             position: "fixed",
@@ -150,7 +151,7 @@ export default function DashboardLayout({ sidebarLinks, children }) {
           }}
         />
       )}
-      
+
       <div style={styles.sidebar}>
         <h3 className="text-center fw-bold mb-5 text-white">
           <Link
@@ -224,112 +225,128 @@ export default function DashboardLayout({ sidebarLinks, children }) {
   );
 }
 
-// ... Sidebar Links Exports (Same as before)
 export const instructorSidebarLinks = [
-    {
-      label: "Courses",
-      icon: <FaBook />,
-      children: [
-        { label: "My Courses", path: "/instructor-dashboard/instructor_courses" },
-        { label: "Add New Course", path: "/instructor-dashboard/add_courses" },
-        { label: "Pending Approvals", path: "/instructor-dashboard/pending_approvals" },
-        { label: "Course Discussions", path: "/instructor-dashboard/course-discussions" }
-      ],
-    },
-    {
-      label: "Categories",
-      icon: <FaBook />,
-      children: [
-        { label: "Request Category", path: "/instructor-dashboard/request-category" },
-      ],
-    },
-    {
-      label: "Lessons",
-      icon: <FaBook />,
-      children: [
-        { label: "Manage Lessons", path: "/instructor-dashboard/manage_lessons" },
-      ],
-    },
-    {
-      label: "Exams",
-      icon: <FaClipboardList />,
-      children: [
-        { label: "Manage Exams", path: "/instructor-dashboard/manage_exams" },
-      ],
-    },
-    {
-      label: "Students",
-      icon: <FaUser />,
-      children: [
-        { label: "Enrolled Students", path: "/instructor-dashboard/enrolled_students" },
-      ],
-    },
-    {
-      label: "Earnings",
-      icon: <FaRupeeSign />,
-      children: [
-        { label: "My Earnings", path: "/instructor-dashboard/earnings" },
-        { label: "Payout History", path: "/instructor-dashboard/payout-history" },
-      ],
-    },
-    {
-      label: "Analytics / Reports",
-      icon: <FaChartLine />,
-      children: [
-        { label: "Course Analytics", path: "/instructor-dashboard/course_analytics" },
-        { label: "Student Progress", path: "/instructor-dashboard/student_progress" },
-      ],
-    },
-  ];
-  
-  export const adminSidebarLinks = [
-    {
-      label: "Users",
-      icon: <FaUsers />,
-      children: [
-        { label: "All Users", path: "/admin-dashboard/users" },
-      ],
-    },
-    {
-      label: "Courses",
-      icon: <FaBook />,
-      children: [
-        { label: "All Courses", path: "/admin-dashboard/courses" },
-        { label: "Pending Approval", path: "/admin-dashboard/pending-courses" },
-        { label: "Rejected Courses", path: "/admin-dashboard/rejected-courses" },
-      ],
-    },
-    {
-      label: "Categories",
-      icon: <FaBook />,
-      children: [
-        { label: "Manage Categories", path: "/admin-dashboard/categories" },
-        { label: "Suggestions", path: "/admin-dashboard/category-suggestions" },
-      ],
-    },
-    {
-      label: "Payments & Revenue",
-      icon: <FaRupeeSign />,
-      children: [
-        { label: "Earnings Overview", path: "/admin-dashboard/revenue" },
-        { label: "Instructor Payouts", path: "/admin-dashboard/payouts" },
-        { label: "Transactions", path: "/admin-dashboard/transactions" },
-      ],
-    },
-    {
-      label: "Reports & Analytics",
-      icon: <FaClipboardList />,
-      children: [
-        { label: "Enrollment Stats", path: "/admin-dashboard/reports/enrollments" },
-        { label: "Course Performance", path: "/admin-dashboard/reports/courses" },
-      ],
-    },
-    {
-      label: "Support",
-      icon: <FaBell />,
-      children: [
-        { label: "Contact Messages", path: "/admin-dashboard/contact-messages" },
-        { label: "Forum Discussions", path: "/admin-dashboard/discussions" }
-      ],
-    },
-  ];
+  {
+    label: "Courses",
+    icon: <FaBook />,
+    children: [
+      { label: "My Courses", path: "/instructor-dashboard/instructor_courses" },
+      { label: "Add New Course", path: "/instructor-dashboard/add_courses" },
+      { label: "Pending Approvals", path: "/instructor-dashboard/pending_approvals" },
+      { label: "Course Discussions", path: "/instructor-dashboard/course-discussions" }
+    ],
+  },
+  {
+    label: "Categories",
+    icon: <FaBook />,
+    children: [
+      { label: "Request Category", path: "/instructor-dashboard/request-category" },
+    ],
+  },
+  {
+    label: "Lessons",
+    icon: <FaBook />,
+    children: [
+      { label: "Manage Lessons", path: "/instructor-dashboard/manage_lessons" },
+    ],
+  },
+  {
+    label: "Exams",
+    icon: <FaClipboardList />,
+    children: [
+      { label: "Manage Exams", path: "/instructor-dashboard/manage_exams" },
+    ],
+  },
+  {
+    label: "Students",
+    icon: <FaUser />,
+    children: [
+      { label: "Enrolled Students", path: "/instructor-dashboard/enrolled_students" },
+    ],
+  },
+  {
+    label: "Earnings",
+    icon: <FaRupeeSign />,
+    children: [
+      { label: "My Earnings", path: "/instructor-dashboard/earnings" },
+      { label: "Payout History", path: "/instructor-dashboard/payout-history" },
+    ],
+  },
+  {
+    label: "Event Analytics",
+    icon: <FaChartLine />,
+    children: [
+      { label: "Engagement (DAU)", path: "/instructor-dashboard/engagement-analytics" },
+      { label: "Course Events", path: "/instructor-dashboard/course-event-analytics" },
+      { label: "Engagement Score", path: "/instructor-dashboard/engagement-score" },
+      { label: "Drop-out Risk", path: "/instructor-dashboard/dropout-risk" },
+      { label: "Lesson Drop-Off", path: "/instructor-dashboard/lesson-dropoff" },
+    ],
+  },
+  {
+    label: "Reports",
+    icon: <FaChartLine />,
+    children: [
+      { label: "My Performance Score", path: "/instructor-dashboard/instructor-score" },
+      { label: "Course Analytics", path: "/instructor-dashboard/course_analytics" },
+      { label: "Student Progress", path: "/instructor-dashboard/student_progress" },
+    ],
+  },
+
+];
+
+export const adminSidebarLinks = [
+  {
+    label: "Users",
+    icon: <FaUsers />,
+    children: [
+      { label: "All Users", path: "/admin-dashboard/users" },
+    ],
+  },
+  {
+    label: "Courses",
+    icon: <FaBook />,
+    children: [
+      { label: "All Courses", path: "/admin-dashboard/courses" },
+      { label: "Pending Approval", path: "/admin-dashboard/pending-courses" },
+      { label: "Rejected Courses", path: "/admin-dashboard/rejected-courses" },
+    ],
+  },
+  {
+    label: "Categories",
+    icon: <FaBook />,
+    children: [
+      { label: "Manage Categories", path: "/admin-dashboard/categories" },
+      { label: "Suggestions", path: "/admin-dashboard/category-suggestions" },
+    ],
+  },
+  {
+    label: "Payments & Revenue",
+    icon: <FaRupeeSign />,
+    children: [
+      { label: "Earnings Overview", path: "/admin-dashboard/revenue" },
+      { label: "Instructor Payouts", path: "/admin-dashboard/payouts" },
+      { label: "Transactions", path: "/admin-dashboard/transactions" },
+    ],
+  },
+  {
+    label: "Reports & Analytics",
+    icon: <FaClipboardList />,
+    children: [
+      { label: "Instructor Ranking", path: "/admin-dashboard/instructor-ranking" },
+      { label: "Engagement Heatmap", path: "/admin-dashboard/heatmap" },
+      { label: "Platform Risk", path: "/admin-dashboard/platform-risk" },
+      { label: "Platform Analytics", path: "/admin-dashboard/analytics" },
+      { label: "Enrollment Stats", path: "/admin-dashboard/reports/enrollments" },
+      { label: "Course Performance", path: "/admin-dashboard/reports/courses" },
+    ],
+  },
+  {
+    label: "Support",
+    icon: <FaBell />,
+    children: [
+      { label: "Contact Messages", path: "/admin-dashboard/contact-messages" },
+      { label: "Forum Discussions", path: "/admin-dashboard/discussions" }
+    ],
+  },
+];

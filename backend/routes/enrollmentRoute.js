@@ -5,7 +5,7 @@ const authMiddleware = require("../middleware/authMiddleware");
 
 router.post("/", authMiddleware, enrollCourse);
 router.get("/", authMiddleware, getStudentEnrollments);
-router.get("/student/:studentId/course/:courseId", enrolledStudent);
+router.get("/student/:studentId/course/:courseId",authMiddleware, enrolledStudent);
 router.put("/unenroll/:courseId",authMiddleware, unenrollCourse);
 router.get("/:id/receipt", authMiddleware, downloadReceipt);
 

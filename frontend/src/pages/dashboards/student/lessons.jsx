@@ -32,7 +32,9 @@ function Lesson() {
   const [notification, setNotification] = useState("");
 
   const videoRef = useRef(null);
-  const loggedInUser = JSON.parse(localStorage.getItem("user"));
+  const markingRef = useRef(false);
+
+  const loggedInUser = JSON.parse(localStorage.getItem("user") || "null");
   const studentId = loggedInUser?._id;
 
   const BASE_URL = (import.meta.env.VITE_BASE_URL || "").replace(/\/+$/, "");
@@ -46,6 +48,7 @@ function Lesson() {
     const fetchLessonData = async () => {
       try {
         setLoading(true);
+        setError("");
 
         const res = await api.get(`/courses/${courseId}`);
         const courseData = res.data || {};
@@ -54,25 +57,23 @@ function Lesson() {
         const lessonList = Array.isArray(courseData.lessons) ? courseData.lessons : [];
         setLessons(lessonList);
 
-        // ✅ enrollment parsing (robust)
-        const enrollmentRes = await api.get("/enrollments");
-        const rawEnrollments =
-          (Array.isArray(enrollmentRes.data) && enrollmentRes.data) ||
-          enrollmentRes.data?.enrollments ||
-          enrollmentRes.data?.data ||
-          [];
+        const enrollRes = await api.get(`/enrollments/student/${studentId}/course/${courseId}`);
+        const enrollment = enrollRes.data;
 
-        const enrollments = Array.isArray(rawEnrollments) ? rawEnrollments : [];
-        const enrolled = enrollments.some((e) => String(e?.course?._id || e?.course) === String(courseId));
-        setIsEnrolled(enrolled);
+        if (!enrollment || enrollment?.message === "Enrollment not found") {
+          setIsEnrolled(false);
+          setCompletedLessons([]);
+        } else {
+          const isExpired = enrollment?.expiryDate && new Date(enrollment.expiryDate) < new Date();
+          const allowed = ["active", "completed"].includes(enrollment.status) && !isExpired;
 
-        // ⚠️ This endpoint may be wrong depending on your routes
-        // Update this line if your route is different (rest is correct)
-        const progressRes = await api.get(`/${studentId}/completedLessons`);
-        const completed = Array.isArray(progressRes.data) ? progressRes.data : [];
-        setCompletedLessons(completed.map(String));
+          setIsEnrolled(allowed);
+          setCompletedLessons((enrollment.completedLessons || []).map(String));
+        }
 
-        const foundLesson = lessonList.find((l) => String(l._id) === String(lessonId)) || lessonList[0];
+        const foundLesson =
+          lessonList.find((l) => String(l._id) === String(lessonId)) || lessonList[0];
+
         if (foundLesson) {
           setCurrentLesson(foundLesson);
           localStorage.setItem(`lastLesson_${courseId}`, foundLesson._id);
@@ -113,25 +114,32 @@ function Lesson() {
     if (!currentLesson || !isEnrolled || !course?._id) return;
 
     const markAsCompleted = async () => {
-      if (completedLessons.includes(String(currentLesson._id))) return;
+      const lessonKey = String(currentLesson._id);
+      if (completedLessons.includes(lessonKey)) return;
+      if (markingRef.current) return;
 
+      markingRef.current = true;
       try {
         const resp = await api.post(`/lessons/${currentLesson._id}/markWatched`, {
           studentId,
           courseId: course._id,
         });
 
-        setCompletedLessons((prev) => [...prev, String(currentLesson._id)]);
+        setCompletedLessons((prev) => (prev.includes(lessonKey) ? prev : [...prev, lessonKey]));
 
-        // ✅ show XP toast only if actually awarded
-        const earnedXp = (resp.data?.xpAwards || []).reduce((sum, x) => sum + Number(x?.xp || 0), 0);
+        const earnedXp = (resp.data?.xpAwards || []).reduce(
+          (sum, x) => sum + Number(x?.xp || 0),
+          0
+        );
         if (earnedXp > 0) showNotify(`+${earnedXp} XP earned ✅`);
       } catch (err) {
         console.error("markWatched error:", err);
+      } finally {
+        markingRef.current = false;
       }
     };
 
-    const isVideo = currentLesson.contentType?.toLowerCase() === "video";
+    const isVideo = String(currentLesson.contentType || "").toLowerCase() === "video";
     if (isVideo ? videoProgress >= 90 : true) markAsCompleted();
   }, [currentLesson, videoProgress, isEnrolled, completedLessons, studentId, course]);
 
@@ -150,7 +158,10 @@ function Lesson() {
   if (loading)
     return (
       <div className="d-flex flex-column justify-content-center align-items-center vh-100 bg-white">
-        <div className="spinner-border text-purple mb-3" style={{ width: "3rem", height: "3rem" }}></div>
+        <div
+          className="spinner-border text-purple mb-3"
+          style={{ width: "3rem", height: "3rem" }}
+        ></div>
         <h5 className="text-purple fw-light">Opening your lesson...</h5>
       </div>
     );
@@ -257,6 +268,7 @@ function Lesson() {
           >
             <ArrowLeft size={18} /> Back to Course
           </button>
+
           <div className="d-flex align-items-center justify-content-between">
             <div>
               <h6 className="m-0 fw-bold text-dark">Course Curriculum</h6>
@@ -264,7 +276,9 @@ function Lesson() {
                 <div
                   className="progress-bar bg-purple"
                   style={{
-                    width: lessons.length ? `${(completedLessons.length / lessons.length) * 100}%` : "0%",
+                    width: lessons.length
+                      ? `${(completedLessons.length / lessons.length) * 100}%`
+                      : "0%",
                   }}
                 ></div>
               </div>
@@ -286,18 +300,19 @@ function Lesson() {
                 key={l._id}
                 className={`lesson-item ${active ? "active" : ""} ${locked ? "locked" : ""}`}
                 onClick={() => {
-                  if (!locked) {
-                    setCurrentLesson(l);
-                    setSidebarOpen(false);
-                    navigate(`/course/${courseId}/lessons/${l._id}`);
-                  }
+                  if (locked) return;
+                  setSidebarOpen(false);
+                  navigate(`/course/${courseId}/lessons/${l._id}`);
                 }}
               >
                 <div className={`fw-bold small ${active ? "text-purple" : "opacity-30"}`}>
                   {String(i + 1).padStart(2, "0")}
                 </div>
+
                 <div className="flex-grow-1">
-                  <div className={`fw-bold small ${active ? "text-purple" : "text-secondary"}`}>{l.title}</div>
+                  <div className={`fw-bold small ${active ? "text-purple" : "text-secondary"}`}>
+                    {l.title}
+                  </div>
                   <div className="d-flex align-items-center gap-2 mt-1" style={{ fontSize: "10px" }}>
                     {String(l.contentType).toLowerCase() === "video" ? (
                       <Play size={10} className="text-purple" />
@@ -307,7 +322,12 @@ function Lesson() {
                     <span className="text-uppercase fw-bold text-muted">{l.contentType}</span>
                   </div>
                 </div>
-                {done ? <CheckCircle size={18} className="text-success" /> : locked ? <Lock size={14} className="text-muted" /> : null}
+
+                {done ? (
+                  <CheckCircle size={18} className="text-success" />
+                ) : locked ? (
+                  <Lock size={14} className="text-muted" />
+                ) : null}
               </div>
             );
           })}
@@ -350,13 +370,13 @@ function Lesson() {
 
           {canAccess ? (
             <div className="media-section">
-              {currentLesson?.contentType?.toLowerCase() === "video" ? (
+              {String(currentLesson?.contentType || "").toLowerCase() === "video" ? (
                 <div className="player-wrapper">
                   <video ref={videoRef} className="w-100 h-100" controls controlsList="nodownload">
                     <source src={fileUrl} type="video/mp4" />
                   </video>
                 </div>
-              ) : currentLesson?.contentType?.toLowerCase() === "pdf" ? (
+              ) : String(currentLesson?.contentType || "").toLowerCase() === "pdf" ? (
                 <div className="pdf-container mb-4">
                   <iframe src={`${fileUrl}#toolbar=0`} className="pdf-frame" title="PDF Content" />
                 </div>
@@ -365,7 +385,10 @@ function Lesson() {
                   <div className="d-flex align-items-center gap-2 mb-3 text-purple">
                     <Type size={24} /> <h5 className="m-0 fw-bold">Lesson Notes</h5>
                   </div>
-                  <div className="lh-lg text-secondary" dangerouslySetInnerHTML={{ __html: currentLesson?.description }} />
+                  <div
+                    className="lh-lg text-secondary"
+                    dangerouslySetInnerHTML={{ __html: currentLesson?.description || "" }}
+                  />
                 </div>
               )}
             </div>
@@ -378,7 +401,10 @@ function Lesson() {
               <p className="text-muted mb-4 mx-auto" style={{ maxWidth: "350px" }}>
                 This lesson is part of the premium curriculum. Enroll now to unlock high-quality learning materials.
               </p>
-              <button className="btn btn-orange px-5 py-3 rounded-pill fw-bold shadow-lg" onClick={() => navigate(`/courses/${courseId}`)}>
+              <button
+                className="btn btn-orange px-5 py-3 rounded-pill fw-bold shadow-lg"
+                onClick={() => navigate(`/courses/${courseId}`)}
+              >
                 Unlock Full Access
               </button>
             </div>
@@ -396,8 +422,12 @@ function Lesson() {
               Previous
             </button>
 
-            <button className="btn btn-orange px-5 py-2 rounded-pill fw-bold shadow-lg d-flex align-items-center gap-2" onClick={handleNext}>
-              {currentIndex === lessons.length - 1 ? "Complete Content" : "Next Lesson"} <ChevronRight size={20} />
+            <button
+              className="btn btn-orange px-5 py-2 rounded-pill fw-bold shadow-lg d-flex align-items-center gap-2"
+              onClick={handleNext}
+            >
+              {currentIndex === lessons.length - 1 ? "Complete Content" : "Next Lesson"}{" "}
+              <ChevronRight size={20} />
             </button>
           </div>
         </div>
@@ -407,6 +437,7 @@ function Lesson() {
         <button className="btn btn-light rounded-pill px-3" onClick={handlePrev} disabled={currentIndex === 0}>
           <ChevronLeft size={20} className="text-purple" />
         </button>
+
         <div className="text-center">
           <div className="fw-bold text-purple small">
             {currentIndex + 1} / {lessons.length}
@@ -415,6 +446,7 @@ function Lesson() {
             MODULE PROGRESS
           </div>
         </div>
+
         <button className="btn btn-orange rounded-pill px-4 fw-bold shadow-sm" onClick={handleNext}>
           {currentIndex === lessons.length - 1 ? <CheckCircle size={20} /> : <ChevronRight size={20} />}
         </button>

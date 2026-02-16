@@ -57,6 +57,16 @@ import AboutUs from './pages/aboutus';
 import AdminContactMessages from './pages/dashboards/admin/contactMessages';
 import ForumDiscussions from "./pages/dashboards/admin/Discussions";
 import CourseDiscussions from "./pages/dashboards/instructor/ManageCourseDiscussions";
+import AnalyticsDashboard from "./pages/dashboards/admin/AnalyticsDashboard";
+import EngagementAnalytics from "./pages/dashboards/instructor/Analytics/EngagementAnalytics";
+import CourseEventAnalytics from "./pages/dashboards/instructor/Analytics/CourseEventAnalytics";
+import EngagementScoreLeaderboard from "./pages/dashboards/instructor/Analytics/EngagementScoreLeaderboard";
+import DropoutRiskAnalytics from "./pages/dashboards/instructor/Analytics/DropoutRiskAnalytics";
+import LessonDropoffAnalytics from "./pages/dashboards/instructor/Analytics/LessonDropoffAnalytics";
+import InstructorScore from "./pages/dashboards/instructor/Analytics/InstructorScore";
+import AdminInstructorRanking from "./pages/dashboards/admin/Analytics/AdminInstructorRanking";
+import AdminHeatmap from "./pages/dashboards/admin/Analytics/AdminHeatmap";
+import AdminPlatformRisk from "./pages/dashboards/admin/Analytics/AdminPlatformRisk";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -110,6 +120,10 @@ function App() {
             <Route path="revenue" element={<Revenue />} />
             <Route path="payouts" element={<Payouts />} />
             <Route path="transactions" element={<Transactions />} />
+            <Route path="analytics" element={<AnalyticsDashboard />} />
+            <Route path="instructor-ranking" element={<AdminInstructorRanking />} />
+            <Route path="heatmap" element={<AdminHeatmap />}/>
+            <Route path="/admin-dashboard/platform-risk" element={<AdminPlatformRisk />}/>
             <Route path="reports/enrollments" element={<EnrollmentStats />} />
             <Route path="reports/courses" element={<CoursePerformance />} />
             <Route path="contact-messages" element={<AdminContactMessages />} />
@@ -129,6 +143,12 @@ function App() {
             <Route path="exam_results" element={<ExamResults />} />
             <Route path="earnings" element={<InstructorEarnings />} />
             <Route path="payout-history" element={<PayoutHistory />} />
+            <Route path="engagement-analytics" element={<EngagementAnalytics />} />
+            <Route path="course-event-analytics" element={<CourseEventAnalytics />} />
+            <Route path="engagement-score" element={<EngagementScoreLeaderboard />} />
+            <Route path="dropout-risk" element={<DropoutRiskAnalytics />} />
+            <Route path="lesson-dropoff" element={<LessonDropoffAnalytics />} />
+            <Route path="instructor-score" element={<InstructorScore />} />
             <Route path="course_analytics" element={<CourseAnalytics />} />
             <Route path="student_progress" element={<StudentProgress />} />
             <Route path="course-discussions" element={<CourseDiscussions />} />

@@ -435,15 +435,29 @@ const enrolledStudent = async (req, res) => {
   try {
     const { studentId, courseId } = req.params;
 
-    let enrollment = await Enrollment.findOne({
-      student: studentId,
+    // ✅ security: logged in user can only access their own enrollment
+    if (String(req.user?._id) !== String(studentId)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const enrollment = await Enrollment.findOne({
+      student: studentId,     // ✅ this is USER id
       course: courseId,
     })
       .populate("student", "name email")
-      .populate("course", "title");
+      .populate("course", "title lessons");
 
     if (!enrollment) {
       return res.status(200).json({ message: "Enrollment not found" });
+    }
+
+    // ✅ (optional) if expired or cancelled, front-end should treat as not enrolled
+    const now = new Date();
+    if (enrollment.status === "cancelled" || (enrollment.expiryDate && enrollment.expiryDate < now)) {
+      return res.json({
+        ...enrollment.toObject(),
+        access: false,
+      });
     }
 
     if (enrollment.progress === 100 && !enrollment.certificate) {
@@ -454,7 +468,7 @@ const enrolledStudent = async (req, res) => {
       await enrollment.save();
     }
 
-    res.json(enrollment);
+    return res.json(enrollment);
   } catch (err) {
     console.error("Enrollment fetch error:", err);
     res.status(500).json({ message: "Server error" });
@@ -481,7 +495,10 @@ const downloadReceipt = async (req, res) => {
       return res.status(404).json({ success: false, message: "Receipt not available" });
     }
 
-    const absPath = path.join(__dirname, "..", enrollment.receiptUrl);
+    // ✅ FIX: remove leading slash before joining
+    const rel = String(enrollment.receiptUrl || "").replace(/^\//, "");
+    const absPath = path.join(__dirname, "..",z , rel);
+
     if (!fs.existsSync(absPath)) {
       return res.status(404).json({ success: false, message: "Receipt file missing" });
     }

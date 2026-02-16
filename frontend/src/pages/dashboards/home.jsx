@@ -3,12 +3,18 @@ import { Link, useNavigate } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
 import api from "../../api/api";
+import { track } from "../../utils/track"; // ✅ analytics
 
 function Home() {
   const [categories, setCategories] = useState([]);
   const [newCourses, setNewCourses] = useState([]);
   const navigate = useNavigate();
   const BASE_URL = import.meta.env.VITE_BASE_URL;
+
+  // ✅ track home page view
+  useEffect(() => {
+    track("home_view", {});
+  }, []);
 
   //fetch categories..
   useEffect(() => {
@@ -34,7 +40,7 @@ function Home() {
         // 2. Sort: Latest date ke hisaab se
         // 3. Slice: Sirf top 8
         const approvedAndSorted = (res.data || [])
-          .filter(course => course.status === "approved") // Status check
+          .filter((course) => course.status === "approved") // Status check
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
           .slice(0, 8);
 
@@ -56,25 +62,65 @@ function Home() {
         <p className="hero-subtitle">
           Explore top-rated courses and start learning new skills today!
         </p>
-        <button className="explore-btn" onClick={() => navigate("/courses")}>
+        <button
+          className="explore-btn"
+          onClick={() => {
+            track("cta_explore_courses", {}); // ✅ analytics
+            navigate("/courses");
+          }}
+        >
           Explore Courses
         </button>
       </section>
 
-      <section className="why-choose-section" style={{ margin: "50px 0", textAlign: "center", padding: "0 20px" }}>
-        <h2 className="section-title" style={{ fontSize: "2rem", color: "#333", fontWeight: "600", marginBottom: "50px" }}>
+      <section
+        className="why-choose-section"
+        style={{ margin: "50px 0", textAlign: "center", padding: "0 20px" }}
+      >
+        <h2
+          className="section-title"
+          style={{
+            fontSize: "2rem",
+            color: "#333",
+            fontWeight: "600",
+            marginBottom: "50px",
+          }}
+        >
           Why Choose <span style={{ color: "#7626edff" }}>LearnX</span>?
         </h2>
 
-        <div className="features-grid" style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "100px", fontSize: "1rem", color: "#555" }}>
+        <div
+          className="features-grid"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: "100px",
+            fontSize: "1rem",
+            color: "#555",
+          }}
+        >
           {[
             { icon: "fa fa-graduation-cap", title: "Expert Instructors", desc: "Learn from industry professionals." },
             { icon: "fa fa-clock", title: "Flexible Learning", desc: "Study anytime, anywhere." },
             { icon: "fa fa-certificate", title: "Certified Courses", desc: "Get recognized certificates." },
             { icon: "fa fa-users", title: "Community Support", desc: "Join our learner community." },
           ].map((item, index) => (
-            <div key={index} style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", minWidth: "150px", maxWidth: "200px" }}>
-              <i className={item.icon} style={{ fontSize: "2.3rem", color: "#985eefff", marginBottom: "10px" }}></i>
+            <div
+              key={index}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                textAlign: "center",
+                minWidth: "150px",
+                maxWidth: "200px",
+              }}
+            >
+              <i
+                className={item.icon}
+                style={{ fontSize: "2.3rem", color: "#985eefff", marginBottom: "10px" }}
+              ></i>
               <h4 style={{ margin: "6px 0", fontSize: "1.2rem", fontWeight: "500" }}>{item.title}</h4>
               <p style={{ margin: "0", fontSize: "1rem", color: "#666" }}>{item.desc}</p>
             </div>
@@ -82,18 +128,34 @@ function Home() {
         </div>
       </section>
 
-      <section className="categories-section" style={{ marginTop: "40px", marginBottom: "40px", textAlign: "center" }}>
-        <h2 className="section-title" style={{ marginBottom: "25px", fontSize: "2rem", color: "#333", fontWeight: "600" }}>
+      <section
+        className="categories-section"
+        style={{ marginTop: "40px", marginBottom: "40px", textAlign: "center" }}
+      >
+        <h2
+          className="section-title"
+          style={{ marginBottom: "25px", fontSize: "2rem", color: "#333", fontWeight: "600" }}
+        >
           Browse by Category
         </h2>
 
-        <div className="categories-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "20px", justifyItems: "center", alignItems: "center" }}>
+        <div
+          className="categories-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+            gap: "20px",
+            justifyItems: "center",
+            alignItems: "center",
+          }}
+        >
           {categories.length > 0 ? (
             categories.map((cat) => (
               <div
                 key={cat._id || cat.name}
                 className="category-card"
                 onClick={() => {
+                  track("category_click", { category: cat.name }); // ✅ analytics
                   const formattedCategory = cat.name.replace(/ /g, "+");
                   navigate(`/courses?category=${formattedCategory}`);
                 }}
@@ -136,14 +198,27 @@ function Home() {
                 <div className="course-card">
                   <div className="course-image">
                     <img
-                      src={course.thumbnail ? `${BASE_URL}${course.thumbnail}` : "https://via.placeholder.com/300x180"}
+                      src={
+                        course.thumbnail
+                          ? `${BASE_URL}${course.thumbnail}`
+                          : "https://via.placeholder.com/300x180"
+                      }
                       alt={course.title}
-                      style={{ objectFit: "fill" }}
+                      style={{ objectFit: "fill", cursor: "pointer" }}
+                      onClick={() => {
+                        track("course_open", { courseId: course._id, source: "home_new_courses_img" }); // ✅ analytics
+                        navigate(`/courses/${course._id}`);
+                      }}
                     />
                   </div>
                   <div className="course-info">
                     <h5 className="course-title">
-                      <Link to={`/courses/${course._id}`}>{course.title}</Link>
+                      <Link
+                        to={`/courses/${course._id}`}
+                        onClick={() => track("course_open", { courseId: course._id, source: "home_new_courses_title" })} // ✅ analytics
+                      >
+                        {course.title}
+                      </Link>
                     </h5>
                     <p className="course-description">
                       {course.description?.length > 80
@@ -167,14 +242,23 @@ function Home() {
       <section className="about-section container my-5">
         <div className="about-grid" style={{ marginTop: "-10%", marginBottom: "-3%" }}>
           <div className="about-image">
-            <img src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=80" alt="About LearnX" />
+            <img
+              src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=80"
+              alt="About LearnX"
+            />
           </div>
           <div className="about-text">
-            <h2>About <span>LearnX</span></h2>
+            <h2>
+              About <span>LearnX</span>
+            </h2>
             <p>
-              At LearnX, we are dedicated to empowering learners worldwide. Explore high-quality courses, learn from expert instructors, and gain skills that truly matter. Our mission is to make learning accessible, engaging, and impactful for everyone.
+              At LearnX, we are dedicated to empowering learners worldwide. Explore high-quality courses,
+              learn from expert instructors, and gain skills that truly matter. Our mission is to make
+              learning accessible, engaging, and impactful for everyone.
             </p>
-            <button className="learn-more-btn" onClick={() => navigate("/aboutus")}>Learn More</button>
+            <button className="learn-more-btn" onClick={() => navigate("/aboutus")}>
+              Learn More
+            </button>
           </div>
         </div>
       </section>

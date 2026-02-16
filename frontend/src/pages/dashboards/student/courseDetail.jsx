@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../../api/api";
+import { track } from "../../../utils/track"; // ✅ analytics
 import {
   Eye, Download, PlayCircle, BookOpen, FileText,
   CheckCircle, Lock, Award, Info, AlertTriangle,
@@ -12,7 +13,6 @@ function CourseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // State Management
   const [course, setCourse] = useState(null);
   const [lessons, setLessons] = useState([]);
   const [exams, setExams] = useState([]);
@@ -30,15 +30,12 @@ function CourseDetail() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [discussionCount, setDiscussionCount] = useState(0);
 
-  // ✅ Gamification State
   const [gamiLoading, setGamiLoading] = useState(true);
   const [gami, setGami] = useState({ xpTotal: 0, xpInCourse: 0, streakCount: 0 });
 
-  // ✅ Badges (course-wise)
   const [badgeLoading, setBadgeLoading] = useState(true);
   const [badges, setBadges] = useState([]);
 
-  // Notification State
   const [notification, setNotification] = useState({ show: false, message: "", type: "info" });
 
   const loggedInUser = JSON.parse(localStorage.getItem("user"));
@@ -46,13 +43,12 @@ function CourseDetail() {
   const videoRef = useRef(null);
   const BASE_URL = import.meta.env.VITE_BASE_URL || "";
 
-  // Helper to trigger alerts
   const showAlert = (message, type = "info") => {
     setNotification({ show: true, message, type });
     setTimeout(() => setNotification({ show: false, message: "", type: "info" }), 5000);
   };
 
-  // ✅ Fetch gamification summary
+  // Fetch gamification summary
   const fetchGamification = async (courseId) => {
     try {
       if (!courseId) return;
@@ -71,7 +67,7 @@ function CourseDetail() {
     }
   };
 
-  // ✅ Fetch badges (course-wise)
+  // Fetch badges (course-wise)
   const fetchBadges = async (courseId) => {
     try {
       if (!courseId) return;
@@ -98,20 +94,31 @@ function CourseDetail() {
     const fetchCourseData = async () => {
       try {
         setLoading(true);
+
+        // track course view (basic)
+        track("course_view", { courseId: id });
+
         const res = await api.get(`/courses/${id}`);
         const courseData = res.data || {};
         setCourse(courseData);
+
+        // enrich course view once we have data
+        track("course_view", {
+          courseId: courseData?._id || id,
+          title: courseData?.title,
+          price: Number(courseData?.price || 0),
+          status: courseData?.status,
+          level: courseData?.level,
+          category: courseData?.category?.name,
+        });
 
         const courseLessons = Array.isArray(courseData.lessons) ? courseData.lessons : [];
         setLessons(courseLessons);
         setExams(Array.isArray(courseData.exams) ? courseData.exams : []);
 
-        // ✅ Gamification + Badges fetch
+        // Gamification + Badges fetch
         if (studentId && courseData?._id) {
-          await Promise.all([
-            fetchGamification(courseData._id),
-            fetchBadges(courseData._id),
-          ]);
+          await Promise.all([fetchGamification(courseData._id), fetchBadges(courseData._id)]);
         }
 
         if (studentId && courseData?._id) {
@@ -144,7 +151,6 @@ function CourseDetail() {
 
         const forumRes = await api.get(`/forum/course/${id}/count`);
         setDiscussionCount(forumRes.data.count || 0);
-
       } catch (err) {
         setError("Failed to load course details.");
       } finally {
@@ -157,11 +163,15 @@ function CourseDetail() {
 
   // Discussion Guard
   const handleDiscussionAccess = () => {
+    track("discussion_open_attempt", { courseId: id, isEnrolled });
+
     if (!isEnrolled) {
       showAlert("Discussion forum is only available for enrolled students.", "warning");
       setSelectedTab("lessons");
       return;
     }
+
+    track("discussion_open", { courseId: id });
     navigate(`/course/${id}/discussion`);
   };
 
@@ -178,6 +188,14 @@ function CourseDetail() {
   // Handlers
   const handleEnroll = async () => {
     if (!course) return;
+
+    track("course_enroll_click", {
+      courseId: id,
+      price: Number(course.price || 0),
+      isExpired,
+      source: "course_detail",
+    });
+
     if (course.status !== "approved") {
       showAlert("This course is currently under review.", "info");
       return;
@@ -194,7 +212,9 @@ function CourseDetail() {
           { courseId: id, studentId, amount: 0 },
           { headers: { Authorization: `Bearer ${token}` } }
         );
+
         if (res.data.success) {
+          track("course_free_enroll_success", { courseId: id, price: 0 });
           showAlert("Successfully Enrolled!", "success");
           setIsEnrolled(true);
           window.location.reload();
@@ -207,7 +227,7 @@ function CourseDetail() {
       return;
     }
 
-    // --- CASE 2: PAID COURSE (RAZORPAY) ---
+    // CASE 2: PAID COURSE (RAZORPAY)
     try {
       setEnrollLoading(true);
 
@@ -228,6 +248,14 @@ function CourseDetail() {
       }
 
       const { key, orderId, amount, currency } = orderRes.data;
+
+      track("payment_order_created", {
+        courseId: id,
+        orderId,
+        amount,
+        currency,
+        flow: "enroll",
+      });
 
       const options = {
         key: key,
@@ -252,11 +280,21 @@ function CourseDetail() {
             );
 
             if (verifyRes.data.success) {
+              track("payment_success", {
+                courseId: id,
+                orderId: response.razorpay_order_id,
+                paymentId: response.razorpay_payment_id,
+              });
+
               showAlert("Payment Successful! Welcome to the course.", "success");
               setIsEnrolled(true);
               window.location.reload();
+            } else {
+              track("payment_failed", { courseId: id, orderId: response.razorpay_order_id, reason: "verify_failed" });
+              showAlert("Payment verification failed.", "danger");
             }
           } catch (err) {
+            track("payment_failed", { courseId: id, orderId: response.razorpay_order_id, reason: "verify_error" });
             showAlert("Payment verification failed.", "danger");
           }
         },
@@ -268,8 +306,18 @@ function CourseDetail() {
       };
 
       const rzp = new window.Razorpay(options);
-      rzp.open();
 
+      // optional: if user closes payment modal
+      rzp.on("payment.failed", function (resp) {
+        track("payment_failed", {
+          courseId: id,
+          orderId: resp?.error?.metadata?.order_id,
+          paymentId: resp?.error?.metadata?.payment_id,
+          reason: resp?.error?.reason || "payment_failed",
+        });
+      });
+
+      rzp.open();
     } catch (err) {
       console.error("Enrollment error:", err);
       showAlert(err.message || "Failed to initialize payment.", "danger");
@@ -280,9 +328,12 @@ function CourseDetail() {
 
   const executeUnenroll = async () => {
     try {
+      track("course_unenroll_click", { courseId: id });
+
       setEnrollLoading(true);
       const res = await api.put(`/enrollments/unenroll/${id}`, { studentId });
       if (res.data.success) {
+        track("course_unenroll_success", { courseId: id });
         showAlert("Unenrolled successfully. We hope to see you back soon!", "info");
         setIsEnrolled(false);
         setIsExpired(true);
@@ -306,6 +357,8 @@ function CourseDetail() {
 
   const handleReEnroll = async () => {
     try {
+      track("course_renew_click", { courseId: id, price: Number(course?.price || 0) });
+
       setEnrollLoading(true);
       const res = await api.post("/enrollments", {
         courseId: id,
@@ -313,6 +366,7 @@ function CourseDetail() {
         amount: course.price || 0,
       });
       if (res.data.success) {
+        track("course_renew_success", { courseId: id });
         showAlert("Welcome back! Course access restored.", "success");
         setIsEnrolled(true);
         setIsExpired(false);
@@ -331,10 +385,12 @@ function CourseDetail() {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
     const handleTimeUpdate = () => {
       const percent = (video.currentTime / video.duration) * 100;
       setVideoProgress(percent);
     };
+
     video.addEventListener("timeupdate", handleTimeUpdate);
     return () => video.removeEventListener("timeupdate", handleTimeUpdate);
   }, [selectedLesson]);
@@ -345,10 +401,18 @@ function CourseDetail() {
 
     const markCompleted = async () => {
       if (completedLessons.includes(selectedLesson._id)) return;
+
       try {
         await api.post(`/lessons/${selectedLesson._id}/markWatched`, {
           studentId,
           courseId: course?._id,
+        });
+
+        track("lesson_complete", {
+          courseId: course?._id || id,
+          lessonId: selectedLesson._id,
+          contentType: selectedLesson.contentType,
+          via: selectedLesson.contentType === "video" ? "video_90_percent" : "non_video",
         });
 
         setCompletedLessons((prev) => [...prev, selectedLesson._id]);
@@ -358,13 +422,9 @@ function CourseDetail() {
         setCertificateUrl(updatedEnroll.data.certificateUrl || null);
 
         // ✅ refresh XP + badges + toast
-        await Promise.all([
-          fetchGamification(course?._id),
-          fetchBadges(course?._id),
-        ]);
+        await Promise.all([fetchGamification(course?._id), fetchBadges(course?._id)]);
 
         showAlert(`+10 XP earned ✅ (${selectedLesson.title} completed!)`, "success");
-
       } catch (err) {
         console.error("Mark watched error:", err);
       }
@@ -384,12 +444,16 @@ function CourseDetail() {
   };
 
   const handleViewCertificate = () => {
+    track("certificate_view_click", { courseId: id, unlocked: !!certificate });
+
     if (!certificate) return showAlert("Finish all lessons and exams to unlock your certificate!", "info");
     const fullUrl = certificate.startsWith("http") ? certificate : `${BASE_URL}${certificate}`;
     window.open(fullUrl, "_blank");
   };
 
   const handleDownloadCertificate = async () => {
+    track("certificate_download_click", { courseId: id, unlocked: !!certificate });
+
     if (!certificate) return;
     try {
       showAlert("Preparing your certificate...", "info");
@@ -413,36 +477,69 @@ function CourseDetail() {
     }
   };
 
-  if (loading) return (
-    <div className="d-flex flex-column justify-content-center align-items-center vh-100 bg-white">
-      <div className="spinner-grow text-info mb-3" role="status"></div>
-      <h5 className="text-secondary fw-light animate-pulse">Setting up your learning environment...</h5>
-    </div>
-  );
+  if (loading)
+    return (
+      <div className="d-flex flex-column justify-content-center align-items-center vh-100 bg-white">
+        <div className="spinner-grow text-info mb-3" role="status"></div>
+        <h5 className="text-secondary fw-light animate-pulse">Setting up your learning environment...</h5>
+      </div>
+    );
 
-  if (error) return (
-    <div className="container mt-5">
-      <div className="card border-0 shadow-lg rounded-4 overflow-hidden">
-        <div className="card-body text-center py-5">
-          <div className="bg-danger bg-opacity-10 d-inline-block p-4 rounded-circle mb-4">
-            <AlertTriangle size={64} className="text-danger" />
+  if (error)
+    return (
+      <div className="container mt-5">
+        <div className="card border-0 shadow-lg rounded-4 overflow-hidden">
+          <div className="card-body text-center py-5">
+            <div className="bg-danger bg-opacity-10 d-inline-block p-4 rounded-circle mb-4">
+              <AlertTriangle size={64} className="text-danger" />
+            </div>
+            <h2 className="fw-bold mb-3">Oops!</h2>
+            <p className="text-muted mb-4 fs-5">{error}</p>
+            <button className="btn btn-dark px-5 py-2 rounded-pill shadow-sm" onClick={() => navigate(-1)}>
+              Go Back
+            </button>
           </div>
-          <h2 className="fw-bold mb-3">Oops!</h2>
-          <p className="text-muted mb-4 fs-5">{error}</p>
-          <button className="btn btn-dark px-5 py-2 rounded-pill shadow-sm" onClick={() => navigate(-1)}>Go Back</button>
         </div>
       </div>
-    </div>
-  );
+    );
+
+  // ✅ helper wrappers to track tab + lesson select without changing UI much
+  const setTab = (tab) => {
+    track("tab_change", { courseId: id, tab });
+    setSelectedTab(tab);
+  };
+
+  const selectLesson = (lesson, idx) => {
+    track("lesson_select", {
+      courseId: course?._id || id,
+      lessonId: lesson?._id,
+      index: idx,
+      contentType: lesson?.contentType,
+      preview: !!lesson?.isPreviewFree,
+      allowed: isEnrolled || lesson?.isPreviewFree,
+    });
+    setSelectedLesson(lesson);
+  };
+
+  const openExam = (examId) => {
+    track("exam_open", { courseId: course?._id || id, examId, allowed: isEnrolled });
+    if (isEnrolled) navigate(`/course/${id}/exam/${examId}`);
+  };
 
   return (
     <div className="bg-light min-vh-100 pb-5">
-
       {notification.show && (
-        <div className={`alert alert-${notification.type} border-0 alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-4 shadow-lg`}
-          role="alert" style={{ zIndex: 10000, minWidth: '320px', borderRadius: '12px' }}>
+        <div
+          className={`alert alert-${notification.type} border-0 alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-4 shadow-lg`}
+          role="alert"
+          style={{ zIndex: 10000, minWidth: "320px", borderRadius: "12px" }}
+        >
           <div className="d-flex align-items-center gap-3">
-            {notification.type === "success" ? <CheckCircle size={22} className="text-success" /> : <Info size={22} className="text-info" />}
+            {notification.type === "success" ? (
+              <CheckCircle size={22} className="text-success" />
+            ) : (
+              <Info size={22} className="text-info" />
+            )}
             <span className="fw-medium">{notification.message}</span>
           </div>
           <button type="button" className="btn-close" onClick={() => setNotification({ ...notification, show: false })}></button>
@@ -460,17 +557,28 @@ function CourseDetail() {
                       {course.category?.name ?? "Course"}
                     </span>
                   </li>
-                  <li className="breadcrumb-item text-muted align-self-center small ps-2">{course.level ?? "Intermediate"}</li>
+                  <li className="breadcrumb-item text-muted align-self-center small ps-2">
+                    {course.level ?? "Intermediate"}
+                  </li>
                 </ol>
               </nav>
               <h1 className="fw-bolder display-5 mb-3 text-dark tracking-tight">{course.title}</h1>
-              <p className="lead text-secondary mb-4 opacity-75" style={{ maxWidth: '750px' }}>{course.description}</p>
+              <p className="lead text-secondary mb-4 opacity-75" style={{ maxWidth: "750px" }}>
+                {course.description}
+              </p>
 
               <div className="d-flex flex-wrap gap-4 align-items-center">
                 <div className="instructor-card d-flex align-items-center gap-3 bg-white p-2 pe-4 rounded-pill shadow-sm">
-                  <div className="bg-warning bg-opacity-10 p-2 rounded-circle"><User size={20} className="text-warning" /></div>
+                  <div className="bg-warning bg-opacity-10 p-2 rounded-circle">
+                    <User size={20} className="text-warning" />
+                  </div>
                   <div>
-                    <div className="small text-muted" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Lead Instructor</div>
+                    <div
+                      className="small text-muted"
+                      style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "1px" }}
+                    >
+                      Lead Instructor
+                    </div>
                     <div className="fw-bold text-dark">{course.instructor?.name ?? "Expert Mentor"}</div>
                   </div>
                 </div>
@@ -490,12 +598,17 @@ function CourseDetail() {
                 <div className="progress-card bg-white p-4 rounded-4 shadow-sm border">
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <span className="fw-bold text-dark">Course Mastery</span>
-                    <span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3">{progress}% Complete</span>
+                    <span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3">
+                      {progress}% Complete
+                    </span>
                   </div>
 
                   <div className="progress bg-light" style={{ height: "12px", borderRadius: "10px" }}>
-                    <div className="progress-bar progress-bar-striped progress-bar-animated bg-success shadow-sm"
-                      role="progressbar" style={{ width: `${progress}%` }}></div>
+                    <div
+                      className="progress-bar progress-bar-striped progress-bar-animated bg-success shadow-sm"
+                      role="progressbar"
+                      style={{ width: `${progress}%` }}
+                    ></div>
                   </div>
 
                   {/* ✅ Gamification UI */}
@@ -528,17 +641,13 @@ function CourseDetail() {
                           <Trophy size={16} className="text-warning" />
                           Badges (This course)
                         </div>
-                        <span className="small text-muted">
-                          {badgeLoading ? "..." : badges.length}
-                        </span>
+                        <span className="small text-muted">{badgeLoading ? "..." : badges.length}</span>
                       </div>
 
                       {badgeLoading ? (
                         <div className="text-muted small">Loading badges...</div>
                       ) : badges.length === 0 ? (
-                        <div className="text-muted small">
-                          No badges yet. Complete lessons/exams to unlock!
-                        </div>
+                        <div className="text-muted small">No badges yet. Complete lessons/exams to unlock!</div>
                       ) : (
                         <div className="d-flex flex-wrap gap-2">
                           {badges.slice(0, 8).map((b, idx) => (
@@ -571,7 +680,6 @@ function CourseDetail() {
 
       <div className="container">
         <div className="row g-4">
-
           <div className="col-lg-8">
             <div className="card shadow-sm border-0 rounded-4 overflow-hidden bg-white mb-4">
               <div className="card-body p-0">
@@ -582,23 +690,48 @@ function CourseDetail() {
                         <PlayCircle size={20} className="text-info" />
                         {selectedLesson.title}
                       </h5>
-                      {selectedLesson.isPreviewFree && !isEnrolled &&
-                        <span className="badge bg-success-subtle text-success border border-success px-3 rounded-pill">FREE PREVIEW</span>
-                      }
+                      {selectedLesson.isPreviewFree && !isEnrolled && (
+                        <span className="badge bg-success-subtle text-success border border-success px-3 rounded-pill">
+                          FREE PREVIEW
+                        </span>
+                      )}
                     </div>
 
                     <div className="ratio ratio-16x9 bg-dark shadow-inner">
                       {selectedLesson.contentType === "video" ? (
-                        <video ref={videoRef} controls key={selectedLesson._id} className="w-100 h-100 video-player" poster={course.thumbnail}>
-                          <source src={selectedLesson.fileUrl?.startsWith("http") ? selectedLesson.fileUrl : `${BASE_URL}${selectedLesson.fileUrl}`} type="video/mp4" />
+                        <video
+                          ref={videoRef}
+                          controls
+                          key={selectedLesson._id}
+                          className="w-100 h-100 video-player"
+                          poster={course.thumbnail}
+                        >
+                          <source
+                            src={
+                              selectedLesson.fileUrl?.startsWith("http")
+                                ? selectedLesson.fileUrl
+                                : `${BASE_URL}${selectedLesson.fileUrl}`
+                            }
+                            type="video/mp4"
+                          />
                           Your browser does not support the video tag.
                         </video>
                       ) : selectedLesson.contentType === "pdf" ? (
-                        <iframe src={selectedLesson.fileUrl?.startsWith("http") ? selectedLesson.fileUrl : `${BASE_URL}${selectedLesson.fileUrl}`} title={selectedLesson.title} className="w-100 h-100" />
+                        <iframe
+                          src={
+                            selectedLesson.fileUrl?.startsWith("http")
+                              ? selectedLesson.fileUrl
+                              : `${BASE_URL}${selectedLesson.fileUrl}`
+                          }
+                          title={selectedLesson.title}
+                          className="w-100 h-100"
+                        />
                       ) : (
                         <div className="d-flex flex-column align-items-center justify-content-center h-100 text-muted p-5 bg-light">
                           <BookOpen size={48} className="mb-3 opacity-25" />
-                          <p className="lead text-center fw-medium px-4">{selectedLesson.description || "Refer to the module resources for this lesson."}</p>
+                          <p className="lead text-center fw-medium px-4">
+                            {selectedLesson.description || "Refer to the module resources for this lesson."}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -609,17 +742,26 @@ function CourseDetail() {
                       <Award size={64} className="text-primary" />
                     </div>
                     <h3 className="fw-bold text-dark">Knowledge Assessment</h3>
-                    <p className="text-muted mx-auto mb-4" style={{ maxWidth: '500px' }}>
+                    <p className="text-muted mx-auto mb-4" style={{ maxWidth: "500px" }}>
                       Complete your final assessments to validate your expertise.
                     </p>
                     <div className="alert alert-info border-0 rounded-4 px-4 d-inline-block shadow-sm">
-                      <Info size={18} className="me-2" /> <strong>Get Ready:</strong> Select a module exam from the list on the right.
+                      <Info size={18} className="me-2" /> <strong>Get Ready:</strong> Select a module exam from the list
+                      on the right.
                     </div>
                   </div>
                 ) : selectedTab === "discussion" ? (
                   <div className="p-5 text-center">
-                    <div className={`bg-info bg-opacity-10 rounded-circle d-inline-flex p-4 mb-4 ${!isEnrolled ? 'grayscale shadow-sm' : 'shadow-sm'}`}>
-                      {isEnrolled ? <MessageCircle size={64} className="text-info" /> : <ShieldAlert size={64} className="text-muted" />}
+                    <div
+                      className={`bg-info bg-opacity-10 rounded-circle d-inline-flex p-4 mb-4 ${
+                        !isEnrolled ? "grayscale shadow-sm" : "shadow-sm"
+                      }`}
+                    >
+                      {isEnrolled ? (
+                        <MessageCircle size={64} className="text-info" />
+                      ) : (
+                        <ShieldAlert size={64} className="text-muted" />
+                      )}
                     </div>
                     <h3 className="fw-bold">{isEnrolled ? "Student Discussion Forum" : "Access Restricted"}</h3>
                     <p className="text-muted mx-auto mb-4" style={{ maxWidth: "500px" }}>
@@ -629,7 +771,10 @@ function CourseDetail() {
                     </p>
 
                     {isEnrolled ? (
-                      <button className="btn btn-info px-5 py-2 fw-bold rounded-pill text-white shadow-sm transition-all" onClick={handleDiscussionAccess}>
+                      <button
+                        className="btn btn-info px-5 py-2 fw-bold rounded-pill text-white shadow-sm transition-all"
+                        onClick={handleDiscussionAccess}
+                      >
                         Enter Community Forum
                       </button>
                     ) : (
@@ -662,9 +807,7 @@ function CourseDetail() {
                   <div className="small text-muted text-uppercase fw-bold ls-1">Assessments</div>
                 </div>
                 <div className="col-4">
-                  <div className="h3 fw-bolder mb-0 text-warning">
-                    {Number(course.price) === 0 ? "Free" : `₹${course.price}`}
-                  </div>
+                  <div className="h3 fw-bolder mb-0 text-warning">{Number(course.price) === 0 ? "Free" : `₹${course.price}`}</div>
                   <div className="small text-muted text-uppercase fw-bold ls-1">Total Value</div>
                 </div>
               </div>
@@ -688,7 +831,9 @@ function CourseDetail() {
                   <div className="text-center">
                     <div className="d-flex align-items-center justify-content-center gap-2 mb-3">
                       <span className="h1 fw-bolder mb-0">{course.price > 0 ? `₹${course.price}` : "Free"}</span>
-                      {course.price > 0 && <span className="text-muted text-decoration-line-through">₹{Math.round(course.price * 1.5)}</span>}
+                      {course.price > 0 && (
+                        <span className="text-muted text-decoration-line-through">₹{Math.round(course.price * 1.5)}</span>
+                      )}
                     </div>
                     <button
                       className="btn btn-warning btn-lg w-100 fw-bold rounded-pill mb-3 py-2 shadow-lg hover-scale d-flex align-items-center justify-content-center gap-2"
@@ -736,10 +881,7 @@ function CourseDetail() {
                       </div>
                     )}
 
-                    <button
-                      className="btn btn-link btn-sm text-danger text-decoration-none mt-2 opacity-50 hover-opacity-100"
-                      onClick={handleUnenroll}
-                    >
+                    <button className="btn btn-link btn-sm text-danger text-decoration-none mt-2 opacity-50 hover-opacity-100" onClick={handleUnenroll}>
                       Cancel Enrollment
                     </button>
                   </div>
@@ -749,22 +891,31 @@ function CourseDetail() {
 
             <div className="card shadow-sm border-0 rounded-4 overflow-hidden bg-white sticky-lg-top" style={{ top: "20px" }}>
               <div className="nav nav-pills nav-fill p-2 bg-light m-2 rounded-3 gap-1">
-                <button className={`nav-link border-0 fw-bold transition-all ${selectedTab === "lessons" ? "active bg-info shadow-sm" : "text-muted"}`}
-                  onClick={() => setSelectedTab("lessons")} >
+                <button
+                  className={`nav-link border-0 fw-bold transition-all ${selectedTab === "lessons" ? "active bg-info shadow-sm" : "text-muted"}`}
+                  onClick={() => setTab("lessons")}
+                >
                   <BookOpen size={16} className="me-1" /> <span className="small">Lessons</span>
                 </button>
 
-                <button className={`nav-link border-0 fw-bold transition-all ${selectedTab === "exams" ? "active bg-info shadow-sm" : "text-muted"}`}
-                  onClick={() => setSelectedTab("exams")} >
+                <button
+                  className={`nav-link border-0 fw-bold transition-all ${selectedTab === "exams" ? "active bg-info shadow-sm" : "text-muted"}`}
+                  onClick={() => setTab("exams")}
+                >
                   <FileText size={16} className="me-1" /> <span className="small">Exams</span>
                 </button>
 
-                <button className={`nav-link border-0 fw-bold transition-all position-relative ${selectedTab === "discussion" ? "active bg-info shadow-sm" : "text-muted"}`}
-                  onClick={() => setSelectedTab("discussion")} >
+                <button
+                  className={`nav-link border-0 fw-bold transition-all position-relative ${selectedTab === "discussion" ? "active bg-info shadow-sm" : "text-muted"}`}
+                  onClick={() => setTab("discussion")}
+                >
                   {isEnrolled ? <MessageCircle size={16} className="me-1" /> : <Lock size={16} className="me-1 opacity-50" />}
                   <span className="small">Discuss</span>
                   {isEnrolled && discussionCount > 0 && (
-                    <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow-sm border border-white" style={{ fontSize: "10px" }}>
+                    <span
+                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow-sm border border-white"
+                      style={{ fontSize: "10px" }}
+                    >
                       {discussionCount}
                     </span>
                   )}
@@ -772,7 +923,6 @@ function CourseDetail() {
               </div>
 
               <div className="overflow-auto custom-scrollbar" style={{ maxHeight: "55vh" }}>
-
                 {selectedTab === "lessons" && (
                   <div className="list-group list-group-flush p-3 pt-0">
                     {lessons.map((lesson, idx) => {
@@ -782,19 +932,39 @@ function CourseDetail() {
                       const isCompleted = completedLessons.includes(lesson._id);
 
                       return (
-                        <button key={lesson._id || idx} onClick={() => canAccess && setSelectedLesson(lesson)} disabled={!canAccess}
-                          className={`list-group-item list-group-item-action border-0 mb-3 rounded-3 transition-all ${isActive ? "bg-info bg-opacity-10 border-start border-info border-4 active-item" : ""} ${!canAccess ? "bg-light opacity-75" : ""}`} >
+                        <button
+                          key={lesson._id || idx}
+                          onClick={() => canAccess && selectLesson(lesson, idx)}
+                          disabled={!canAccess}
+                          className={`list-group-item list-group-item-action border-0 mb-3 rounded-3 transition-all ${
+                            isActive ? "bg-info bg-opacity-10 border-start border-info border-4 active-item" : ""
+                          } ${!canAccess ? "bg-light opacity-75" : ""}`}
+                        >
                           <div className="d-flex align-items-center gap-3">
                             <div className="flex-shrink-0">
-                              {isCompleted ? <CheckCircle size={18} className="text-success" /> :
-                                canAccess ? <PlayCircle size={18} className={isActive ? "text-info" : "text-muted"} /> :
-                                  <Lock size={16} className="text-muted opacity-50" />}
+                              {isCompleted ? (
+                                <CheckCircle size={18} className="text-success" />
+                              ) : canAccess ? (
+                                <PlayCircle size={18} className={isActive ? "text-info" : "text-muted"} />
+                              ) : (
+                                <Lock size={16} className="text-muted opacity-50" />
+                              )}
                             </div>
                             <div className="flex-grow-1 overflow-hidden">
-                              <div className={`small fw-bold text-truncate ${isActive ? "text-info" : "text-dark"}`}>{idx + 1}. {lesson.title}</div>
+                              <div className={`small fw-bold text-truncate ${isActive ? "text-info" : "text-dark"}`}>
+                                {idx + 1}. {lesson.title}
+                              </div>
                               <div className="d-flex align-items-center gap-2 mt-1">
-                                {lesson.isPreviewFree && !isEnrolled && <span className="badge bg-success" style={{ fontSize: "9px" }}>FREE</span>}
-                                {canAccess && <div className="progress flex-grow-1" style={{ height: "4px" }}><div className="progress-bar bg-info" style={{ width: `${lessonProg}%` }} /></div>}
+                                {lesson.isPreviewFree && !isEnrolled && (
+                                  <span className="badge bg-success" style={{ fontSize: "9px" }}>
+                                    FREE
+                                  </span>
+                                )}
+                                {canAccess && (
+                                  <div className="progress flex-grow-1" style={{ height: "4px" }}>
+                                    <div className="progress-bar bg-info" style={{ width: `${lessonProg}%` }} />
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -807,26 +977,39 @@ function CourseDetail() {
                 {selectedTab === "exams" && (
                   <div className="p-3">
                     {exams.map((exam, idx) => {
-                      const prog = examProgress.find(p => p.examId === exam._id);
+                      const prog = examProgress.find((p) => p.examId === exam._id);
                       const isCompleted = prog?.isCompleted;
                       const bestScore = prog?.bestScore ?? null;
 
                       return (
-                        <div key={exam._id || idx} onClick={() => isEnrolled && navigate(`/course/${id}/exam/${exam._id}`)}
-                          className={`card mb-3 border-0 shadow-sm p-3 exam-card transition-all ${isEnrolled ? "cursor-pointer" : "locked-card"}`} >
+                        <div
+                          key={exam._id || idx}
+                          onClick={() => openExam(exam._id)}
+                          className={`card mb-3 border-0 shadow-sm p-3 exam-card transition-all ${
+                            isEnrolled ? "cursor-pointer" : "locked-card"
+                          }`}
+                        >
                           <div className="d-flex justify-content-between align-items-start mb-2">
-                            <h6 className="m-0 fw-bold text-dark pe-3 lh-sm">{exam.title || `Module ${idx + 1} Assessment`}</h6>
+                            <h6 className="m-0 fw-bold text-dark pe-3 lh-sm">
+                              {exam.title || `Module ${idx + 1} Assessment`}
+                            </h6>
                             {isCompleted && <CheckCircle size={16} className="text-success flex-shrink-0" />}
                             {!isEnrolled && <Lock size={14} className="text-muted" />}
                           </div>
                           <div className="d-flex gap-3 small text-muted">
-                            <span className="d-flex align-items-center gap-1"><Clock size={12} /> {exam.duration ?? 0}m</span>
-                            <span className="d-flex align-items-center gap-1"><FileText size={12} /> {exam.questions?.length ?? 0} Questions</span>
+                            <span className="d-flex align-items-center gap-1">
+                              <Clock size={12} /> {exam.duration ?? 0}m
+                            </span>
+                            <span className="d-flex align-items-center gap-1">
+                              <FileText size={12} /> {exam.questions?.length ?? 0} Questions
+                            </span>
                           </div>
                           {isEnrolled && bestScore !== null && (
                             <div className="mt-2 pt-2 border-top d-flex justify-content-between align-items-center">
                               <span className="small text-muted">Best Score</span>
-                              <span className={`badge ${bestScore >= 70 ? "bg-success" : "bg-primary"} rounded-pill px-2`}>{bestScore}%</span>
+                              <span className={`badge ${bestScore >= 70 ? "bg-success" : "bg-primary"} rounded-pill px-2`}>
+                                {bestScore}%
+                              </span>
                             </div>
                           )}
                         </div>
@@ -837,13 +1020,16 @@ function CourseDetail() {
 
                 {selectedTab === "discussion" && (
                   <div className="p-4 text-center">
-                    <MessageCircle size={32} className={`mb-3 ${isEnrolled ? 'text-info' : 'text-muted opacity-25'}`} />
+                    <MessageCircle size={32} className={`mb-3 ${isEnrolled ? "text-info" : "text-muted opacity-25"}`} />
                     <p className="small text-dark fw-bold mb-2">Community Insights</p>
-                    <p className="text-muted mb-4" style={{ fontSize: '12px' }}>
-                      Join the conversation with {discussionCount || '0'} active posts from other learners.
+                    <p className="text-muted mb-4" style={{ fontSize: "12px" }}>
+                      Join the conversation with {discussionCount || "0"} active posts from other learners.
                     </p>
-                    <button className={`btn ${isEnrolled ? 'btn-outline-info' : 'btn-light disabled'} btn-sm w-100 rounded-pill`} onClick={handleDiscussionAccess}>
-                      {isEnrolled ? 'Visit Discussion Forum' : 'Enroll to Unlock'}
+                    <button
+                      className={`btn ${isEnrolled ? "btn-outline-info" : "btn-light disabled"} btn-sm w-100 rounded-pill`}
+                      onClick={handleDiscussionAccess}
+                    >
+                      {isEnrolled ? "Visit Discussion Forum" : "Enroll to Unlock"}
                     </button>
                   </div>
                 )}
