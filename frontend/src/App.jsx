@@ -57,7 +57,7 @@ import AboutUs from './pages/aboutus';
 import AdminContactMessages from './pages/dashboards/admin/contactMessages';
 import ForumDiscussions from "./pages/dashboards/admin/Discussions";
 import CourseDiscussions from "./pages/dashboards/instructor/ManageCourseDiscussions";
-import AnalyticsDashboard from "./pages/dashboards/admin/AnalyticsDashboard";
+import AnalyticsDashboard from "./pages/dashboards/admin/Analytics/AnalyticsDashboard";
 import EngagementAnalytics from "./pages/dashboards/instructor/Analytics/EngagementAnalytics";
 import CourseEventAnalytics from "./pages/dashboards/instructor/Analytics/CourseEventAnalytics";
 import EngagementScoreLeaderboard from "./pages/dashboards/instructor/Analytics/EngagementScoreLeaderboard";

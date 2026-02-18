@@ -1,4 +1,3 @@
-// src/pages/Instructor/Analytics/CourseEventAnalytics.jsx
 import { useEffect, useMemo, useState } from "react";
 import api from "../../../../api/api";
 import {
@@ -10,13 +9,15 @@ import {
   Tooltip,
   Legend,
   CartesianGrid,
+  Cell
 } from "recharts";
-import { FaChalkboardTeacher, FaChartBar } from "react-icons/fa";
+import { FaChalkboardTeacher, FaChartBar, FaSyncAlt, FaLightbulb } from "react-icons/fa";
+import { motion } from "framer-motion";
 
 export default function CourseEventAnalytics() {
-  const [courses, setCourses] = useState([]); // [{_id,title}]
+  const [courses, setCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState("");
-  const [events, setEvents] = useState([]); // [{_id:event,count}]
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [err, setErr] = useState("");
@@ -25,18 +26,16 @@ export default function CourseEventAnalytics() {
 
   const colors = {
     primary: "#6f42c1",
+    primaryLight: "#f3e8ff",
     bg: "#f8fafc",
     border: "#e2e8f0",
     textMain: "#1e293b",
     textMuted: "#64748b",
     card: "#ffffff",
+    accent: "#8b5cf6"
   };
 
-  // ✅ IMPORTANT:
-  // This endpoint must return instructor courses list.
-  // If your backend uses different path, change it here.
   const fetchInstructorCourses = async () => {
-    // Try multiple common endpoints, first that works will be used
     const candidates = [
       "/instructor/courses",
       "/instructor/courses?status=approved",
@@ -48,19 +47,10 @@ export default function CourseEventAnalytics() {
     for (const url of candidates) {
       try {
         const res = await api.get(url, { headers: { Authorization: `Bearer ${token}` } });
-
-        // normalize response
-        const list =
-          res.data?.courses ||
-          res.data?.myCourses ||
-          (Array.isArray(res.data) ? res.data : null);
-
+        const list = res.data?.courses || res.data?.myCourses || (Array.isArray(res.data) ? res.data : null);
         if (Array.isArray(list)) return list;
-      } catch (e) {
-        // continue
-      }
+      } catch (e) {}
     }
-
     throw new Error("No instructor courses endpoint matched.");
   };
 
@@ -69,29 +59,20 @@ export default function CourseEventAnalytics() {
       try {
         setLoading(true);
         setErr("");
-
         const list = await fetchInstructorCourses();
-
         const normalized = list
-          .map((c) => ({
-            _id: c._id,
-            title: c.title || c.courseTitle || "Untitled",
-          }))
+          .map((c) => ({ _id: c._id, title: c.title || c.courseTitle || "Untitled" }))
           .filter((c) => c._id);
 
         setCourses(normalized);
         setSelectedCourseId(normalized[0]?._id || "");
       } catch (e) {
-        console.error(e);
-        setErr(
-          "Could not load instructor courses. Please update the courses endpoint in CourseEventAnalytics.jsx."
-        );
+        setErr("Could not load instructor courses.");
       } finally {
         setLoading(false);
       }
     };
     init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const fetchCourseEvents = async (courseId) => {
@@ -104,7 +85,6 @@ export default function CourseEventAnalytics() {
       });
       setEvents(Array.isArray(res.data?.events) ? res.data.events : []);
     } catch (e) {
-      console.error(e);
       setErr("Failed to load course event analytics.");
       setEvents([]);
     } finally {
@@ -113,158 +93,166 @@ export default function CourseEventAnalytics() {
   };
 
   useEffect(() => {
-    if (!selectedCourseId) return;
-    fetchCourseEvents(selectedCourseId);
+    if (selectedCourseId) fetchCourseEvents(selectedCourseId);
   }, [selectedCourseId]);
 
   const chartData = useMemo(() => {
-    return events.map((e) => ({ event: e._id, count: e.count || 0 }));
+    return events.map((e) => ({ event: e._id.replace(/_/g, ' '), count: e.count || 0 }));
   }, [events]);
 
-  if (loading) {
-    return (
-      <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: "50%",
-              border: `4px solid ${colors.border}`,
-              borderTop: `4px solid ${colors.primary}`,
-              animation: "spin 1s linear infinite",
-              margin: "0 auto",
-            }}
-          />
-          <p style={{ marginTop: 12, color: colors.primary, fontWeight: 600 }}>Loading Courses...</p>
-          <style>{`@keyframes spin {0%{transform:rotate(0)}100%{transform:rotate(360deg)}}`}</style>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="d-flex justify-content-center align-items-center vh-100 bg-white">
+      <div className="spinner-border text-primary" style={{ width: '3rem', height: '3rem' }}></div>
+    </div>
+  );
 
   return (
-    <div style={{ padding: 16, background: colors.bg, minHeight: "100vh", fontFamily: "Inter, sans-serif" }}>
-      <div style={{ marginBottom: 14 }}>
-        <h2 style={{ margin: 0, color: colors.textMain, fontWeight: 900, letterSpacing: "-0.3px" }}>
-          Course Event Analytics
+    <div style={{ padding: "clamp(16px, 4vw, 32px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      
+      {/* Header Section */}
+      <header className="mb-5 text-start">
+        <h2 style={{ margin: 0, color: colors.textMain, fontWeight: 900, letterSpacing: "-1px" }}>
+          Course Activity Insights
         </h2>
-        <p style={{ margin: "6px 0 0", color: colors.textMuted, fontWeight: 500 }}>
-          Select a course and see student actions (last 30 days)
+        <p style={{ margin: "4px 0 0", color: colors.textMuted, fontWeight: 500 }}>
+          Granular breakdown of student interactions over the last 30 days.
         </p>
-      </div>
+      </header>
 
       {err && (
-        <div className="alert alert-danger" style={{ border: "none", borderRadius: 12, marginBottom: 14 }}>
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="alert alert-danger border-0 shadow-sm rounded-4 mb-4 text-start">
           {err}
-        </div>
+        </motion.div>
       )}
 
-      {/* Filter */}
-      <div
-        style={{
-          background: colors.card,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 14,
-          padding: 14,
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-          flexWrap: "wrap",
-          marginBottom: 14,
-          boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-        }}
-      >
-        <div
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: 12,
-            background: "#f5f3ff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: colors.primary,
-            fontSize: 18,
-          }}
-        >
-          <FaChalkboardTeacher />
-        </div>
-
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <div style={{ fontSize: 12, fontWeight: 900, color: colors.textMuted, textTransform: "uppercase" }}>
-            Course
+      {/* Selector Card */}
+      <div style={{
+        background: colors.card,
+        border: `1px solid ${colors.border}`,
+        borderRadius: "24px",
+        padding: "24px",
+        marginBottom: "24px",
+        boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02)"
+      }}>
+        <div className="row g-3 align-items-center">
+          <div className="col-auto">
+            <div style={{
+              width: "56px", height: "56px", borderRadius: "16px",
+              background: colors.primaryLight, display: "flex",
+              alignItems: "center", justifyContent: "center",
+              color: colors.primary, fontSize: "24px"
+            }}>
+              <FaChalkboardTeacher />
+            </div>
           </div>
-          <select
-            className="form-select"
-            value={selectedCourseId}
-            onChange={(e) => setSelectedCourseId(e.target.value)}
-            style={{
-              marginTop: 6,
-              borderRadius: 12,
-              borderColor: colors.border,
-              padding: "12px 12px",
-              fontWeight: 700,
-              color: colors.textMain,
-            }}
-          >
-            {courses.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.title}
-              </option>
-            ))}
-          </select>
+          <div className="col text-start">
+            <h6 className="m-0 fw-bold text-dark">Select Course</h6>
+            <p className="m-0 text-muted small">Choose a course to filter event data</p>
+          </div>
+          <div className="col-12 col-lg-4">
+            <select
+              className="form-select border-0 bg-light fw-bold py-3"
+              value={selectedCourseId}
+              onChange={(e) => setSelectedCourseId(e.target.value)}
+              style={{ borderRadius: "14px", cursor: "pointer" }}
+            >
+              {courses.map((c) => (
+                <option key={c._id} value={c._id}>{c.title}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-auto">
+            <button
+              className="btn"
+              onClick={() => fetchCourseEvents(selectedCourseId)}
+              disabled={loadingEvents || !selectedCourseId}
+              style={{
+                background: "linear-gradient(135deg, #6f42c1 0%, #8553e8 100%)",
+                color: "#fff",
+                borderRadius: "14px",
+                padding: "14px 24px",
+                fontWeight: "700",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                border: "none",
+                boxShadow: "0 10px 15px -3px rgba(111, 66, 193, 0.3)"
+              }}
+            >
+              <FaSyncAlt className={loadingEvents ? "fa-spin" : ""} />
+              {loadingEvents ? "Syncing..." : "Refresh"}
+            </button>
+          </div>
         </div>
-
-        <button
-          className="btn btn-outline-dark"
-          onClick={() => fetchCourseEvents(selectedCourseId)}
-          style={{ borderRadius: 12, fontWeight: 800, padding: "12px 14px" }}
-          disabled={loadingEvents || !selectedCourseId}
-        >
-          {loadingEvents ? "Refreshing..." : "Refresh"}
-        </button>
       </div>
 
-      {/* Chart */}
-      <div
-        style={{
-          background: colors.card,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 14,
-          padding: 16,
-          boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-          <div style={{ color: colors.primary }}>
-            <FaChartBar />
-          </div>
-          <div style={{ fontWeight: 900, color: colors.textMain }}>Event Counts</div>
-          <div style={{ marginLeft: "auto", color: colors.textMuted, fontWeight: 700, fontSize: 12 }}>
-            last 30 days
+      {/* Main Chart Card */}
+      <div style={{
+        background: colors.card,
+        border: `1px solid ${colors.border}`,
+        borderRadius: "24px",
+        padding: "32px",
+        boxShadow: "0 20px 25px -5px rgba(0,0,0,0.05)",
+        minHeight: "500px"
+      }}>
+        <div className="d-flex align-items-center gap-2 mb-5">
+          <FaChartBar className="text-primary" size={20} />
+          <h5 className="m-0 fw-bold text-dark">Event Distribution</h5>
+          <div className="badge rounded-pill border ms-auto px-3 py-2 bg-light text-muted small fw-bold">
+            Last 30 Days
           </div>
         </div>
 
         {chartData.length === 0 ? (
-          <EmptyBox text="No course event data yet. Open lesson/exam pages to generate events." />
+          <EmptyBox text="No engagement data found. Encourage students to interact with lessons and exams to populate this chart." />
         ) : (
-          <div style={{ width: "100%", height: 360 }}>
+          <div style={{ width: "100%", height: 400 }}>
             <ResponsiveContainer>
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="event" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={70} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="count" fill={colors.primary} radius={[6, 6, 0, 0]} />
+              <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="event" 
+                  tick={{ fontSize: 11, fontWeight: 600, fill: colors.textMuted }} 
+                  axisLine={false}
+                  tickLine={false}
+                  angle={-25} 
+                  textAnchor="end" 
+                  interval={0}
+                />
+                <YAxis 
+                  tick={{ fontSize: 11, fontWeight: 600, fill: colors.textMuted }} 
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip 
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', padding: '12px' }}
+                />
+                <Bar dataKey="count" radius={[8, 8, 0, 0]} barSize={45}>
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={index % 2 === 0 ? colors.primary : colors.accent} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         )}
 
-        <div style={{ marginTop: 10, color: colors.textMuted, fontSize: 12 }}>
-          Tip: track events like <b>course_open</b>, <b>lesson_open</b>, <b>lesson_complete</b>, <b>exam_start</b>, <b>exam_complete</b>.
+        {/* Info Box Footer */}
+        <div style={{ 
+            marginTop: "2rem", 
+            padding: "1rem 1.5rem", 
+            background: "#f8fafc", 
+            borderRadius: "16px", 
+            border: "1px solid #e2e8f0",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px"
+        }}>
+          <FaLightbulb className="text-warning" />
+          <p className="m-0 text-muted small text-start">
+            <strong>Pro Tip:</strong> Focus on <b>lesson_complete</b> vs <b>lesson_open</b> ratios to identify content friction points in your course.
+          </p>
         </div>
       </div>
     </div>
@@ -273,17 +261,16 @@ export default function CourseEventAnalytics() {
 
 function EmptyBox({ text }) {
   return (
-    <div
-      style={{
-        padding: "44px 14px",
-        textAlign: "center",
-        color: "#94a3b8",
-        background: "#fff",
-        border: "1px dashed #e2e8f0",
-        borderRadius: 12,
-      }}
-    >
-      {text}
+    <div style={{
+      padding: "80px 20px",
+      textAlign: "center",
+      color: "#94a3b8",
+      background: "#f8fafc",
+      border: "2px dashed #e2e8f0",
+      borderRadius: "20px",
+      margin: "20px 0"
+    }}>
+      <p className="mb-0 fw-medium mx-auto" style={{ maxWidth: "400px" }}>{text}</p>
     </div>
   );
 }

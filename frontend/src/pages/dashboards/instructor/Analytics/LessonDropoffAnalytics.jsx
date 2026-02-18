@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { FaChalkboardTeacher, FaChartLine, FaSyncAlt } from "react-icons/fa";
+import {
+    FaChalkboardTeacher, FaChartLine, FaSyncAlt,
+    FaLightbulb, FaArrowDown, FaRegClock, FaLayerGroup, FaInfoCircle
+} from "react-icons/fa";
 import api from "../../../../api/api";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function LessonDropoffAnalytics() {
     const [courses, setCourses] = useState([]);
@@ -15,13 +19,18 @@ export default function LessonDropoffAnalytics() {
 
     const colors = {
         primary: "#6f42c1",
+        primaryLight: "#f3e8ff",
         bg: "#f8fafc",
         border: "#e2e8f0",
         textMain: "#1e293b",
         textMuted: "#64748b",
         card: "#ffffff",
+        danger: "#ef4444",
+        warning: "#f59e0b",
+        success: "#10b981"
     };
 
+    // --- Core Logic remains unchanged ---
     const fetchInstructorCourses = async () => {
         const candidates = [
             "/instructor/courses",
@@ -38,7 +47,6 @@ export default function LessonDropoffAnalytics() {
                 if (Array.isArray(list)) return list;
             } catch { }
         }
-
         throw new Error("No instructor courses endpoint matched.");
     };
 
@@ -47,18 +55,13 @@ export default function LessonDropoffAnalytics() {
         try {
             setLoadingData(true);
             setErr("");
-
             const res = await api.get(`/analytics/insights/course/${courseId}/lesson-dropoff?days=30`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-
             setRows(Array.isArray(res.data?.rows) ? res.data.rows : []);
             setSuggestions(Array.isArray(res.data?.suggestions) ? res.data.suggestions : []);
         } catch (e) {
-            console.error(e);
             setErr("Failed to load lesson drop-off analytics.");
-            setRows([]);
-            setSuggestions([]);
         } finally {
             setLoadingData(false);
         }
@@ -68,195 +71,198 @@ export default function LessonDropoffAnalytics() {
         const init = async () => {
             try {
                 setLoading(true);
-                setErr("");
-
                 const list = await fetchInstructorCourses();
                 const normalized = list
                     .map((c) => ({ _id: c._id, title: c.title || c.courseTitle || "Untitled" }))
                     .filter((c) => c._id);
-
                 setCourses(normalized);
-
                 const firstId = normalized[0]?._id || "";
                 setSelectedCourseId(firstId);
                 if (firstId) await fetchDropoff(firstId);
             } catch (e) {
-                console.error(e);
                 setErr("Could not load instructor courses.");
             } finally {
                 setLoading(false);
             }
         };
-
         init();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [token]);
 
     useEffect(() => {
-        if (!selectedCourseId) return;
-        fetchDropoff(selectedCourseId);
+        if (selectedCourseId) fetchDropoff(selectedCourseId);
     }, [selectedCourseId]);
 
-    // const worst = useMemo(() => rows.filter((r) => r.opens >= 10).slice(0, 10), [rows]);
     const worst = useMemo(() => rows.filter((r) => r.opens >= 1).slice(0, 50), [rows]);
 
-    if (loading) return <div className="container mt-5">Loading...</div>;
+    if (loading) return (
+        <div className="d-flex justify-content-center align-items-center vh-100 bg-white">
+            <div className="spinner-grow text-primary" role="status"></div>
+        </div>
+    );
 
     return (
-        <div style={{ padding: 16, background: colors.bg, minHeight: "100vh", fontFamily: "Inter, sans-serif" }}>
-            <div style={{ marginBottom: 14 }}>
-                <h2 style={{ margin: 0, color: colors.textMain, fontWeight: 900 }}>Lesson Drop-Off</h2>
-                <p style={{ margin: "6px 0 0", color: colors.textMuted, fontWeight: 500 }}>
-                    Shows where students stop: lesson opened vs completed (last 30 days)
-                </p>
-            </div>
+        <div style={{ padding: "clamp(16px, 4vw, 32px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+            <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
 
-            {err && <div className="alert alert-danger">{err}</div>}
-
-            {/* Filter */}
-            <div
-                style={{
-                    background: colors.card,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: 14,
-                    padding: 14,
-                    display: "flex",
-                    gap: 12,
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    marginBottom: 14,
-                }}
-            >
-                <div
-                    style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 12,
-                        background: "#f5f3ff",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: colors.primary,
-                        fontSize: 18,
-                    }}
-                >
-                    <FaChalkboardTeacher />
-                </div>
-
-                <div style={{ flex: 1, minWidth: 220 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, color: colors.textMuted, textTransform: "uppercase" }}>
-                        Course
+                {/* Header Section */}
+                <header style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem", gap: "1.5rem" }}>
+                    <div className="text-start">
+                        <h2 style={{ margin: 0, color: colors.textMain, fontWeight: 900, letterSpacing: "-1px" }}>
+                            Lesson Drop-Off
+                        </h2>
+                        <p style={{ margin: "4px 0 0", color: colors.textMuted, fontWeight: 500 }}>
+                            Track content friction: Lesson opens vs completions (last 30 days)
+                        </p>
                     </div>
-                    <select
-                        className="form-select"
-                        value={selectedCourseId}
-                        onChange={(e) => setSelectedCourseId(e.target.value)}
-                        style={{ marginTop: 6, borderRadius: 12, padding: "12px 12px", fontWeight: 700 }}
-                    >
-                        {courses.map((c) => (
-                            <option key={c._id} value={c._id}>
-                                {c.title}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                <button
-                    className="btn btn-outline-dark"
-                    onClick={() => fetchDropoff(selectedCourseId)}
-                    style={{ borderRadius: 12, fontWeight: 800, padding: "12px 14px" }}
-                    disabled={loadingData || !selectedCourseId}
-                >
-                    <FaSyncAlt style={{ marginRight: 8 }} />
-                    {loadingData ? "Refreshing..." : "Refresh"}
-                </button>
-            </div>
-
-            {/* Suggestions */}
-            <div
-                style={{
-                    background: colors.card,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: 14,
-                    padding: 14,
-                    marginBottom: 14,
-                }}
-            >
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                    <div style={{ color: colors.primary }}>
-                        <FaChartLine />
+                    <div>
+                        <button
+                            onClick={() => fetchDropoff(selectedCourseId)}
+                            disabled={loadingData || !selectedCourseId}
+                            style={{
+                                background: "linear-gradient(135deg, #6f42c1 0%, #8553e8 100%)",
+                                color: "#fff",
+                                borderRadius: "14px",
+                                padding: "12px 28px",
+                                fontWeight: "700",
+                                border: "none",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "10px",
+                                boxShadow: "0 10px 20px -5px rgba(111, 66, 193, 0.4)",
+                                transition: "all 0.3s ease"
+                            }}
+                        >
+                            <FaSyncAlt className={loadingData ? "fa-spin" : ""} />
+                            {loadingData ? "Updating..." : "Refresh Analytics"}
+                        </button>
                     </div>
-                    <div style={{ fontWeight: 900, color: colors.textMain }}>Suggestions</div>
+                </header>
+
+                {/* Filter Section */}
+                <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: "24px", padding: "24px", marginBottom: "24px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02)" }}>
+                    <div className="row g-3 align-items-center">
+                        <div className="col-auto">
+                            <div style={{ width: "56px", height: "56px", borderRadius: "16px", background: colors.primaryLight, display: "flex", alignItems: "center", justifyContent: "center", color: colors.primary, fontSize: "24px" }}>
+                                <FaChalkboardTeacher />
+                            </div>
+                        </div>
+                        <div className="col text-start">
+                            <h6 className="m-0 fw-bold text-dark">Analytics Context</h6>
+                            <p className="m-0 text-muted small">Viewing drop-off data for course content</p>
+                        </div>
+                        <div className="col-12 col-lg-5">
+                            <select className="form-select border-0 bg-light fw-bold py-3" value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)} style={{ borderRadius: "14px", cursor: "pointer" }}>
+                                {courses.map((c) => <option key={c._id} value={c._id}>{c.title}</option>)}
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
-                {suggestions.length === 0 ? (
-                    <div style={{ color: colors.textMuted }}>No suggestions yet (need more data).</div>
-                ) : (
-                    <ul style={{ margin: 0, paddingLeft: 18, color: colors.textMain }}>
-                        {suggestions.map((s, i) => (
-                            <li key={s.lessonId + i} style={{ marginBottom: 6 }}>
-                                <div className="fw-bold">
-                                    {s.lessonTitle}
+                <div className="row g-4">
+                    {/* Optimization Tips - Strictly Left Aligned */}
+                    <div className="col-12 col-lg-4">
+                        <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: "24px", padding: "24px", height: "100%", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.04)" }}>
+                            <div style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "flex-start", // Left Aligned
+                                gap: "12px",
+                                marginBottom: "1.5rem"
+                            }}>
+                                <div style={{ color: colors.primary, background: colors.primaryLight, padding: "8px", borderRadius: "10px", display: "flex" }}>
+                                    <FaLightbulb />
                                 </div>
-                                <div style={{ fontSize: 13 }}>
-                                    {s.message}
+                                <h5 className="m-0 fw-bold text-dark" style={{ letterSpacing: "-0.5px" }}>Optimization Tips</h5>
+                            </div>
+
+                            {suggestions.length === 0 ? (
+                                <div className="text-start py-4">
+                                    <p className="text-muted small">Insufficient data to generate optimization strategies at this time.</p>
                                 </div>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
-
-            {/* Table */}
-            <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 14, padding: 16 }}>
-                <div style={{ fontWeight: 900, color: colors.textMain, marginBottom: 10 }}>Lessons (worst drop first)</div>
-
-                {worst.length === 0 ? (
-                    <div style={{ color: colors.textMuted }}>No lesson data yet. Students must open/complete lessons.</div>
-                ) : (
-                    <div className="table-responsive">
-                        <table className="table table-sm align-middle">
-                            <thead>
-                                <tr>
-                                    <th>Lesson</th>
-                                    <th>Opens</th>
-                                    <th>Completes</th>
-                                    <th>Completion %</th>
-                                    <th>Drop %</th>
-                                    <th>Last Open</th>
-                                    <th>Last Complete</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {worst.map((r) => (
-                                    <tr key={r.lessonId}>
-                                        <td>
-                                            <div className="fw-bold">
-                                                {r.lessonTitle || "Untitled Lesson"}
-                                            </div>
-                                            <div style={{ fontSize: 11, color: "#64748b" }}>
-                                                {r.lessonId}
-                                            </div>
-                                        </td>
-                                        <td className="fw-bold">{r.opens}</td>
-                                        <td className="fw-bold">{r.completes}</td>
-                                        <td className="fw-bold">{Math.round((r.completionRate || 0) * 100)}%</td>
-                                        <td className="fw-bold">{Math.round((r.dropRate || 0) * 100)}%</td>
-                                        <td style={{ fontSize: 12, color: colors.textMuted }}>
-                                            {r.lastOpenAt ? new Date(r.lastOpenAt).toLocaleString() : "—"}
-                                        </td>
-                                        <td style={{ fontSize: 12, color: colors.textMuted }}>
-                                            {r.lastCompleteAt ? new Date(r.lastCompleteAt).toLocaleString() : "—"}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                            ) : (
+                                <div className="d-flex flex-column gap-3">
+                                    {suggestions.map((s, i) => (
+                                        <div key={s.lessonId + i} className="text-start" style={{ padding: "16px", background: "#f8fafc", borderRadius: "16px", borderLeft: `4px solid ${colors.primary}` }}>
+                                            <div className="fw-bold text-dark mb-1 small">{s.lessonTitle}</div>
+                                            <div className="text-muted" style={{ fontSize: "12px", lineHeight: "1.5" }}>{s.message}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
-                )}
 
-                <div style={{ marginTop: 10, color: colors.textMuted, fontSize: 12 }}>
-                    Note: We use <b>lesson_select</b> as "open".
+                    {/* Table Section */}
+                    <div className="col-12 col-lg-8">
+                        <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: "24px", overflow: "hidden", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.05)" }}>
+                            <div style={{
+                                padding: "24px",
+                                borderBottom: `1px solid ${colors.border}`,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "flex-start",
+                                gap: "12px"
+                            }}>
+                                <FaChartLine className="text-primary" />
+                                <h5 className="m-0 fw-bold text-dark">Lesson Performance</h5>
+
+                                <div className="badge bg-light text-muted fw-bold small rounded-pill px-3 py-2 border ms-auto">
+                                    Last 30 Days
+                                </div>
+                            </div>
+
+                            <div className="table-responsive">
+                                <table className="table table-hover align-middle mb-0">
+                                    <thead style={{ background: "#fcfcfd" }}>
+                                        <tr style={{ color: colors.textMuted, fontSize: "11px", textTransform: "uppercase", fontWeight: "800" }}>
+                                            <th className="ps-4 py-4 text-start">Content</th>
+                                            <th className="text-center">Opens</th>
+                                            <th className="text-center">Drops</th>
+                                            <th className="text-center" style={{ minWidth: "120px" }}>Health</th>
+                                            <th className="pe-4 text-end">Last Event</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {worst.map((r) => (
+                                            <tr key={r.lessonId}>
+                                                <td className="ps-4 text-start">
+                                                    <div className="fw-bold text-dark mb-0">{r.lessonTitle || "Untitled"}</div>
+                                                    <div style={{ fontSize: "10px" }} className="text-muted">{r.lessonId}</div>
+                                                </td>
+                                                <td className="text-center">
+                                                    <span className="badge bg-light text-dark border rounded-pill px-3">{r.opens}</span>
+                                                </td>
+                                                <td className="text-center">
+                                                    <span style={{ fontWeight: "800", color: (r.dropRate || 0) > 0.4 ? colors.danger : colors.textMain }}>
+                                                        {Math.round((r.dropRate || 0) * 100)}%
+                                                    </span>
+                                                </td>
+                                                <td className="text-center">
+                                                    <div className="progress" style={{ height: "6px", borderRadius: "10px" }}>
+                                                        <div className="progress-bar" style={{
+                                                            width: `${Math.round((r.completionRate || 0) * 100)}%`,
+                                                            background: (r.completionRate || 0) > 0.7 ? colors.success : colors.warning
+                                                        }} />
+                                                    </div>
+                                                </td>
+                                                <td className="pe-4 text-end text-muted small">
+                                                    {r.lastOpenAt ? new Date(r.lastOpenAt).toLocaleDateString() : "—"}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Info Section - Left Aligned */}
+                            <div style={{ padding: "20px 24px", background: "#f8f9fa", borderTop: `1px solid ${colors.border}` }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: "10px", color: colors.textMuted, fontSize: "12px" }}>
+                                    <FaInfoCircle />
+                                    <span className="text-start">Pro Tip: System identifies "Opens" via <b>lesson_select</b> events. Refresh to sync latest student interactions.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

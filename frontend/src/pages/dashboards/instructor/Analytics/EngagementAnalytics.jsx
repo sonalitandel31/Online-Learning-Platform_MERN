@@ -1,4 +1,3 @@
-// src/pages/Instructor/Analytics/EngagementAnalytics.jsx
 import { useEffect, useMemo, useState } from "react";
 import api from "../../../../api/api";
 import {
@@ -12,12 +11,15 @@ import {
   LineChart,
   Line,
   CartesianGrid,
+  AreaChart,
+  Area
 } from "recharts";
-import { FaBolt, FaChartLine, FaUserClock } from "react-icons/fa";
+import { FaBolt, FaChartLine, FaUserClock, FaInfoCircle, FaCalendarAlt } from "react-icons/fa";
+import { motion } from "framer-motion";
 
 export default function EngagementAnalytics() {
-  const [events, setEvents] = useState([]); // [{_id:eventName,count}]
-  const [dau, setDau] = useState([]); // [{date,dau,events}]
+  const [events, setEvents] = useState([]); 
+  const [dau, setDau] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
@@ -25,6 +27,8 @@ export default function EngagementAnalytics() {
 
   const colors = {
     primary: "#6f42c1",
+    primaryLight: "#f3e8ff",
+    secondary: "#10b981",
     bg: "#f8fafc",
     border: "#e2e8f0",
     textMain: "#1e293b",
@@ -34,8 +38,7 @@ export default function EngagementAnalytics() {
 
   const totals = useMemo(() => {
     const totalEvents = events.reduce((sum, e) => sum + (e.count || 0), 0);
-    const avgDau =
-      dau.length > 0 ? Math.round(dau.reduce((s, d) => s + (d.dau || 0), 0) / dau.length) : 0;
+    const avgDau = dau.length > 0 ? Math.round(dau.reduce((s, d) => s + (d.dau || 0), 0) / dau.length) : 0;
     const peakDau = dau.length > 0 ? Math.max(...dau.map((d) => d.dau || 0)) : 0;
     return { totalEvents, avgDau, peakDau };
   }, [events, dau]);
@@ -45,20 +48,13 @@ export default function EngagementAnalytics() {
       try {
         setLoading(true);
         setErr("");
-
         const [evRes, dauRes] = await Promise.all([
-          api.get("/analytics/instructor/me", {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          api.get("/analytics/dau?days=14", {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+          api.get("/analytics/instructor/me", { headers: { Authorization: `Bearer ${token}` } }),
+          api.get("/analytics/dau?days=14", { headers: { Authorization: `Bearer ${token}` } }),
         ]);
-
         setEvents(Array.isArray(evRes.data?.events) ? evRes.data.events : []);
         setDau(Array.isArray(dauRes.data?.dau) ? dauRes.data.dau : []);
       } catch (e) {
-        console.error(e);
         setErr("Failed to load engagement analytics.");
       } finally {
         setLoading(false);
@@ -68,207 +64,157 @@ export default function EngagementAnalytics() {
   }, [token]);
 
   const eventData = useMemo(() => {
-    // normalize chart fields
     return events.map((e) => ({
       event: e._id,
       count: e.count || 0,
     }));
   }, [events]);
 
-  if (loading) {
-    return (
-      <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: "50%",
-              border: `4px solid ${colors.border}`,
-              borderTop: `4px solid ${colors.primary}`,
-              animation: "spin 1s linear infinite",
-              margin: "0 auto",
-            }}
-          />
-          <p style={{ marginTop: 12, color: colors.primary, fontWeight: 600 }}>Loading Engagement Analytics...</p>
-          <style>{`@keyframes spin {0%{transform:rotate(0)}100%{transform:rotate(360deg)}}`}</style>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="d-flex justify-content-center align-items-center vh-100 bg-white">
+      <div className="spinner-border text-primary" style={{ width: '3rem', height: '3rem' }}></div>
+    </div>
+  );
 
   return (
-    <div style={{ padding: 16, background: colors.bg, minHeight: "100vh", fontFamily: "Inter, sans-serif" }}>
+    <div style={{ padding: "clamp(16px, 4vw, 32px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      
       {/* Header */}
-      <div style={{ marginBottom: 18 }}>
-        <h2 style={{ margin: 0, color: colors.textMain, fontWeight: 900, letterSpacing: "-0.3px" }}>
-          Engagement Analytics
-        </h2>
-        <p style={{ margin: "6px 0 0", color: colors.textMuted, fontWeight: 500 }}>
-          Student activity events + DAU trend (last 14 days)
+      <header className="mb-5 text-start">
+        <div className="d-flex align-items-center gap-3 mb-2">
+            <h2 style={{ margin: 0, color: colors.textMain, fontWeight: 900, letterSpacing: "-1px" }}>
+              Engagement Analytics
+            </h2>
+            <div className="badge rounded-pill border px-3 py-2 bg-white text-muted small d-flex align-items-center gap-2">
+                <FaCalendarAlt size={12} /> Last 14-30 Days
+            </div>
+        </div>
+        <p style={{ margin: 0, color: colors.textMuted, fontWeight: 500 }}>
+          Real-time student activity tracking and daily active usage trends.
         </p>
-      </div>
+      </header>
 
       {err && (
-        <div
-          className="alert alert-danger"
-          style={{ border: "none", borderRadius: 12, marginBottom: 16 }}
-        >
-          {err}
+        <div className="alert alert-danger border-0 shadow-sm rounded-4 mb-4 text-start">
+          <FaInfoCircle className="me-2" /> {err}
         </div>
       )}
 
-      {/* Stats cards */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 12,
-          marginBottom: 16,
-        }}
-      >
-        <StatCard
-          icon={<FaBolt />}
-          title="Total Events (30d)"
-          value={totals.totalEvents}
-          colors={colors}
-        />
-        <StatCard
-          icon={<FaUserClock />}
-          title="Avg DAU (14d)"
-          value={totals.avgDau}
-          colors={colors}
-        />
-        <StatCard
-          icon={<FaChartLine />}
-          title="Peak DAU (14d)"
-          value={totals.peakDau}
-          colors={colors}
-        />
+      {/* Stats Grid */}
+      <div className="row g-4 mb-5">
+        <div className="col-12 col-md-4">
+            <StatCard icon={<FaBolt />} title="Total Events (30d)" value={totals.totalEvents} color={colors.primary} />
+        </div>
+        <div className="col-12 col-md-4">
+            <StatCard icon={<FaUserClock />} title="Avg DAU (14d)" value={totals.avgDau} color={colors.secondary} />
+        </div>
+        <div className="col-12 col-md-4">
+            <StatCard icon={<FaChartLine />} title="Peak DAU (14d)" value={totals.peakDau} color="#3b82f6" />
+        </div>
       </div>
 
-      {/* Charts */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
-        <div
-          style={{
-            background: colors.card,
-            border: `1px solid ${colors.border}`,
-            borderRadius: 14,
-            padding: 16,
-            boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-          }}
-        >
-          <div style={{ fontWeight: 900, color: colors.textMain, marginBottom: 10 }}>
-            Event Breakdown (last 30 days)
-          </div>
-          {eventData.length === 0 ? (
-            <EmptyBox text="No event data yet. Open courses/lessons/exams to generate events." />
-          ) : (
-            <div style={{ width: "100%", height: 320 }}>
-              <ResponsiveContainer>
-                <BarChart data={eventData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="event" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={70} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="count" fill={colors.primary} radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+      {/* Charts Grid */}
+      <div className="row g-4">
+        <div className="col-12 col-xl-6">
+          <ChartContainer title="Event Breakdown" subtitle="Student actions recorded in the last 30 days">
+            {eventData.length === 0 ? (
+              <EmptyBox text="No event data available yet." />
+            ) : (
+              <div style={{ width: "100%", height: 350 }}>
+                <ResponsiveContainer>
+                  <BarChart data={eventData} margin={{ top: 20, right: 30, left: 0, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="event" tick={{ fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" />
+                    <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }} />
+                    <Bar dataKey="count" fill={colors.primary} radius={[8, 8, 0, 0]} barSize={40} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </ChartContainer>
         </div>
 
-        <div
-          style={{
-            background: colors.card,
-            border: `1px solid ${colors.border}`,
-            borderRadius: 14,
-            padding: 16,
-            boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-          }}
-        >
-          <div style={{ fontWeight: 900, color: colors.textMain, marginBottom: 10 }}>
-            Daily Active Users (last 14 days)
-          </div>
-          {dau.length === 0 ? (
-            <EmptyBox text="No DAU data yet." />
-          ) : (
-            <div style={{ width: "100%", height: 320 }}>
-              <ResponsiveContainer>
-                <LineChart data={dau}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="dau" stroke={colors.primary} strokeWidth={3} dot={false} />
-                  <Line type="monotone" dataKey="events" stroke="#10b981" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
+        <div className="col-12 col-xl-6">
+          <ChartContainer title="Daily Active Users" subtitle="Unique logged-in users vs total events">
+            {dau.length === 0 ? (
+              <EmptyBox text="No trend data available." />
+            ) : (
+              <div style={{ width: "100%", height: 350 }}>
+                <ResponsiveContainer>
+                  <AreaChart data={dau} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorDau" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={colors.primary} stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor={colors.primary} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }} />
+                    <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
+                    <Area type="monotone" dataKey="dau" stroke={colors.primary} strokeWidth={3} fillOpacity={1} fill="url(#colorDau)" />
+                    <Line type="monotone" dataKey="events" stroke={colors.secondary} strokeWidth={2} dot={{ r: 4, fill: colors.secondary }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            
+            {/* STRICTLY LEFT-ALIGNED INFO FOOTER */}
+            <div style={{ 
+                marginTop: "1.5rem", 
+                padding: "1rem", 
+                background: "#f8fafc", 
+                borderRadius: "12px", 
+                border: "1px solid #e2e8f0",
+                width: "100%" 
+            }}>
+                <div className="d-flex align-items-center justify-content-start gap-2 text-muted" style={{ fontSize: 11 }}>
+                    <FaInfoCircle />
+                    <span className="text-start">DAU reflects unique userId sessions. Anonymous interactions are excluded.</span>
+                </div>
             </div>
-          )}
-          <div style={{ marginTop: 10, color: colors.textMuted, fontSize: 12 }}>
-            Note: DAU counts unique <b>logged-in</b> users only (userId based). Anonymous visitors may not be counted.
-          </div>
+          </ChartContainer>
         </div>
       </div>
     </div>
   );
 }
 
-function StatCard({ icon, title, value, colors }) {
+function StatCard({ icon, title, value, color }) {
   return (
-    <div
-      style={{
-        background: colors.card,
-        border: `1px solid ${colors.border}`,
-        borderRadius: 14,
-        padding: 14,
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-      }}
+    <motion.div
+      whileHover={{ y: -5 }}
+      style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "24px", padding: "24px", display: "flex", alignItems: "center", gap: "20px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02)" }}
     >
-      <div
-        style={{
-          width: 42,
-          height: 42,
-          borderRadius: 12,
-          background: "#f5f3ff",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: colors.primary,
-          fontSize: 18,
-        }}
-      >
+      <div style={{ width: 60, height: 60, borderRadius: "18px", background: `${color}15`, color: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
         {icon}
       </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ color: colors.textMuted, fontSize: 12, fontWeight: 800, textTransform: "uppercase" }}>
-          {title}
-        </div>
-        <div style={{ color: colors.textMain, fontSize: 20, fontWeight: 900 }}>{value}</div>
+      <div className="text-start">
+        <div style={{ color: "#64748b", fontSize: "12px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.5px" }}>{title}</div>
+        <div style={{ color: "#1e293b", fontSize: "28px", fontWeight: "900" }}>{value.toLocaleString()}</div>
       </div>
+    </motion.div>
+  );
+}
+
+function ChartContainer({ title, subtitle, children }) {
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "24px", padding: "24px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.05)", height: "100%", display: "flex", flexDirection: "column" }}>
+      <div className="mb-4 text-start">
+        <h5 className="fw-bold mb-1 text-dark">{title}</h5>
+        <p className="text-muted small mb-0">{subtitle}</p>
+      </div>
+      <div style={{ flexGrow: 1 }}>{children}</div>
     </div>
   );
 }
 
 function EmptyBox({ text }) {
   return (
-    <div
-      style={{
-        padding: "40px 14px",
-        textAlign: "center",
-        color: "#94a3b8",
-        background: "#fff",
-        border: "1px dashed #e2e8f0",
-        borderRadius: 12,
-      }}
-    >
-      {text}
+    <div style={{ padding: "80px 20px", textAlign: "center", color: "#94a3b8", background: "#f8fafc", border: "2px dashed #e2e8f0", borderRadius: "20px" }}>
+      <p className="mb-0 fw-medium">{text}</p>
     </div>
   );
 }
