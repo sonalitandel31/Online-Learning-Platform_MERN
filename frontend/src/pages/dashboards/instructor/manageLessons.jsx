@@ -1,7 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../../../api/api";
-import { FaPlus, FaEdit, FaTrash, FaVideo, FaFilePdf, FaFileAlt, FaChevronDown, FaChevronUp } from "react-icons/fa";
+import {
+  FaPlus,
+  FaEdit,
+  FaTrash,
+  FaVideo,
+  FaFilePdf,
+  FaFileAlt,
+  FaChevronDown,
+  FaChevronUp,
+} from "react-icons/fa";
 
 export default function ManageLessons() {
   const { courseId: selectedCourseId } = useParams();
@@ -35,7 +44,7 @@ export default function ManageLessons() {
     success: "#198754",
     warning: "#d97706",
     bg: "#f8fafc",
-    border: "#e2e8f0"
+    border: "#e2e8f0",
   };
 
   useEffect(() => {
@@ -48,7 +57,8 @@ export default function ManageLessons() {
 
         const coursesData = res.data.courses.map((course) => ({
           ...course,
-          lessons: [],
+          lessons: course.lessons || [],
+          lessonsCount: course.lessonsCount ?? 0,
           expanded: false,
           lessonsLoading: false,
         }));
@@ -64,14 +74,13 @@ export default function ManageLessons() {
   }, [token]);
 
   useEffect(() => {
-    if (selectedCourseId && courses.length > 0) {
-      setCourses((prev) =>
-        prev.map((course) =>
-          course._id === selectedCourseId ? { ...course, expanded: true } : course
-        )
-      );
-    }
-  }, [selectedCourseId, courses]);
+    if (!selectedCourseId) return;
+    setCourses((prev) =>
+      prev.map((course) =>
+        course._id === selectedCourseId ? { ...course, expanded: true } : course
+      )
+    );
+  }, [selectedCourseId]);
 
   const toggleCourse = async (courseId) => {
     setCourses((prev) =>
@@ -95,7 +104,12 @@ export default function ManageLessons() {
         setCourses((prev) =>
           prev.map((c) =>
             c._id === courseId
-              ? { ...c, lessons: res.data.lessons || [], lessonsLoading: false }
+              ? {
+                ...c,
+                lessons: res.data.lessons || [],
+                lessonsCount: res.data.lessonsCount ?? (res.data.lessons || []).length,
+                lessonsLoading: false,
+              }
               : c
           )
         );
@@ -165,7 +179,13 @@ export default function ManageLessons() {
       });
     } else {
       setEditingLesson(null);
-      setForm({ title: "", contentType: "video", fileUrl: "", description: "", isPreviewFree: false });
+      setForm({
+        title: "",
+        contentType: "video",
+        fileUrl: "",
+        description: "",
+        isPreviewFree: false,
+      });
     }
 
     setModalOpen(true);
@@ -203,9 +223,11 @@ export default function ManageLessons() {
             c._id !== currentCourseId
               ? c
               : {
-                  ...c,
-                  lessons: c.lessons.map((l) => (l._id === editingLesson._id ? res.data.lesson : l)),
-                }
+                ...c,
+                lessons: c.lessons.map((l) =>
+                  l._id === editingLesson._id ? res.data.lesson : l
+                ),
+              }
           )
         );
       } else {
@@ -215,7 +237,13 @@ export default function ManageLessons() {
 
         setCourses((prev) =>
           prev.map((c) =>
-            c._id !== currentCourseId ? c : { ...c, lessons: [...c.lessons, res.data.lesson] }
+            c._id !== currentCourseId
+              ? c
+              : {
+                ...c,
+                lessons: [...c.lessons, res.data.lesson],
+                lessonsCount: (c.lessonsCount || 0) + 1,
+              }
           )
         );
       }
@@ -241,7 +269,11 @@ export default function ManageLessons() {
         prev.map((c) =>
           c._id !== courseId
             ? c
-            : { ...c, lessons: c.lessons.filter((l) => l._id !== lessonId) }
+            : {
+              ...c,
+              lessons: c.lessons.filter((l) => l._id !== lessonId),
+              lessonsCount: Math.max((c.lessonsCount || 1) - 1, 0),
+            }
         )
       );
     } catch (err) {
@@ -251,7 +283,15 @@ export default function ManageLessons() {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "70vh" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "70vh",
+        }}
+      >
         <div className="spinner" />
         <p style={{ marginTop: "15px", color: colors.primary }}>Loading lessons...</p>
         <style>{`.spinner { border: 4px solid #f3f3f3; border-top: 4px solid ${colors.primary}; borderRadius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
@@ -284,32 +324,104 @@ export default function ManageLessons() {
         .btn-add:disabled { background: #cbd5e1; cursor: not-allowed; }
       `}</style>
 
-      <h2 style={{ marginBottom: "25px", fontWeight: "800", color: "#1e293b" }}>Manage Lessons</h2>
+      <h2 style={{ marginBottom: "25px", fontWeight: "800", color: "#1e293b" }}>
+        Manage Lessons
+      </h2>
 
-      {error && <div style={{ background: "#fee2e2", color: "#991b1b", padding: "12px", borderRadius: "8px", marginBottom: "15px" }}>{error}</div>}
-      {warning && <div style={{ background: "#fef3c7", color: "#92400e", padding: "12px", borderRadius: "8px", marginBottom: "15px" }}>{warning}</div>}
+      {error && (
+        <div
+          style={{
+            background: "#fee2e2",
+            color: "#991b1b",
+            padding: "12px",
+            borderRadius: "8px",
+            marginBottom: "15px",
+          }}
+        >
+          {error}
+        </div>
+      )}
+      {warning && (
+        <div
+          style={{
+            background: "#fef3c7",
+            color: "#92400e",
+            padding: "12px",
+            borderRadius: "8px",
+            marginBottom: "15px",
+          }}
+        >
+          {warning}
+        </div>
+      )}
 
       {courses.map((course) => (
         <div key={course._id} className="course-row">
-          <div className="course-header" onClick={() => toggleCourse(course._id)} style={{ background: course._id === selectedCourseId ? "#f3e8ff" : "white" }}>
+          <div
+            className="course-header"
+            onClick={() => toggleCourse(course._id)}
+            style={{ background: course._id === selectedCourseId ? "#f3e8ff" : "white" }}
+          >
             <div>
-              <div style={{ fontWeight: "700", fontSize: "1.05rem" }}>{course.title}</div>
+              <div
+                style={{
+                  fontWeight: "700",
+                  fontSize: "1.05rem",
+                  display: "flex",
+                  gap: "10px",
+                  alignItems: "center",
+                }}
+              >
+                {course.title}
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    padding: "4px 10px",
+                    borderRadius: "999px",
+                    background: "#eef2ff",
+                    color: colors.primary,
+                    fontWeight: "700",
+                  }}
+                >
+                  {course.lessonsCount === null ? "..." : `${course.lessonsCount} Lessons`}
+                </span>
+              </div>
               <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "4px" }}>
-                Status: <span style={{ fontWeight: "bold", color: course.status === "approved" ? colors.success : colors.warning }}>{course.status}</span>
+                Status:{" "}
+                <span
+                  style={{
+                    fontWeight: "bold",
+                    color: course.status === "approved" ? colors.success : colors.warning,
+                  }}
+                >
+                  {course.status}
+                </span>
               </div>
             </div>
             {course.expanded ? <FaChevronUp color="#94a3b8" /> : <FaChevronDown color="#94a3b8" />}
           </div>
 
-          <div style={{ maxHeight: course.expanded ? "2000px" : "0px", overflow: "hidden", transition: "max-height 0.4s ease" }}>
-            <button className="btn-add" onClick={() => openModal(course._id)} disabled={!isCourseEditable(course.status)}>
+          <div
+            style={{
+              maxHeight: course.expanded ? "2000px" : "0px",
+              overflow: "hidden",
+              transition: "max-height 0.4s ease",
+            }}
+          >
+            <button
+              className="btn-add"
+              onClick={() => openModal(course._id)}
+              disabled={!isCourseEditable(course.status)}
+            >
               <FaPlus size={12} /> Add New Lesson
             </button>
 
             {course.lessonsLoading ? (
               <p style={{ padding: "20px", color: colors.primary }}>Fetching lessons...</p>
             ) : course.lessons.length === 0 ? (
-              <p style={{ padding: "0 20px 20px 20px", color: "#94a3b8" }}>No lessons found for this course.</p>
+              <p style={{ padding: "0 20px 20px 20px", color: "#94a3b8" }}>
+                No lessons found for this course.
+              </p>
             ) : (
               <>
                 {/* DESKTOP TABLE */}
@@ -326,12 +438,34 @@ export default function ManageLessons() {
                     {course.lessons.map((lesson) => (
                       <tr key={lesson._id}>
                         <td style={{ fontWeight: "600" }}>{lesson.title}</td>
-                        <td style={{ fontSize: "0.85rem", textTransform: "capitalize" }}>{lesson.contentType}</td>
-                        <td>{lesson.isPreviewFree ? <span style={{ color: colors.success }}>Free</span> : "Paid"}</td>
+                        <td style={{ fontSize: "0.85rem", textTransform: "capitalize" }}>
+                          {lesson.contentType}
+                        </td>
+                        <td>
+                          {lesson.isPreviewFree ? (
+                            <span style={{ color: colors.success }}>Free</span>
+                          ) : (
+                            "Paid"
+                          )}
+                        </td>
                         <td>
                           <div style={{ display: "flex", gap: "10px" }}>
-                            <FaEdit className="action-icon" onClick={() => openModal(course._id, lesson)} style={{ cursor: isCourseEditable(course.status) ? "pointer" : "not-allowed", color: colors.primary }} />
-                            <FaTrash className="action-icon" onClick={() => handleDelete(course._id, lesson._id)} style={{ cursor: isCourseEditable(course.status) ? "pointer" : "not-allowed", color: colors.danger }} />
+                            <FaEdit
+                              className="action-icon"
+                              onClick={() => openModal(course._id, lesson)}
+                              style={{
+                                cursor: isCourseEditable(course.status) ? "pointer" : "not-allowed",
+                                color: colors.primary,
+                              }}
+                            />
+                            <FaTrash
+                              className="action-icon"
+                              onClick={() => handleDelete(course._id, lesson._id)}
+                              style={{
+                                cursor: isCourseEditable(course.status) ? "pointer" : "not-allowed",
+                                color: colors.danger,
+                              }}
+                            />
                           </div>
                         </td>
                       </tr>
@@ -343,17 +477,36 @@ export default function ManageLessons() {
                 <div className="lesson-mobile-list">
                   {course.lessons.map((lesson) => (
                     <div key={lesson._id} className="lesson-card">
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          marginBottom: "10px",
+                        }}
+                      >
                         <div style={{ fontWeight: "700" }}>{lesson.title}</div>
                         <div style={{ display: "flex", gap: "15px" }}>
-                           <FaEdit onClick={() => openModal(course._id, lesson)} style={{ color: colors.primary, fontSize: "1.2rem" }} />
-                           <FaTrash onClick={() => handleDelete(course._id, lesson._id)} style={{ color: colors.danger, fontSize: "1.2rem" }} />
+                          <FaEdit
+                            onClick={() => openModal(course._id, lesson)}
+                            style={{ color: colors.primary, fontSize: "1.2rem" }}
+                          />
+                          <FaTrash
+                            onClick={() => handleDelete(course._id, lesson._id)}
+                            style={{ color: colors.danger, fontSize: "1.2rem" }}
+                          />
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: "15px", fontSize: "0.8rem", color: "#64748b" }}>
                         <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                           {lesson.contentType === "video" ? <FaVideo /> : lesson.contentType === "pdf" ? <FaFilePdf /> : <FaFileAlt />}
-                           {lesson.contentType.toUpperCase()}
+                          {lesson.contentType === "video" ? (
+                            <FaVideo />
+                          ) : lesson.contentType === "pdf" ? (
+                            <FaFilePdf />
+                          ) : (
+                            <FaFileAlt />
+                          )}
+                          {lesson.contentType.toUpperCase()}
                         </span>
                         <span>•</span>
                         <span style={{ color: lesson.isPreviewFree ? colors.success : "inherit" }}>
@@ -372,23 +525,46 @@ export default function ManageLessons() {
       {modalOpen && (
         <div style={modalOverlayStyle}>
           <form onSubmit={handleSubmit} style={modalContentStyle}>
-            <h3 style={{ marginBottom: "20px", color: colors.primary }}>{editingLesson ? "Edit Lesson" : "Add Lesson"}</h3>
-            
+            <h3 style={{ marginBottom: "20px", color: colors.primary }}>
+              {editingLesson ? "Edit Lesson" : "Add Lesson"}
+            </h3>
+
             <label style={labelStyle}>Lesson Title</label>
-            <input name="title" value={form.title} onChange={handleChange} required style={inputFieldStyle} placeholder="Introduction to..." />
+            <input
+              name="title"
+              value={form.title}
+              onChange={handleChange}
+              required
+              style={inputFieldStyle}
+              placeholder="Introduction to..."
+            />
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
               <div>
                 <label style={labelStyle}>Content Type</label>
-                <select name="contentType" value={form.contentType} onChange={handleChange} style={inputFieldStyle}>
+                <select
+                  name="contentType"
+                  value={form.contentType}
+                  onChange={handleChange}
+                  style={inputFieldStyle}
+                >
                   <option value="video">Video</option>
                   <option value="pdf">Pdf</option>
                   <option value="text">Text Content</option>
                 </select>
               </div>
               <div style={{ display: "flex", alignItems: "center", paddingTop: "25px" }}>
-                <input type="checkbox" id="isPreviewFree" name="isPreviewFree" checked={form.isPreviewFree} onChange={handleChange} style={{ marginRight: "8px" }} />
-                <label htmlFor="isPreviewFree" style={{ fontSize: "0.9rem", cursor: "pointer" }}>Free Preview</label>
+                <input
+                  type="checkbox"
+                  id="isPreviewFree"
+                  name="isPreviewFree"
+                  checked={form.isPreviewFree}
+                  onChange={handleChange}
+                  style={{ marginRight: "8px" }}
+                />
+                <label htmlFor="isPreviewFree" style={{ fontSize: "0.9rem", cursor: "pointer" }}>
+                  Free Preview
+                </label>
               </div>
             </div>
 
@@ -397,15 +573,27 @@ export default function ManageLessons() {
                 <label style={labelStyle}>Lesson File</label>
                 <input type="file" onChange={handleFileUpload} style={{ ...inputFieldStyle, padding: "8px" }} />
                 {uploading && <p style={{ fontSize: "0.8rem", color: colors.primary }}>Uploading to server...</p>}
-                {form.fileUrl && !uploading && <p style={{ fontSize: "0.75rem", color: colors.success, overflow: "hidden", textOverflow: "ellipsis" }}>File ready: {form.fileUrl}</p>}
+                {form.fileUrl && !uploading && (
+                  <p style={{ fontSize: "0.75rem", color: colors.success, overflow: "hidden", textOverflow: "ellipsis" }}>
+                    File ready: {form.fileUrl}
+                  </p>
+                )}
               </div>
             )}
 
             <label style={{ ...labelStyle, marginTop: "15px" }}>Description</label>
-            <textarea name="description" value={form.description} onChange={handleChange} style={{ ...inputFieldStyle, height: "80px", resize: "none" }} placeholder="What will students learn?" />
+            <textarea
+              name="description"
+              value={form.description}
+              onChange={handleChange}
+              style={{ ...inputFieldStyle, height: "80px", resize: "none" }}
+              placeholder="What will students learn?"
+            />
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "25px" }}>
-              <button type="button" onClick={() => setModalOpen(false)} disabled={submitting} style={cancelBtnStyle}>Cancel</button>
+              <button type="button" onClick={() => setModalOpen(false)} disabled={submitting} style={cancelBtnStyle}>
+                Cancel
+              </button>
               <button type="submit" disabled={submitting || uploading} style={submitBtnStyle}>
                 {submitting ? "Saving..." : editingLesson ? "Update Lesson" : "Add Lesson"}
               </button>
@@ -418,9 +606,58 @@ export default function ManageLessons() {
 }
 
 // --- Styled Components Replacements (Internal) ---
-const modalOverlayStyle = { position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(15, 23, 42, 0.6)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000, padding: "15px" };
-const modalContentStyle = { background: "#fff", padding: "25px", borderRadius: "15px", width: "100%", maxWidth: "500px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" };
-const labelStyle = { display: "block", fontSize: "0.85rem", fontWeight: "600", color: "#64748b", marginBottom: "6px" };
-const inputFieldStyle = { width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "12px", boxSizing: "border-box", fontSize: "16px" };
-const cancelBtnStyle = { padding: "10px 20px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: "8px", fontWeight: "600", cursor: "pointer" };
-const submitBtnStyle = { padding: "10px 20px", background: "#6f42c1", color: "white", border: "none", borderRadius: "8px", fontWeight: "600", cursor: "pointer" };
+const modalOverlayStyle = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  width: "100%",
+  height: "100%",
+  background: "rgba(15, 23, 42, 0.6)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 1000,
+  padding: "15px",
+};
+const modalContentStyle = {
+  background: "#fff",
+  padding: "25px",
+  borderRadius: "15px",
+  width: "100%",
+  maxWidth: "500px",
+  boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+};
+const labelStyle = {
+  display: "block",
+  fontSize: "0.85rem",
+  fontWeight: "600",
+  color: "#64748b",
+  marginBottom: "6px",
+};
+const inputFieldStyle = {
+  width: "100%",
+  padding: "12px",
+  borderRadius: "8px",
+  border: "1px solid #e2e8f0",
+  marginBottom: "12px",
+  boxSizing: "border-box",
+  fontSize: "16px",
+};
+const cancelBtnStyle = {
+  padding: "10px 20px",
+  background: "#f1f5f9",
+  color: "#64748b",
+  border: "none",
+  borderRadius: "8px",
+  fontWeight: "600",
+  cursor: "pointer",
+};
+const submitBtnStyle = {
+  padding: "10px 20px",
+  background: "#6f42c1",
+  color: "white",
+  border: "none",
+  borderRadius: "8px",
+  fontWeight: "600",
+  cursor: "pointer",
+};

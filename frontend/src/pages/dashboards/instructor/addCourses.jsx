@@ -9,6 +9,11 @@ function AddCourse() {
   const [categories, setCategories] = useState([]);
   const [level, setLevel] = useState("Beginner");
   const [price, setPrice] = useState(0);
+
+  // thumbnail states (added)
+  const [thumbnail, setThumbnail] = useState(""); // stores "/uploads/thumbnails/..."
+  const [uploadingThumb, setUploadingThumb] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false); // New state for inline feedback
@@ -16,6 +21,9 @@ function AddCourse() {
 
   const token = localStorage.getItem("token");
   const instructorId = localStorage.getItem("userId");
+
+  // base url for preview (added)
+  const BASE_URL = import.meta.env.VITE_BASE_URL || "";
 
   // --- STYLING CONSTANTS ---
   const colors = {
@@ -25,7 +33,7 @@ function AddCourse() {
     cardBg: "#ffffff",
     text: "#1f2937",
     border: "#d1d5db",
-    error: "#ef4444"
+    error: "#ef4444",
   };
 
   useEffect(() => {
@@ -45,6 +53,59 @@ function AddCourse() {
     fetchCategories();
   }, [token]);
 
+  // thumbnail upload handler (added)
+  const handleThumbnailUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError("");
+
+    if (!token) {
+      setError("You must be logged in.");
+      return;
+    }
+
+    // optional: basic image validation
+    const isImage = file.type?.startsWith("image/");
+    if (!isImage) {
+      setError("Please upload an image file (jpg/png/webp).");
+      return;
+    }
+
+    try {
+      setUploadingThumb(true);
+
+      const formData = new FormData();
+      formData.append("thumbnail", file);
+
+      const res = await api.post("/instructor/course/upload-thumbnail", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const fileUrl = res.data?.fileUrl;
+      if (!fileUrl) {
+        setError("Thumbnail upload failed: missing fileUrl.");
+        return;
+      }
+
+      // backend returns "/uploads/thumbnails/..."
+      setThumbnail(fileUrl);
+    } catch (err) {
+      console.error("Thumbnail upload error:", err);
+      setError(
+        err.response?.data?.message ||
+          err.response?.data?.error ||
+          err.message ||
+          "Thumbnail upload failed."
+      );
+    } finally {
+      setUploadingThumb(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -57,7 +118,15 @@ function AddCourse() {
       setLoading(true);
       const res = await api.post(
         "/instructor/create-course",
-        { title, description, category, level, instructor: instructorId, price },
+        {
+          title,
+          description,
+          category,
+          level,
+          instructor: instructorId,
+          price,
+          thumbnail,
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -75,9 +144,9 @@ function AddCourse() {
       console.error("Create course error:", err);
       setError(
         err.response?.data?.error ||
-        err.response?.data?.message ||
-        err.message ||
-        "Failed to create course."
+          err.response?.data?.message ||
+          err.message ||
+          "Failed to create course."
       );
     } finally {
       setLoading(false);
@@ -92,7 +161,7 @@ function AddCourse() {
     border: `1px solid ${colors.border}`,
     fontSize: "1rem",
     outlineColor: colors.primary,
-    boxSizing: "border-box"
+    boxSizing: "border-box",
   };
 
   const labelStyle = {
@@ -100,62 +169,79 @@ function AddCourse() {
     marginBottom: "8px",
     fontWeight: "600",
     color: colors.text,
-    fontSize: "0.9rem"
+    fontSize: "0.9rem",
   };
 
+  // thumbnail preview url (added)
+  const thumbPreviewUrl = thumbnail
+    ? thumbnail.startsWith("http")
+      ? thumbnail
+      : `${String(BASE_URL).replace(/\/$/, "")}/${String(thumbnail).replace(/^\//, "")}`
+    : "";
+
   return (
-    <div style={{ 
-      minHeight: "100vh", 
-      backgroundColor: colors.bg, 
-      display: "flex", 
-      justifyContent: "center", 
-      alignItems: "center", 
-      padding: "20px" 
-    }}>
-      <div style={{ 
-        backgroundColor: colors.cardBg, 
-        width: "100%", 
-        maxWidth: "600px", 
-        padding: "40px", 
-        borderRadius: "16px", 
-        boxShadow: "0 10px 25px rgba(0,0,0,0.05)" 
-      }}>
-        <h2 style={{ 
-          textAlign: "center", 
-          color: colors.primary, 
-          marginBottom: "30px", 
-          fontSize: "1.8rem",
-          fontWeight: "700" 
-        }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        backgroundColor: colors.bg,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: "20px",
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: colors.cardBg,
+          width: "100%",
+          maxWidth: "600px",
+          padding: "40px",
+          borderRadius: "16px",
+          boxShadow: "0 10px 25px rgba(0,0,0,0.05)",
+        }}
+      >
+        <h2
+          style={{
+            textAlign: "center",
+            color: colors.primary,
+            marginBottom: "30px",
+            fontSize: "1.8rem",
+            fontWeight: "700",
+          }}
+        >
           Create New Course
         </h2>
 
         {error && (
-          <div style={{ 
-            backgroundColor: "#fee2e2", 
-            color: colors.error, 
-            padding: "12px", 
-            borderRadius: "8px", 
-            marginBottom: "20px", 
-            fontSize: "0.9rem",
-            border: `1px solid ${colors.error}33`
-          }}>
+          <div
+            style={{
+              backgroundColor: "#fee2e2",
+              color: colors.error,
+              padding: "12px",
+              borderRadius: "8px",
+              marginBottom: "20px",
+              fontSize: "0.9rem",
+              border: `1px solid ${colors.error}33`,
+            }}
+          >
             {error}
           </div>
         )}
 
         {success && (
-          <div style={{ 
-            backgroundColor: "#dcfce7", 
-            color: "#166534", 
-            padding: "12px", 
-            borderRadius: "8px", 
-            marginBottom: "20px", 
-            fontSize: "1rem",
-            fontWeight: "600",
-            textAlign: "center",
-            border: `1px solid #10b98133`
-          }}>
+          <div
+            style={{
+              backgroundColor: "#dcfce7",
+              color: "#166534",
+              padding: "12px",
+              borderRadius: "8px",
+              marginBottom: "20px",
+              fontSize: "1rem",
+              fontWeight: "600",
+              textAlign: "center",
+              border: `1px solid #10b98133`,
+            }}
+          >
             Course created successfully! Redirecting...
           </div>
         )}
@@ -182,6 +268,43 @@ function AddCourse() {
             />
           </div>
 
+          {/* Thumbnail upload UI (added) */}
+          <div>
+            <label style={labelStyle}>Course Thumbnail (optional)</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleThumbnailUpload}
+              style={{ marginBottom: "12px", fontSize: "0.95rem" }}
+              disabled={uploadingThumb || loading || success}
+            />
+
+            {uploadingThumb && (
+              <div style={{ marginBottom: "18px", fontSize: "0.9rem", color: "#92400e" }}>
+                Uploading thumbnail...
+              </div>
+            )}
+
+            {thumbPreviewUrl && !uploadingThumb && (
+              <div style={{ marginBottom: "20px" }}>
+                <div style={{ fontSize: "0.85rem", marginBottom: "8px", color: "#6b7280" }}>
+                  Preview:
+                </div>
+                <img
+                  src={thumbPreviewUrl}
+                  alt="thumbnail preview"
+                  style={{
+                    width: "100%",
+                    height: "160px",
+                    objectFit: "cover",
+                    borderRadius: "12px",
+                    border: `1px solid ${colors.border}`,
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
             <div>
               <label style={labelStyle}>Category</label>
@@ -203,11 +326,7 @@ function AddCourse() {
 
             <div>
               <label style={labelStyle}>Level</label>
-              <select
-                value={level}
-                onChange={(e) => setLevel(e.target.value)}
-                style={inputStyle}
-              >
+              <select value={level} onChange={(e) => setLevel(e.target.value)} style={inputStyle}>
                 <option>Beginner</option>
                 <option>Intermediate</option>
                 <option>Advanced</option>
@@ -226,38 +345,38 @@ function AddCourse() {
             />
           </div>
 
-          <button 
-            type="submit" 
-            disabled={loading || success}
-            style={{ 
-              width: "100%", 
-              padding: "10px", 
-              backgroundColor: loading ? "#9ca3af" : (success ? colors.secondary : colors.secondary), 
-              color: "#fff", 
-              border: "none", 
-              borderRadius: "8px", 
-              fontSize: "1.1rem", 
-              fontWeight: "600", 
-              cursor: (loading || success) ? "not-allowed" : "pointer",
+          <button
+            type="submit"
+            disabled={loading || success || uploadingThumb}
+            style={{
+              width: "100%",
+              padding: "10px",
+              backgroundColor: loading ? "#9ca3af" : success ? colors.secondary : colors.secondary,
+              color: "#fff",
+              border: "none",
+              borderRadius: "8px",
+              fontSize: "1.1rem",
+              fontWeight: "600",
+              cursor: loading || success || uploadingThumb ? "not-allowed" : "pointer",
               transition: "background-color 0.2s",
-              boxShadow: "0 4px 6px rgba(16, 185, 129, 0.2)"
+              boxShadow: "0 4px 6px rgba(16, 185, 129, 0.2)",
             }}
           >
-            {loading ? "Processing..." : (success ? "Created!" : "Create Course")}
+            {loading ? "Processing..." : success ? "Created!" : uploadingThumb ? "Uploading..." : "Create Course"}
           </button>
-          
-          <button 
+
+          <button
             type="button"
             onClick={() => navigate("/instructor-dashboard/instructor_courses")}
-            style={{ 
-              width: "100%", 
+            style={{
+              width: "100%",
               marginTop: "12px",
-              padding: "10px", 
-              backgroundColor: "transparent", 
-              color: "#6b7280", 
-              border: "none", 
-              fontSize: "0.9rem", 
-              cursor: "pointer"
+              padding: "10px",
+              backgroundColor: "transparent",
+              color: "#6b7280",
+              border: "none",
+              fontSize: "0.9rem",
+              cursor: "pointer",
             }}
           >
             Cancel and Go Back

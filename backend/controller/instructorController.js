@@ -4,12 +4,14 @@ const Exam = require("../models/examModel");
 const Enrollment = require("../models/enrollmentModel");
 const User = require("../models/userModel");
 const InstructorProfile = require("../models/instructorModel");
-const ExamResult = require("../models/resultModel"); 
-const Payment = require("../models/paymentModel"); 
+const ExamResult = require("../models/resultModel");
+const Payment = require("../models/paymentModel");
 
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+
+const { checkSubscriptionForCourse } = require("../utils/subscriptionAccess");
 
 const lessonStorage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -110,25 +112,30 @@ const courses = async (req, res) => {
   try {
     const instructorId = req.user._id;
     const filter = { instructor: instructorId };
-
     if (req.query.status) filter.status = req.query.status;
 
     const coursesData = await Course.find(filter)
-      .populate("category", "name")                
+      .populate("category", "name")
       .populate({
         path: "lessons",
         select: "title contentType fileUrl description isPreviewFree createdAt",
-        options: { sort: { createdAt: 1 } },      
+        options: { sort: { createdAt: 1 } },
       })
       .populate({
         path: "exams",
         select: "title duration questions",
       });
 
-    res.json({ courses: coursesData });
+    const coursesWithCounts = coursesData.map((c) => ({
+      ...c.toObject(),
+      lessonsCount: c.lessons?.length || 0,
+      examsCount: c.exams?.length || 0,
+    }));
+
+    return res.json({ courses: coursesWithCounts });
   } catch (error) {
     console.error("Fetch courses failed:", error);
-    res.status(500).json({ message: "Fetch courses failed", error });
+    return res.status(500).json({ message: "Fetch courses failed", error });
   }
 };
 
@@ -161,14 +168,46 @@ const createCourse = async (req, res) => {
   }
 };
 
+const sanitizeExamQuestions = (exam) => {
+  const obj = exam?.toObject ? exam.toObject() : exam;
+  if (!obj) return obj;
+
+  if (Array.isArray(obj.questions)) {
+    obj.questions = obj.questions.map((q) => {
+      const qq = { ...q };
+      delete qq.correctAnswer;
+      delete qq.correctOption;
+      delete qq.answer;
+      delete qq.solution;
+      return qq;
+    });
+  }
+  return obj;
+};
+
+const stripLessonFileUrl = (lesson) => {
+  const obj = lesson?.toObject ? lesson.toObject() : lesson;
+  if (!obj) return obj;
+  // hide direct asset link for locked lessons
+  obj.fileUrl = null;
+  return obj;
+};
+
+const hasActiveEnrollment = async ({ userId, courseId }) => {
+  const now = new Date();
+  const enr = await Enrollment.findOne({ student: userId, course: courseId }).lean();
+  return (
+    enr &&
+    enr.status !== "cancelled" &&
+    (!enr.expiryDate || new Date(enr.expiryDate) >= now)
+  );
+};
+
 const getCourseDetail = async (req, res) => {
   try {
     const { courseId } = req.params;
-
     const userId = req.user?._id;
-    if (!userId) {
-      return res.status(401).json({ message: "Unauthorized: User not logged in" });
-    }
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const course = await Course.findById(courseId)
       .populate("category", "name")
@@ -180,30 +219,75 @@ const getCourseDetail = async (req, res) => {
       })
       .populate({
         path: "exams",
-        select: "title duration questions",
+        // IMPORTANT: do NOT blindly include questions
+        select: "title duration questions createdAt",
+        options: { sort: { createdAt: 1 } },
       });
 
     if (!course) return res.status(404).json({ message: "Course not found" });
 
-    let isEnrolled = false;
-    let completedLessons = [];
-    try {
-      const Student = require("../models/studentModel");
-      const student = await Student.findOne({ user: userId });
-      if (student) {
-        const enrollment = await Enrollment.findOne({ course: courseId, student: student._id });
-        isEnrolled = !!enrollment;
-        completedLessons = enrollment?.completedLessons?.map(l => l.toString()) || [];
+    // ✅ free course: allow everything (but still sanitize exam answers)
+    const isPaid = Number(course.price || 0) > 0;
+
+    let access = { ok: true, type: "free" };
+
+    if (isPaid) {
+      const enrolled = await hasActiveEnrollment({ userId, courseId });
+      if (enrolled) {
+        access = { ok: true, type: "purchase" };
+      } else {
+        const subCheck = await checkSubscriptionForCourse({ userId, courseId });
+        access = subCheck.ok
+          ? { ok: true, type: "subscription" }
+          : { ok: false, type: "none", reason: subCheck.reason };
       }
-    } catch (err) {
-      console.warn("Student fetch warning:", err.message);
     }
 
-    res.json({ course, isEnrolled, completedLessons });
+    // ✅ build response safely
+    let lessons = course.lessons || [];
+    let exams = course.exams || [];
 
+    if (!access.ok) {
+      // Only preview lessons, and never expose fileUrl for locked course
+      lessons = lessons
+        .filter((l) => l.isPreviewFree === true)
+        .map(stripLessonFileUrl);
+
+      // For exams, show only meta (no questions)
+      exams = exams.map((e) => {
+        const ex = e?.toObject ? e.toObject() : e;
+        delete ex.questions;
+        return ex;
+      });
+    } else {
+      // User has access → sanitize exam answers
+      exams = exams.map(sanitizeExamQuestions);
+    }
+
+    // enrollment progress info (optional)
+    let completedLessons = [];
+    let isEnrolled = false;
+
+    const enrollment = await Enrollment.findOne({ course: courseId, student: userId }).lean();
+    if (enrollment) {
+      isEnrolled = true;
+      completedLessons = enrollment.completedLessons?.map((l) => String(l)) || [];
+    }
+
+    // Return "course" but replace lessons/exams with safe versions
+    const courseObj = course.toObject();
+    courseObj.lessons = lessons;
+    courseObj.exams = exams;
+
+    return res.json({
+      course: courseObj,
+      isEnrolled,
+      completedLessons,
+      access, // ✅ frontend can show "Subscribe to unlock"
+    });
   } catch (error) {
     console.error("Fetch course detail failed:", error);
-    res.status(500).json({ message: "Failed to fetch course detail", error: error.message });
+    return res.status(500).json({ message: "Failed to fetch course detail" });
   }
 };
 
@@ -217,7 +301,7 @@ const updateCourse = async (req, res) => {
       { _id: courseId, instructor: instructorId },
       { title, description, category, level, price, thumbnail, status },
       { new: true }
-    ).populate("category", "name"); 
+    ).populate("category", "name");
 
     if (!course) return res.status(404).json({ message: "Course not found" });
 
@@ -238,7 +322,7 @@ const updateCourseStatus = async (req, res) => {
       { _id: courseId, instructor: instructorId },
       { status },
       { new: true }
-    ).populate("category", "name"); 
+    ).populate("category", "name");
 
     if (!course) return res.status(404).json({ message: "Course not found" });
 
@@ -281,10 +365,14 @@ const getLessonsByCourse = async (req, res) => {
     if (!course) return res.status(404).json({ message: "Course not found" });
 
     const lessons = await Lesson.find({ course: courseId }).sort({ createdAt: 1 });
-    res.json({ lessons });
+
+    return res.json({
+      lessons,
+      lessonsCount: lessons.length,
+    });
   } catch (error) {
     console.error("Fetch course lessons failed:", error);
-    res.status(500).json({ message: "Fetch course lessons failed", error });
+    return res.status(500).json({ message: "Fetch course lessons failed", error });
   }
 };
 
@@ -316,7 +404,7 @@ const addLesson = async (req, res) => {
 
     res.status(201).json({ message: "Lesson added", lesson });
   } catch (error) {
-    console.error("Lesson creation failed:", error); 
+    console.error("Lesson creation failed:", error);
     res.status(500).json({ message: "Lesson creation failed", error: error.message });
   }
 };
@@ -576,11 +664,62 @@ const deleteExam = async (req, res) => {
 const getCourseExams = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const exams = await Exam.find({ course: courseId });
-    res.status(200).json({ exams });
+    const userId = req.user?._id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    // check course (for price)
+    const course = await Course.findById(courseId).select("price status").lean();
+    if (!course || course.status !== "approved") {
+      return res.status(404).json({ message: "Course not available" });
+    }
+
+    // free course => allow (but sanitize answers)
+    const isPaid = Number(course.price || 0) > 0;
+
+    let canAccess = true;
+    if (isPaid) {
+      const enrolled = await hasActiveEnrollment({ userId, courseId });
+      if (!enrolled) {
+        const subCheck = await checkSubscriptionForCourse({ userId, courseId });
+        canAccess = subCheck.ok;
+        if (!canAccess) {
+          const exams = await Exam.find({ course: courseId })
+            .select("title duration questions createdAt")
+            .lean();
+
+          const formatted = exams.map((e) => ({
+            _id: e._id,
+            title: e.title,
+            duration: e.duration,
+            createdAt: e.createdAt,
+            questionsCount: Array.isArray(e.questions) ? e.questions.length : 0,
+          }));
+
+          return res.status(200).json({ exams: formatted, access: true });  
+        }
+      }
+    }
+
+    // allowed => return exams but sanitize correct answers
+    const exams = await Exam.find({ course: courseId }).lean();
+    const safe = exams.map((e) => {
+      if (Array.isArray(e.questions)) {
+        e.questions = e.questions.map((q) => {
+          const qq = { ...q };
+          delete qq.correctAnswer;
+          delete qq.correctOption;
+          delete qq.answer;
+          delete qq.solution;
+          return qq;
+        });
+      }
+      return e;
+    });
+
+    return res.status(200).json({ exams: safe, access: true });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Fetch exams failed", error: error.message });
+    return res.status(500).json({ message: "Fetch exams failed" });
   }
 };
 
@@ -617,7 +756,7 @@ const getCourseAnalytics = async (req, res) => {
 
 const getInstructorEarnings = async (req, res) => {
   try {
-    const instructorId = req.user._id; 
+    const instructorId = req.user._id;
     const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
 
     const payments = await Payment.find({
@@ -634,7 +773,7 @@ const getInstructorEarnings = async (req, res) => {
     const monthly = {};
     payments.forEach((p) => {
       const date = new Date(p.paymentDate);
-      const month = date.getMonth() + 1; 
+      const month = date.getMonth() + 1;
       monthly[month] = (monthly[month] || 0) + (p.instructorEarning || 0);
     });
 
@@ -651,7 +790,7 @@ const getInstructorEarnings = async (req, res) => {
 
 const getPayoutHistory = async (req, res) => {
   try {
-    const instructorId = req.user._id; 
+    const instructorId = req.user._id;
     const { page = 1, limit = 10 } = req.query;
 
     const payouts = await Payment.find({ instructor: instructorId, status: "completed" })
@@ -701,7 +840,7 @@ module.exports = {
   uploadLessonFile,
   uploadThumbnail,
   uploadThumbnailFile,
-  getCourseAnalytics, 
+  getCourseAnalytics,
   getInstructorEarnings,
   getPayoutHistory,
 };

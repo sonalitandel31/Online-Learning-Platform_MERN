@@ -1,25 +1,20 @@
 const Enrollment = require("../models/enrollmentModel");
 const Course = require("../models/courseModel");
 const Student = require("../models/studentModel");
+const UserSubscription = require("../models/UserSubscriptionModel");
+const { checkSubscriptionForCourse } = require("../utils/subscriptionAccess");
 
 const path = require("path");
-
 const fs = require("fs");
 const PDFDocument = require("pdfkit");
 
+// ---------- helpers ----------
 const ensureDir = (dirPath) => {
   if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 };
 
+// NOTE: Your generateReceiptPDF is kept as-is
 const generateReceiptPDF = async ({ enrollment, course, student }) => {
-  const fs = require("fs");
-  const PDFDocument = require("pdfkit");
-  const path = require("path");
-
-  const ensureDir = (dirPath) => {
-    if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
-  };
-
   const receiptsDir = path.join(__dirname, "..", "uploads", "receipts");
   ensureDir(receiptsDir);
 
@@ -28,12 +23,10 @@ const generateReceiptPDF = async ({ enrollment, course, student }) => {
   const absPath = path.join(receiptsDir, fileName);
   const publicPath = `/uploads/receipts/${fileName}`;
 
-  // ---------- helpers ----------
   const formatINR = (n) => {
     const val = Number(n || 0);
     return val.toLocaleString("en-IN", { maximumFractionDigits: 2 });
   };
-
   const safe = (v) => (v ? String(v) : "—");
 
   const drawLine = (doc, y, color = "#E5E7EB") => {
@@ -43,11 +36,7 @@ const generateReceiptPDF = async ({ enrollment, course, student }) => {
   };
 
   const drawKeyValue = (doc, x, y, key, value, keyW = 110, valW = 170) => {
-    doc
-      .font("Helvetica")
-      .fontSize(9)
-      .fillColor("#6B7280")
-      .text(key, x, y, { width: keyW });
+    doc.font("Helvetica").fontSize(9).fillColor("#6B7280").text(key, x, y, { width: keyW });
 
     doc
       .font("Helvetica-Bold")
@@ -60,31 +49,19 @@ const generateReceiptPDF = async ({ enrollment, course, student }) => {
   const stream = fs.createWriteStream(absPath);
   doc.pipe(stream);
 
-  // ---------- Header Bar ----------
+  // Header
   doc.save();
-  doc.rect(0, 0, 595.28, 95).fill("#111827"); // dark header
+  doc.rect(0, 0, 595.28, 95).fill("#111827");
   doc.restore();
 
-  // Brand (change to your company name)
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(22)
-    .fillColor("#FFFFFF")
-    .text("LearnX", 50, 30);
-
-  doc
-    .font("Helvetica")
-    .fontSize(10)
-    .fillColor("#D1D5DB")
-    .text("Online Learning Platform", 50, 58);
-
+  doc.font("Helvetica-Bold").fontSize(22).fillColor("#FFFFFF").text("LearnX", 50, 30);
+  doc.font("Helvetica").fontSize(10).fillColor("#D1D5DB").text("Online Learning Platform", 50, 58);
   doc
     .font("Helvetica-Bold")
     .fontSize(16)
     .fillColor("#FFFFFF")
     .text("PAYMENT RECEIPT", 350, 38, { align: "right", width: 195 });
 
-  // ---------- Receipt Meta Box ----------
   const metaTop = 110;
   doc.save();
   doc.roundedRect(50, metaTop, 495, 70, 10).fill("#F9FAFB");
@@ -97,10 +74,9 @@ const generateReceiptPDF = async ({ enrollment, course, student }) => {
   drawKeyValue(doc, 65, metaTop + 42, "Payment Status", safe(enrollment.paymentStatus), 105, 140);
   drawKeyValue(doc, 320, metaTop + 42, "Amount Paid", `₹ ${formatINR(enrollment.amount)}`, 75, 170);
 
-  // ---------- Customer + Course Blocks ----------
   const blockTop = metaTop + 90;
 
-  // Left block: Student
+  // Student block
   doc.save();
   doc.roundedRect(50, blockTop, 240, 120, 10).fill("#FFFFFF");
   doc.roundedRect(50, blockTop, 240, 120, 10).strokeColor("#E5E7EB").stroke();
@@ -112,7 +88,7 @@ const generateReceiptPDF = async ({ enrollment, course, student }) => {
   doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827").text(safe(student?.name), 65, blockTop + 42);
   doc.font("Helvetica").fontSize(9).fillColor("#374151").text(safe(student?.email), 65, blockTop + 60);
 
-  // Right block: Course
+  // Course block
   doc.save();
   doc.roundedRect(305, blockTop, 240, 120, 10).fill("#FFFFFF");
   doc.roundedRect(305, blockTop, 240, 120, 10).strokeColor("#E5E7EB").stroke();
@@ -125,16 +101,14 @@ const generateReceiptPDF = async ({ enrollment, course, student }) => {
     width: 210,
   });
 
-  // optional IDs
   doc
     .font("Helvetica")
     .fontSize(9)
     .fillColor("#374151")
     .text(`Course ID: ${safe(course?._id)}`, 320, blockTop + 75);
 
-  // ---------- Payment Reference ----------
+  // Payment reference
   const refTop = blockTop + 140;
-
   doc.save();
   doc.roundedRect(50, refTop, 495, 95, 10).fill("#FFFFFF");
   doc.roundedRect(50, refTop, 495, 95, 10).strokeColor("#E5E7EB").stroke();
@@ -142,14 +116,13 @@ const generateReceiptPDF = async ({ enrollment, course, student }) => {
 
   doc.font("Helvetica-Bold").fontSize(11).fillColor("#111827").text("Payment Reference", 65, refTop + 12);
 
+  const safeEnrollId = safe(enrollment._id);
   drawKeyValue(doc, 65, refTop + 38, "Payment ID", safe(enrollment.paymentId), 80, 170);
   drawKeyValue(doc, 320, refTop + 38, "Order ID", safe(enrollment.orderId), 55, 170);
+  drawKeyValue(doc, 65, refTop + 62, "Enrollment ID", safeEnrollId, 85, 410);
 
-  drawKeyValue(doc, 65, refTop + 62, "Enrollment ID", safe(enrollment._id), 85, 410);
-
-  // ---------- Amount Summary (table-like) ----------
+  // Summary
   const sumTop = refTop + 115;
-
   doc.font("Helvetica-Bold").fontSize(12).fillColor("#111827").text("Summary", 50, sumTop);
 
   const tableTop = sumTop + 18;
@@ -157,7 +130,6 @@ const generateReceiptPDF = async ({ enrollment, course, student }) => {
   doc.roundedRect(50, tableTop, 495, 90, 10).fill("#F9FAFB");
   doc.restore();
 
-  // header row
   doc.save();
   doc.rect(50, tableTop, 495, 28).fill("#111827");
   doc.restore();
@@ -168,14 +140,12 @@ const generateReceiptPDF = async ({ enrollment, course, student }) => {
     align: "right",
   });
 
-  // row
   doc.font("Helvetica").fontSize(10).fillColor("#111827").text("Course Enrollment", 65, tableTop + 40);
   doc.font("Helvetica").fontSize(10).fillColor("#111827").text(`₹ ${formatINR(enrollment.amount)}`, 450, tableTop + 40, {
     width: 80,
     align: "right",
   });
 
-  // total
   drawLine(doc, tableTop + 62, "#E5E7EB");
   doc.font("Helvetica-Bold").fontSize(11).fillColor("#111827").text("Total Paid", 65, tableTop + 70);
   doc.font("Helvetica-Bold").fontSize(11).fillColor("#111827").text(`₹ ${formatINR(enrollment.amount)}`, 450, tableTop + 70, {
@@ -183,7 +153,6 @@ const generateReceiptPDF = async ({ enrollment, course, student }) => {
     align: "right",
   });
 
-  // ---------- Footer ----------
   const footerY = 753;
   drawLine(doc, footerY, "#E5E7EB");
 
@@ -215,143 +184,120 @@ const generateReceiptPDF = async ({ enrollment, course, student }) => {
   return { publicPath, receiptNo };
 };
 
-/* const enrollCourse = async (req, res) => {
-  try {
-    const userId = req.user?._id || req.body.studentId;
-    const { courseId, amount } = req.body;
-
-    if (!userId || !courseId) {
-      return res.status(400).json({ success: false, message: "Missing student or course" });
-    }
-
-    const course = await Course.findById(courseId);
-    if (!course || course.status !== "approved") {
-      return res.status(400).json({ success: false, message: "Course not available" });
-    }
-
-    let existing = await Enrollment.findOne({ student: userId, course: courseId });
-
-    if (existing) {
-      const now = new Date();
-      if (existing.status === "cancelled" || existing.expiryDate < now) {
-        existing.status = "active";
-        existing.paymentStatus = "complete";
-        existing.amount = amount;
-        existing.expiryDate = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000); 
-        await existing.save();
-
-        await Student.findOneAndUpdate(
-          { user: userId },
-          { $addToSet: { enrolledCourses: courseId } },
-          { new: true }
-        );
-
-        return res.status(200).json({
-          success: true,
-          message: "Re-enrolled successfully",
-          enrollment: existing,
-        });
-      }
-
-      return res.status(400).json({ success: false, message: "Already enrolled and active" });
-    }
-
-    const enrollment = await Enrollment.create({
-      student: userId,
-      course: courseId,
-      amount,
-      paymentStatus: "complete",
-      status: "active",
-      expiryDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000),
-    });
-
-    await Student.findOneAndUpdate(
-      { user: userId },
-      { $addToSet: { enrolledCourses: courseId } },
-      { new: true }
-    );
-
-    res.status(201).json({
-      success: true,
-      message: "Enrollment successful",
-      enrollment,
-    });
-  } catch (err) {
-    console.error("EnrollCourse Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-}; */
-
+// ---------- UPDATED: enrollCourse ----------
 const enrollCourse = async (req, res) => {
   try {
+    const courseId = req.body.courseId || req.body.course;
     const userId = req.user?._id || req.body.studentId;
-    const { courseId, amount } = req.body;
+    const amount = Number(req.body.amount || 0);
+    const source = String(req.body.source || "purchase").toLowerCase();
 
     if (!userId || !courseId) {
       return res.status(400).json({ success: false, message: "Missing student or course" });
     }
 
-    const course = await Course.findById(courseId);
-    if (!course || course.status !== "approved") {
-      return res.status(400).json({ success: false, message: "Course not available" });
-    }
+    // 1. Safe Student Fetch
+    const studentUser = await Student.findOne({ user: userId })
+      .populate("user", "name email")
+      .lean();
 
-    let existing = await Enrollment.findOne({ student: userId, course: courseId });
-
-    // ✅ get student profile user info (name/email)
-    const studentUser = await Student.findOne({ user: userId }).populate("user", "name email").lean();
+    // 2. Prevent crash if studentUser is null
     const studentInfo = {
-      name: studentUser?.user?.name,
-      email: studentUser?.user?.email,
+      name: studentUser?.user?.name || "Student",
+      email: studentUser?.user?.email || "N/A",
     };
 
-    if (existing) {
-      const now = new Date();
-      if (existing.status === "cancelled" || existing.expiryDate < now) {
-        existing.status = "active";
-        existing.paymentStatus = "complete";
-        existing.amount = amount;
-        existing.paymentDate = new Date();
-        existing.expiryDate = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000);
+    const course = await Course.findById(courseId);
+    if (!course) return res.status(404).json({ success: false, message: "Course not found" });
 
-        // ✅ generate new receipt
-        const { publicPath, receiptNo } = await generateReceiptPDF({
-          enrollment: existing,
-          course,
-          student: studentInfo,
-        });
-        existing.receiptUrl = publicPath;
-        existing.receiptNo = receiptNo;
-
-        await existing.save();
-
-        await Student.findOneAndUpdate(
-          { user: userId },
-          { $addToSet: { enrolledCourses: courseId } },
-          { new: true }
-        );
-
-        return res.status(200).json({
-          success: true,
-          message: "Re-enrolled successfully",
-          enrollment: existing,
-        });
-      }
-
-      return res.status(400).json({ success: false, message: "Already enrolled and active" });
+    // 3. Check for existing active enrollment
+    let existing = await Enrollment.findOne({ student: userId, course: courseId });
+    if (existing && existing.status !== "cancelled") {
+      return res.status(200).json({ success: true, message: "Already enrolled", enrollment: existing });
     }
 
+    const now = new Date();
+    const isExistingActive =
+      existing &&
+      existing.status !== "cancelled" &&
+      (!existing.expiryDate || new Date(existing.expiryDate) >= now);
+
+    // ✅ IMPORTANT: if already active, DO NOT return 400 (especially for subscription auto-enroll)
+    if (isExistingActive) {
+      return res.status(200).json({
+        success: true,
+        message: "Already enrolled",
+        enrollment: existing,
+      });
+    }
+
+    // Decide expiry:
+    // - purchase/free => 180 days
+    // - subscription => align with subscription end date (if available) else 180 fallback
+    let expiryDate = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000);
+
+    if (source === "subscription") {
+      const sub = await UserSubscription.findOne({ userId })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const paidEnd = sub?.currentPeriodEnd || sub?.endDate;
+      const trialEnd = sub?.trialEndDate;
+
+      // take the future end if valid
+      const pick =
+        (trialEnd && new Date(trialEnd) > now ? new Date(trialEnd) : null) ||
+        (paidEnd && new Date(paidEnd) > now ? new Date(paidEnd) : null);
+
+      if (pick) expiryDate = pick;
+    }
+
+    // ✅ re-activate if exists but cancelled/expired
+    if (existing) {
+      existing.status = "active";
+      existing.paymentStatus = source === "subscription" ? "subscription" : "complete";
+      existing.amount = amount;
+      existing.paymentDate = new Date();
+      existing.expiryDate = expiryDate;
+      existing.source = source;
+
+      // receipt only for purchase/free payments (optional; keep for all if you want)
+      // Here: keep receipt generation for all, but subscription will show ₹0
+      const { publicPath, receiptNo } = await generateReceiptPDF({
+        enrollment: existing,
+        course,
+        student: studentInfo,
+      });
+      existing.receiptUrl = publicPath;
+      existing.receiptNo = receiptNo;
+
+      await existing.save();
+
+      await Student.findOneAndUpdate(
+        { user: userId },
+        { $addToSet: { enrolledCourses: courseId } },
+        { new: true }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Re-enrolled successfully",
+        enrollment: existing,
+      });
+    }
+
+    // ✅ create new enrollment
     const enrollment = await Enrollment.create({
       student: userId,
       course: courseId,
       amount,
-      paymentStatus: "complete",
+      paymentStatus: source === "subscription" ? "subscription" : "complete",
       status: "active",
       paymentDate: new Date(),
-      expiryDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000),
+      expiryDate,
+      source,
     });
 
-    // ✅ generate receipt after create (needs _id)
     const { publicPath, receiptNo } = await generateReceiptPDF({
       enrollment,
       course,
@@ -368,14 +314,14 @@ const enrollCourse = async (req, res) => {
       { new: true }
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Enrollment successful",
       enrollment,
     });
   } catch (err) {
     console.error("EnrollCourse Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -385,7 +331,6 @@ const unenrollCourse = async (req, res) => {
     const { courseId } = req.params;
 
     const enrollment = await Enrollment.findOne({ student: userId, course: courseId });
-
     if (!enrollment) {
       return res.status(404).json({ success: false, message: "Enrollment not found" });
     }
@@ -393,15 +338,12 @@ const unenrollCourse = async (req, res) => {
     enrollment.status = "cancelled";
     await enrollment.save();
 
-    await Student.findOneAndUpdate(
-      { user: userId },
-      { $pull: { enrolledCourses: courseId } }
-    );
+    await Student.findOneAndUpdate({ user: userId }, { $pull: { enrolledCourses: courseId } });
 
-    res.json({ success: true, message: "Unenrolled successfully" });
+    return res.json({ success: true, message: "Unenrolled successfully" });
   } catch (err) {
     console.error("UnenrollCourse Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -417,17 +359,32 @@ const getStudentEnrollments = async (req, res) => {
       })
       .lean();
 
+    const sub = await UserSubscription.findOne({ userId }).sort({ createdAt: -1 }).populate("planId").lean();
+
+    let subscription = { active: false, status: null, accessType: null, courseIds: [] };
+    if (sub) {
+      const now = new Date();
+      const paidEnd = sub.currentPeriodEnd || sub.endDate;
+      const trialOk = sub.status === "trial" && sub.trialEndDate && new Date(sub.trialEndDate) > now;
+      const paidOk =
+        (sub.status === "active" || sub.status === "cancelled") && paidEnd && new Date(paidEnd) > now;
+
+      subscription = {
+        active: Boolean(trialOk || paidOk),
+        status: sub.status,
+        accessType: sub.planId?.accessType || null,
+        courseIds: sub.planId?.courseIds || [],
+      };
+    }
+
     const student = await Student.findOne({ user: userId })
-      .populate({
-        path: "enrolledCourses",
-        select: "title _id",
-      })
+      .populate({ path: "enrolledCourses", select: "title _id" })
       .lean();
 
-    res.json({ success: true, enrollments, student });
+    return res.json({ success: true, enrollments, student, subscription });
   } catch (err) {
     console.error("GetStudentEnrollments Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -435,43 +392,49 @@ const enrolledStudent = async (req, res) => {
   try {
     const { studentId, courseId } = req.params;
 
-    // ✅ security: logged in user can only access their own enrollment
     if (String(req.user?._id) !== String(studentId)) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    const enrollment = await Enrollment.findOne({
-      student: studentId,     // ✅ this is USER id
-      course: courseId,
-    })
+    const enrollment = await Enrollment.findOne({ student: studentId, course: courseId })
       .populate("student", "name email")
       .populate("course", "title lessons");
 
-    if (!enrollment) {
-      return res.status(200).json({ message: "Enrollment not found" });
-    }
-
-    // ✅ (optional) if expired or cancelled, front-end should treat as not enrolled
     const now = new Date();
-    if (enrollment.status === "cancelled" || (enrollment.expiryDate && enrollment.expiryDate < now)) {
+    const enrollmentAccess =
+      enrollment &&
+      enrollment.status !== "cancelled" &&
+      (!enrollment.expiryDate || enrollment.expiryDate >= now);
+
+    if (enrollmentAccess) {
       return res.json({
         ...enrollment.toObject(),
-        access: false,
+        access: true,
+        accessType: "purchase",
       });
     }
 
-    if (enrollment.progress === 100 && !enrollment.certificate) {
-      const fileName = `${studentId}_${courseId}_Certificate.pdf`;
-      const filePath = `/uploads/certificates/${fileName}`;
-
-      enrollment.certificate = filePath;
-      await enrollment.save();
+    const subCheck = await checkSubscriptionForCourse({ userId: studentId, courseId });
+    if (subCheck.ok) {
+      return res.json({
+        message: "Access granted via subscription",
+        access: true,
+        accessType: "subscription",
+      });
     }
 
-    return res.json(enrollment);
+    if (!enrollment) {
+      return res.status(200).json({ message: "Enrollment not found", access: false, accessType: "none" });
+    }
+
+    return res.json({
+      ...enrollment.toObject(),
+      access: false,
+      accessType: "none",
+    });
   } catch (err) {
     console.error("Enrollment fetch error:", err);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -487,7 +450,7 @@ const downloadReceipt = async (req, res) => {
       return res.status(403).json({ success: false, message: "Forbidden" });
     }
 
-    if (enrollment.paymentStatus !== "complete") {
+    if (enrollment.paymentStatus !== "complete" && enrollment.paymentStatus !== "subscription") {
       return res.status(400).json({ success: false, message: "Payment not completed" });
     }
 
@@ -495,9 +458,8 @@ const downloadReceipt = async (req, res) => {
       return res.status(404).json({ success: false, message: "Receipt not available" });
     }
 
-    // ✅ FIX: remove leading slash before joining
     const rel = String(enrollment.receiptUrl || "").replace(/^\//, "");
-    const absPath = path.join(__dirname, "..",z , rel);
+    const absPath = path.join(__dirname, "..", rel);
 
     if (!fs.existsSync(absPath)) {
       return res.status(404).json({ success: false, message: "Receipt file missing" });
@@ -512,7 +474,7 @@ const downloadReceipt = async (req, res) => {
     return fs.createReadStream(absPath).pipe(res);
   } catch (err) {
     console.error("DownloadReceipt Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 

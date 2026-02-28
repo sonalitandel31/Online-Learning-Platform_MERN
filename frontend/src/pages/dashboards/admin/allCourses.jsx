@@ -53,7 +53,6 @@ export default function AllCourses() {
 
   return (
     <div className="admin-container">
-      {/* Global Styles for Responsiveness */}
       <style>{`
         .admin-container {
           padding: 20px;
@@ -65,7 +64,7 @@ export default function AllCourses() {
           color: #6f42c1;
           text-align: center;
           margin-bottom: 30px;
-          font-weight: 800;
+          font-weight: 700;
           font-size: 2rem;
         }
         .filter-section {
@@ -145,7 +144,7 @@ export default function AllCourses() {
         }
       `}</style>
 
-      <h2 className="header-title">Course Management Dashboard</h2>
+      <h2 className="header-title">Course Management</h2>
 
       <div className="filter-section">
         <input

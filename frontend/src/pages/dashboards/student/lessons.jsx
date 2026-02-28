@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../../api/api";
+import { track } from "../../../utils/track";
 import {
   ChevronLeft,
   ChevronRight,
@@ -15,6 +16,8 @@ import {
   Layout,
   Sparkles,
 } from "lucide-react";
+
+const PLANS_ROUTE = "/plans"; // ✅ change this to your real route
 
 function Lesson() {
   const { courseId, lessonId } = useParams();
@@ -31,6 +34,10 @@ function Lesson() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notification, setNotification] = useState("");
 
+  // Access from /courses/:id
+  const [hasAccess, setHasAccess] = useState(false);
+  const [accessReason, setAccessReason] = useState("");
+
   const videoRef = useRef(null);
   const markingRef = useRef(false);
 
@@ -44,36 +51,67 @@ function Lesson() {
     setTimeout(() => setNotification(""), 3000);
   };
 
+  const autoEnrollViaSubscription = async () => {
+    try {
+      track("subscription_auto_enroll_click", { courseId, source: "lesson" });
+      await api.post("/enrollments", { courseId, studentId, amount: 0, source: "subscription" });
+      track("subscription_auto_enroll_success", { courseId, source: "lesson" });
+      showNotify("Enrollment created via subscription ✅");
+      window.location.reload();
+    } catch (err) {
+      console.error("Auto enroll via subscription failed:", err);
+      track("subscription_auto_enroll_failed", { courseId, source: "lesson" });
+      showNotify("Could not start via subscription. Try again.");
+    }
+  };
+
   useEffect(() => {
     const fetchLessonData = async () => {
       try {
         setLoading(true);
         setError("");
 
-        const res = await api.get(`/courses/${courseId}`);
-        const courseData = res.data || {};
+        if (!studentId) {
+          setError("User not logged in.");
+          setLoading(false);
+          return;
+        }
+
+        track("lesson_page_open", { courseId, lessonId });
+
+        // supports both shapes
+        const { data } = await api.get(`/courses/${courseId}`);
+        const courseData = data?.course || data || {};
+        const access = data?.access || { ok: false, type: "none", reason: "" };
+
         setCourse(courseData);
+        setHasAccess(!!access.ok);
+        setAccessReason(access.reason || access.type || "");
 
         const lessonList = Array.isArray(courseData.lessons) ? courseData.lessons : [];
         setLessons(lessonList);
 
-        const enrollRes = await api.get(`/enrollments/student/${studentId}/course/${courseId}`);
-        const enrollment = enrollRes.data;
+        // Enrollment (progress)
+        try {
+          const enrollRes = await api.get(`/enrollments/student/${studentId}/course/${courseId}`);
+          const enrollment = enrollRes.data;
 
-        if (!enrollment || enrollment?.message === "Enrollment not found") {
+          if (!enrollment || enrollment?.message === "Enrollment not found") {
+            setIsEnrolled(false);
+            setCompletedLessons([]);
+          } else {
+            const isExpired = enrollment?.expiryDate && new Date(enrollment.expiryDate) < new Date();
+            const allowed = ["active", "completed"].includes(enrollment.status) && !isExpired;
+            setIsEnrolled(allowed);
+            setCompletedLessons((enrollment.completedLessons || []).map(String));
+          }
+        } catch (err) {
           setIsEnrolled(false);
           setCompletedLessons([]);
-        } else {
-          const isExpired = enrollment?.expiryDate && new Date(enrollment.expiryDate) < new Date();
-          const allowed = ["active", "completed"].includes(enrollment.status) && !isExpired;
-
-          setIsEnrolled(allowed);
-          setCompletedLessons((enrollment.completedLessons || []).map(String));
         }
 
-        const foundLesson =
-          lessonList.find((l) => String(l._id) === String(lessonId)) || lessonList[0];
-
+        // Current lesson
+        const foundLesson = lessonList.find((l) => String(l._id) === String(lessonId)) || lessonList[0];
         if (foundLesson) {
           setCurrentLesson(foundLesson);
           localStorage.setItem(`lastLesson_${courseId}`, foundLesson._id);
@@ -87,12 +125,6 @@ function Lesson() {
         setLoading(false);
       }
     };
-
-    if (!studentId) {
-      setError("User not logged in.");
-      setLoading(false);
-      return;
-    }
 
     fetchLessonData();
   }, [courseId, lessonId, studentId]);
@@ -111,6 +143,7 @@ function Lesson() {
   }, [currentLesson]);
 
   useEffect(() => {
+    // progress endpoints depend on enrollment record
     if (!currentLesson || !isEnrolled || !course?._id) return;
 
     const markAsCompleted = async () => {
@@ -120,20 +153,21 @@ function Lesson() {
 
       markingRef.current = true;
       try {
-        const resp = await api.post(`/lessons/${currentLesson._id}/markWatched`, {
-          studentId,
-          courseId: course._id,
-        });
+        const resp = await api.post(
+          `/courses/${course._id}/lessons/${currentLesson._id}/markWatched`,
+          {},
+          { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+        );
 
         setCompletedLessons((prev) => (prev.includes(lessonKey) ? prev : [...prev, lessonKey]));
 
-        const earnedXp = (resp.data?.xpAwards || []).reduce(
-          (sum, x) => sum + Number(x?.xp || 0),
-          0
-        );
+        const earnedXp = (resp.data?.xpAwards || []).reduce((sum, x) => sum + Number(x?.xp || 0), 0);
         if (earnedXp > 0) showNotify(`+${earnedXp} XP earned ✅`);
       } catch (err) {
         console.error("markWatched error:", err);
+        if (err.response?.status === 403) {
+          showNotify("Start Learning via Subscription to enable progress tracking.");
+        }
       } finally {
         markingRef.current = false;
       }
@@ -155,13 +189,23 @@ function Lesson() {
     else showNotify("This is the first lesson!");
   };
 
+  const getTextContent = (lesson) => {
+    return (
+      lesson?.html ||
+      lesson?.content ||
+      lesson?.text ||
+      lesson?.body ||
+      lesson?.description ||
+      ""
+    );
+  };
+
+  const isProbablyHtml = (str = "") => /<\/?[a-z][\s\S]*>/i.test(str);
+
   if (loading)
     return (
       <div className="d-flex flex-column justify-content-center align-items-center vh-100 bg-white">
-        <div
-          className="spinner-border text-purple mb-3"
-          style={{ width: "3rem", height: "3rem" }}
-        ></div>
+        <div className="spinner-border text-purple mb-3" style={{ width: "3rem", height: "3rem" }}></div>
         <h5 className="text-purple fw-light">Opening your lesson...</h5>
       </div>
     );
@@ -177,8 +221,9 @@ function Lesson() {
     ? currentLesson.fileUrl
     : `${BASE_URL}/${String(currentLesson?.fileUrl || "").replace(/^\//, "")}`;
 
-  const canAccess = currentLesson?.isPreviewFree || isEnrolled;
+  const canAccess = currentLesson?.isPreviewFree || hasAccess;
   const currentIndex = lessons.findIndex((l) => String(l._id) === String(currentLesson?._id));
+  const showStartViaSubscription = hasAccess && !isEnrolled;
 
   return (
     <div className="lesson-page-container">
@@ -225,6 +270,12 @@ function Lesson() {
 
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1c4e9; border-radius: 10px; }
+
+        .text-lesson-pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-size: 15px; line-height: 1.75; color: #4b5563; /* matches text-secondary */ font-family: inherit;}
+
+        .text-lesson-html { font-size: 15px; line-height: 1.75; color: #4b5563;}
+        .text-lesson-html img { max-width: 100%; height: auto; }
+        .text-lesson-html pre { white-space: pre-wrap; }
 
         @media (max-width: 991px) {
           .lesson-sidebar { 
@@ -276,13 +327,14 @@ function Lesson() {
                 <div
                   className="progress-bar bg-purple"
                   style={{
-                    width: lessons.length
-                      ? `${(completedLessons.length / lessons.length) * 100}%`
-                      : "0%",
+                    width: lessons.length ? `${(completedLessons.length / lessons.length) * 100}%` : "0%",
                   }}
                 ></div>
               </div>
+
+              {!hasAccess && accessReason && <div className="small text-muted mt-2">Access: {accessReason}</div>}
             </div>
+
             <button className="btn btn-light d-lg-none" onClick={() => setSidebarOpen(false)}>
               <X size={20} />
             </button>
@@ -291,7 +343,7 @@ function Lesson() {
 
         <div className="lesson-list custom-scrollbar">
           {lessons.map((l, i) => {
-            const locked = !l.isPreviewFree && !isEnrolled;
+            const locked = !l.isPreviewFree && !hasAccess;
             const active = String(l._id) === String(currentLesson?._id);
             const done = completedLessons.includes(String(l._id));
 
@@ -300,19 +352,20 @@ function Lesson() {
                 key={l._id}
                 className={`lesson-item ${active ? "active" : ""} ${locked ? "locked" : ""}`}
                 onClick={() => {
-                  if (locked) return;
+                  if (locked) {
+                    track("lesson_click_locked", { courseId, lessonId: l._id, index: i });
+                    showNotify("Enroll or Subscribe to access this lesson.");
+                    return;
+                  }
+                  track("lesson_navigate", { courseId, lessonId: l._id, index: i });
                   setSidebarOpen(false);
                   navigate(`/course/${courseId}/lessons/${l._id}`);
                 }}
               >
-                <div className={`fw-bold small ${active ? "text-purple" : "opacity-30"}`}>
-                  {String(i + 1).padStart(2, "0")}
-                </div>
+                <div className={`fw-bold small ${active ? "text-purple" : "opacity-30"}`}>{String(i + 1).padStart(2, "0")}</div>
 
                 <div className="flex-grow-1">
-                  <div className={`fw-bold small ${active ? "text-purple" : "text-secondary"}`}>
-                    {l.title}
-                  </div>
+                  <div className={`fw-bold small ${active ? "text-purple" : "text-secondary"}`}>{l.title}</div>
                   <div className="d-flex align-items-center gap-2 mt-1" style={{ fontSize: "10px" }}>
                     {String(l.contentType).toLowerCase() === "video" ? (
                       <Play size={10} className="text-purple" />
@@ -323,11 +376,7 @@ function Lesson() {
                   </div>
                 </div>
 
-                {done ? (
-                  <CheckCircle size={18} className="text-success" />
-                ) : locked ? (
-                  <Lock size={14} className="text-muted" />
-                ) : null}
+                {done ? <CheckCircle size={18} className="text-success" /> : locked ? <Lock size={14} className="text-muted" /> : null}
               </div>
             );
           })}
@@ -385,10 +434,39 @@ function Lesson() {
                   <div className="d-flex align-items-center gap-2 mb-3 text-purple">
                     <Type size={24} /> <h5 className="m-0 fw-bold">Lesson Notes</h5>
                   </div>
-                  <div
-                    className="lh-lg text-secondary"
-                    dangerouslySetInnerHTML={{ __html: currentLesson?.description || "" }}
-                  />
+
+                  {(() => {
+                    const content = getTextContent(currentLesson);
+
+                    if (!content) {
+                      return <div className="text-muted">No text content available for this lesson.</div>;
+                    }
+
+                    // HTML content
+                    if (isProbablyHtml(content)) {
+                      return <div className="text-lesson-html" dangerouslySetInnerHTML={{ __html: content }} />;
+                    }
+
+                    // Plain text (preserve new lines)
+                    return <pre className="text-lesson-pre">{content}</pre>;
+                  })()}
+                </div>
+              )}
+
+              {showStartViaSubscription && (
+                <div className="mt-3 p-3 bg-white rounded-4 shadow-sm border">
+                  <div className="fw-bold text-dark mb-1">Enable Progress Tracking</div>
+                  <div className="text-muted small mb-3">
+                    You have access via subscription, but your enrollment record is missing. Create it to track progress & completion.
+                  </div>
+                  <div className="d-flex flex-column flex-sm-row gap-2">
+                    <button className="btn btn-purple rounded-pill fw-bold px-4" onClick={autoEnrollViaSubscription}>
+                      Start Learning (via Subscription)
+                    </button>
+                    <button className="btn btn-outline-info rounded-pill fw-bold px-4" onClick={() => navigate("/my-subscription")}>
+                      View My Subscription
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -399,14 +477,16 @@ function Lesson() {
               </div>
               <h4 className="fw-bold text-dark">Premium Content Locked</h4>
               <p className="text-muted mb-4 mx-auto" style={{ maxWidth: "350px" }}>
-                This lesson is part of the premium curriculum. Enroll now to unlock high-quality learning materials.
+                This lesson is part of the premium curriculum. Enroll or subscribe to unlock high-quality learning materials.
               </p>
-              <button
-                className="btn btn-orange px-5 py-3 rounded-pill fw-bold shadow-lg"
-                onClick={() => navigate(`/courses/${courseId}`)}
-              >
-                Unlock Full Access
-              </button>
+              <div className="d-grid gap-2 col-md-6 mx-auto">
+                <button className="btn btn-orange px-5 py-3 rounded-pill fw-bold shadow-lg" onClick={() => navigate(`/courses/${courseId}`)}>
+                  Enroll Now
+                </button>
+                <button className="btn btn-outline-info px-5 py-3 rounded-pill fw-bold shadow-sm" onClick={() => navigate(PLANS_ROUTE)}>
+                  View Plans / Subscribe
+                </button>
+              </div>
             </div>
           )}
 
@@ -422,12 +502,8 @@ function Lesson() {
               Previous
             </button>
 
-            <button
-              className="btn btn-orange px-5 py-2 rounded-pill fw-bold shadow-lg d-flex align-items-center gap-2"
-              onClick={handleNext}
-            >
-              {currentIndex === lessons.length - 1 ? "Complete Content" : "Next Lesson"}{" "}
-              <ChevronRight size={20} />
+            <button className="btn btn-orange px-5 py-2 rounded-pill fw-bold shadow-lg d-flex align-items-center gap-2" onClick={handleNext}>
+              {currentIndex === lessons.length - 1 ? "Complete Content" : "Next Lesson"} <ChevronRight size={20} />
             </button>
           </div>
         </div>

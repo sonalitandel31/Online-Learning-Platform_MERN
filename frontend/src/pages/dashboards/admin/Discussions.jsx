@@ -1,4 +1,3 @@
-// src/pages/Admin/Forum/ForumDiscussions.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Search,
@@ -12,55 +11,52 @@ import {
   CheckCircle2,
   Clock,
   ShieldAlert,
-  RefreshCcw,
   XCircle,
   CornerDownRight,
+  Filter,
+  Layers,
+  Info,
+  MoreVertical,
+  ShieldCheck
 } from "lucide-react";
 import api from "../../../api/api";
 
 const ForumDiscussions = () => {
-  const [activeTab, setActiveTab] = useState("discussions"); // discussions | reports
+  const [activeTab, setActiveTab] = useState("discussions");
 
-  // discussions
+  // discussions state
   const [questions, setQuestions] = useState([]);
   const [loadingDiscussions, setLoadingDiscussions] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedId, setExpandedId] = useState(null);
 
-  // replies (read-only)
+  // replies state (read-only)
   const [repliesByQuestionId, setRepliesByQuestionId] = useState({});
-  const [repliesLoading, setRepliesLoading] = useState({}); // qid -> boolean
+  const [repliesLoading, setRepliesLoading] = useState({});
 
-  // reports
+  // reports state
   const [reports, setReports] = useState([]);
   const [loadingReports, setLoadingReports] = useState(true);
   const [reportActionId, setReportActionId] = useState(null);
-
-  const [reportStatus, setReportStatus] = useState("pending"); 
+  const [reportStatus, setReportStatus] = useState("pending");
   const [reportSearch, setReportSearch] = useState("");
-
-  // NEW: modal state for report details
   const [selectedReport, setSelectedReport] = useState(null);
 
+  // ------------------- Helpers -------------------
   const safeName = (u) => u?.name || "User";
-
   const getRepliesForAnswer = (questionId, answerId) => {
     const list = repliesByQuestionId[questionId] || [];
     return list.filter((r) => String(r.answerId) === String(answerId));
   };
 
-  // ------------------- Fetch Discussions -------------------
+  // ------------------- Fetch Logic -------------------
   const fetchAllDiscussions = async () => {
     try {
       setLoadingDiscussions(true);
       const res = await api.get("/forum/admin/questions");
       setQuestions(res.data || []);
-    } catch (err) {
-      console.error("Admin fetch failed", err);
-    } finally {
-      setLoadingDiscussions(false);
-    }
+    } catch (err) { console.error(err); } finally { setLoadingDiscussions(false); }
   };
 
   const fetchReports = async () => {
@@ -68,630 +64,332 @@ const ForumDiscussions = () => {
       setLoadingReports(true);
       const res = await api.get(`/forum/admin/reports?status=${reportStatus}`);
       setReports(res.data || []);
-    } catch (err) {
-      console.error("Failed to fetch admin reports", err);
-    } finally {
-      setLoadingReports(false);
-    }
+    } catch (err) { console.error(err); } finally { setLoadingReports(false); }
   };
 
-  useEffect(() => {
-    if (activeTab === "reports") fetchReports();
-    // eslint-disable-next-line
-  }, [reportStatus, activeTab]);
-
-  useEffect(() => {
-    fetchAllDiscussions();
-  }, []);
-
   const fetchRepliesForQuestion = async (questionId) => {
-    if (!questionId) return;
-    if (repliesByQuestionId[questionId]) return;
-    if (repliesLoading[questionId]) return;
-
+    if (!questionId || repliesByQuestionId[questionId] || repliesLoading[questionId]) return;
     try {
       setRepliesLoading((prev) => ({ ...prev, [questionId]: true }));
       const res = await api.get(`/forum/question/${questionId}/replies`);
       setRepliesByQuestionId((prev) => ({ ...prev, [questionId]: res.data || [] }));
-    } catch (err) {
-      console.error("Failed to fetch replies for question:", questionId, err);
-      setRepliesByQuestionId((prev) => ({ ...prev, [questionId]: [] }));
-    } finally {
-      setRepliesLoading((prev) => ({ ...prev, [questionId]: false }));
-    }
+    } catch (err) { console.error(err); } finally { setRepliesLoading((prev) => ({ ...prev, [questionId]: false })); }
   };
 
+  // ------------------- Actions -------------------
   const toggleLock = async (e, questionId, lockState) => {
     e.stopPropagation();
     try {
       setActionLoadingId(questionId);
       await api.put(`/forum/question/${questionId}/lock`, { isLocked: lockState });
-      setQuestions((prev) =>
-        prev.map((q) => (q._id === questionId ? { ...q, isLocked: lockState } : q))
-      );
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setActionLoadingId(null);
-    }
+      setQuestions((prev) => prev.map((q) => (q._id === questionId ? { ...q, isLocked: lockState } : q)));
+    } catch (err) { console.error(err); } finally { setActionLoadingId(null); }
   };
 
   const deleteThread = async (e, questionId) => {
     e.stopPropagation();
-    if (!window.confirm("Soft-delete this thread? (It will be hidden from users)")) return;
-
+    if (!window.confirm("Soft-delete this thread?")) return;
     try {
       setActionLoadingId(questionId);
       await api.delete(`/forum/question/${questionId}`);
       setQuestions((prev) => prev.filter((q) => q._id !== questionId));
       if (expandedId === questionId) setExpandedId(null);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setActionLoadingId(null);
-    }
+    } catch (err) { console.error(err); } finally { setActionLoadingId(null); }
   };
 
   const actOnReport = async (reportId, action) => {
-    const actionNote = window.prompt("Action note (optional):", "");
+    const actionNote = window.prompt("Official Action Note:", "");
     try {
       setReportActionId(reportId);
-      await api.put(`/forum/report/${reportId}/action`, {
-        action,
-        actionNote: actionNote || "",
-      });
+      await api.put(`/forum/report/${reportId}/action`, { action, actionNote: actionNote || "" });
       await fetchReports();
-    } catch (err) {
-      console.error("Failed to update report", err);
-    } finally {
-      setReportActionId(null);
-    }
+      if (selectedReport?._id === reportId) setSelectedReport(null);
+    } catch (err) { console.error(err); } finally { setReportActionId(null); }
   };
 
+  // ------------------- Memoized Filters -------------------
   const filteredQuestions = useMemo(() => {
     const s = searchTerm.toLowerCase();
-    return (questions || []).filter(
-      (q) =>
-        (q.title || "").toLowerCase().includes(s) ||
-        (q.courseTitle || "").toLowerCase().includes(s) ||
-        (q.userId?.name || q.asker?.name || "").toLowerCase().includes(s)
+    return questions.filter(q =>
+      [q.title, q.courseTitle, q.userId?.name, q.asker?.name].join(" ").toLowerCase().includes(s)
     );
   }, [questions, searchTerm]);
 
   const stats = useMemo(() => {
-    const total = filteredQuestions.length;
-    const open = filteredQuestions.filter((q) => !q.isSolved).length;
-    const locked = filteredQuestions.filter((q) => !!q.isLocked).length;
-    return { total, open, locked };
+    return {
+      total: filteredQuestions.length,
+      open: filteredQuestions.filter(q => !q.isSolved).length,
+      locked: filteredQuestions.filter(q => !!q.isLocked).length
+    };
   }, [filteredQuestions]);
 
   const filteredReports = useMemo(() => {
-    const s = reportSearch.trim().toLowerCase();
-    if (!s) return reports || [];
-
-    return (reports || []).filter((r) => {
-      const fields = [
-        r?.reason,
-        r?.targetType,
-        r?.status,
-        r?.reporterId?.name,
-        r?.targetUserId?.name,
-        r?.courseId?.title,
-        r?.actionBy?.name,
-        r?.actionNote,
-        r?.note,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return fields.includes(s);
-    });
+    const s = reportSearch.toLowerCase();
+    return reports.filter(r =>
+      [r?.reason, r?.targetType, r?.reporterId?.name, r?.targetUserId?.name, r?.courseId?.title].join(" ").toLowerCase().includes(s)
+    );
   }, [reports, reportSearch]);
 
   const groupedReports = useMemo(() => {
-    const byType = {};
-    for (const r of filteredReports) {
+    return filteredReports.reduce((acc, r) => {
       const k = r.targetType || "unknown";
-      if (!byType[k]) byType[k] = [];
-      byType[k].push(r);
-    }
-    return byType;
+      (acc[k] = acc[k] || []).push(r);
+      return acc;
+    }, {});
   }, [filteredReports]);
+
+  useEffect(() => { activeTab === "reports" ? fetchReports() : fetchAllDiscussions(); }, [activeTab, reportStatus]);
 
   const handleExpandRow = async (qid) => {
     const next = expandedId === qid ? null : qid;
     setExpandedId(next);
-
-    if (next) {
-      await fetchRepliesForQuestion(qid);
-    }
+    if (next) await fetchRepliesForQuestion(qid);
   };
 
   const renderStatusBadge = (statusRaw) => {
     const status = (statusRaw || "pending").toLowerCase();
-    return (
-      <span
-        className={`badge rounded-pill ${
-          status === "pending" ? "bg-warning text-dark" : status === "resolved" ? "bg-success" : "bg-danger"
-        }`}
-      >
-        {status}
-      </span>
-    );
+    const config = {
+      pending: "bg-warning text-dark border-warning",
+      resolved: "bg-success text-white border-success",
+      rejected: "bg-danger text-white border-danger",
+    };
+    return <span className={`badge rounded-pill px-3 py-1 ${config[status]}`}>{status}</span>;
   };
 
   return (
-    <div className="container-fluid py-4 px-2 px-md-4" style={{ backgroundColor: "#f8f9fd", minHeight: "100vh" }}>
+    <div className="container-fluid py-4 px-3" style={{ backgroundColor: "#F9FAFB", minHeight: "100vh" }}>
       <style>{`
-        .hub-card { background:#fff; border-radius:18px; border:1px solid #eef0f7; box-shadow:0 10px 30px rgba(82,63,105,0.05); overflow:hidden; }
-        .tab-btn { border:0; background:transparent; font-weight:800; padding:12px 16px; border-radius:12px; color:#5e6278; display:inline-flex; align-items:center; gap:8px; }
-        .tab-btn.active { background:#f3effb; color:#7e50d3; }
-        .search-container { background:#fff; border-radius:12px; padding:0.5rem 1rem; box-shadow:0 4px 12px rgba(0,0,0,0.03); border:1px solid #eef0f7; }
-        .forum-card { background:#fff; border-radius:20px; border:1px solid #eef0f7; box-shadow:0 10px 30px rgba(82,63,105,0.05); overflow:hidden; }
-        .table thead th { background:#fcfcfd; text-transform:uppercase; font-size:0.7rem; font-weight:700; letter-spacing:1px; color:#a1a5b7; padding:1.25rem 1rem; border-bottom:1px solid #f1f3f9; }
-        .table tbody td { padding:1.25rem 1rem; vertical-align:middle; border-bottom:1px solid #f8f9fb; }
-        .question-title { color:#1e1e2d; font-weight:800; transition:color 0.2s; }
-        .row-hover:hover .question-title { color:#6f42c1; }
-        .status-badge { padding:6px 14px; border-radius:8px; font-size:0.75rem; font-weight:800; display:inline-flex; align-items:center; gap:5px; }
-        .status-open { background:#fff8dd; color:#ff9900; }
-        .status-solved { background:#e8fff3; color:#50cd89; }
-        .status-locked { background:#f1f1f2; color:#3f4254; }
-        .action-btn { width:38px; height:38px; border-radius:10px; border:none; display:flex; align-items:center; justify-content:center; transition:all 0.2s; background:#f5f8fa; color:#5e6278; }
-        .btn-lock-toggle:hover { background:#fff8dd; color:#ff9900; }
-        .btn-delete-thread:hover { background:#fff5f8; color:#f1416c; }
-        .expanded-content-box { background:#f9f9fc; border-radius:12px; padding:1.5rem; margin:0.5rem 1rem 1.5rem 1rem; border:1px dashed #e4e6ef; }
-        .pulse-icon { animation:pulse 2s infinite; width:8px; height:8px; border-radius:50%; background:currentColor; }
-        @keyframes pulse {
-          0% { transform:scale(0.95); box-shadow:0 0 0 0 rgba(255,153,0,0.7); }
-          70% { transform:scale(1); box-shadow:0 0 0 10px rgba(255,153,0,0); }
-          100% { transform:scale(0.95); box-shadow:0 0 0 0 rgba(255,153,0,0); }
-        }
-        .mini-btn { border-radius:12px; font-weight:800; padding:0.55rem 0.9rem; }
-
-        .reply-card {
-          background: #fff;
-          border: 1px solid #eef0f7;
-          border-radius: 10px;
-          padding: 10px;
-          margin-top: 8px;
-        }
-
-        /* ---------------- Reports responsiveness ---------------- */
-        .report-table th, .report-table td { white-space: nowrap; }
-        .report-wrap { white-space: normal !important; word-break: break-word; overflow-wrap: anywhere; }
-
-        /* Make modal scroll-friendly */
-        .modal-backdrop-custom {
-          position: fixed; inset: 0;
-          background: rgba(0,0,0,0.5);
-          z-index: 1040;
-        }
-        .modal-custom {
-          position: fixed; inset: 0;
-          z-index: 1050;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 16px;
-        }
-        .modal-card {
-          width: min(920px, 100%);
-          max-height: 90vh;
-          overflow: auto;
-          background: #fff;
-          border-radius: 16px;
-          border: 1px solid #eef0f7;
-          box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-        }
-
-        /* phones */
-        @media (max-width: 576px) {
-          .container-fluid { padding-left: 10px !important; padding-right: 10px !important; }
-          .hub-card { padding: 14px !important; }
-          .form-select, .form-control { width: 100% !important; max-width: 100% !important; }
-          .modal-custom { padding: 10px; }
-          .modal-card { border-radius: 14px; }
-        }
-
-        /* Add border helper for large screens only */
-        @media (min-width: 992px) {
-          .border-end-lg { border-right: 1px solid #e9ecef; }
-        }
+        :root { --p-main: #7c3aed; --p-soft: #f5f3ff; --y-main: #f59e0b; --y-soft: #fffbeb; }
+        .glass-card { background: white; border-radius: 24px; border: 1px solid #eef2f6; box-shadow: 0 10px 30px rgba(124, 58, 237, 0.05); }
+        .tab-nav { background: white; padding: 6px; border-radius: 16px; display: inline-flex; border: 1px solid #e2e8f0; }
+        .tab-item { border: none; padding: 10px 24px; border-radius: 12px; font-weight: 700; color: #64748b; background: transparent; transition: 0.3s; }
+        .tab-item.active { background: var(--p-main); color: white; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2); }
+        .stat-card { border-radius: 20px; border: 1px solid #f1f5f9; padding: 20px; background: white; }
+        .data-table thead th { background: #f8fafc; color: #64748b; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; padding: 16px; border-bottom: 2px solid #f1f5f9; }
+        .data-table tbody td { padding: 16px; vertical-align: middle; border-bottom: 1px solid #f1f5f9; }
+        .action-icon-btn { width: 36px; height: 36px; border-radius: 10px; border: none; background: #f1f5f9; color: #64748b; transition: 0.2s; }
+        .action-icon-btn:hover { background: var(--p-soft); color: var(--p-main); }
+        .btn-delete:hover { background: #fee2e2; color: #ef4444; }
+        .expanded-box { background: #fcfcfd; border-radius: 16px; margin: 10px; padding: 20px; border: 1px dashed #cbd5e1; }
+        .ans-pill { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px; margin-bottom: 8px; }
+        .reply-mini { background: #f8fafc; border-radius: 8px; padding: 8px; margin-top: 4px; border: 1px solid #f1f5f9; }
+        
+        /* Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(30, 27, 75, 0.4); backdrop-filter: blur(8px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-card-custom { background: white; width: 100%; max-width: 850px; border-radius: 28px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0,0,0,0.15); }
       `}</style>
 
-      {/* Header + Tabs */}
-      <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+      {/* Header & Stats */}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
         <div>
-          <h3 className="fw-bolder mb-1" style={{ color: "#1e1e2d" }}>
-            Admin Forum
-          </h3>
-          <div className="text-muted fw-medium">Moderate discussions and handle reports.</div>
+          <h2 className="fw-800 mb-0" style={{ color: "#1e1b4b" }}>Admin <span style={{ color: "var(--p-main)" }}>Forum</span></h2>
+          <p className="text-muted small fw-medium">High-level moderation & platform health</p>
         </div>
-
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-          <button
-            className={`tab-btn ${activeTab === "discussions" ? "active" : ""}`}
-            onClick={() => setActiveTab("discussions")}
-          >
+        <div className="tab-nav">
+          <button className={`tab-item ${activeTab === "discussions" ? "active" : ""}`} onClick={() => setActiveTab("discussions")}>
             Discussions
           </button>
-
-          <button
-            className={`tab-btn ${activeTab === "reports" ? "active" : ""}`}
-            onClick={() => setActiveTab("reports")}
-          >
-            <ShieldAlert size={18} /> Reports
-            {reports?.length > 0 && <span className="badge rounded-pill bg-danger ms-1">{reports.length}</span>}
+          <button className={`tab-item ${activeTab === "reports" ? "active" : ""}`} onClick={() => setActiveTab("reports")}>
+            <ShieldAlert size={18} className="me-2" /> Reports
+            {reports.length > 0 && <span className="ms-2 badge rounded-pill bg-danger shadow-sm">{reports.length}</span>}
           </button>
-
-          {/* <button
-            className="btn btn-outline-primary mini-btn d-flex align-items-center gap-2"
-            onClick={() => {
-              fetchAllDiscussions();
-              fetchReports();
-            }}
-            title="Refresh"
-          >
-            <RefreshCcw size={16} /> Refresh
-          </button> */}
         </div>
       </div>
 
-      <div className="hub-card p-3 p-md-4">
-        {/* ------------------- TAB: DISCUSSIONS ------------------- */}
-        {activeTab === "discussions" && (
+      <div className="glass-card p-4">
+        {activeTab === "discussions" ? (
           <>
-            {/* Top controls */}
-            <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-4">
-              <div className="d-flex gap-3 flex-wrap">
-                <div className="forum-card p-3" style={{ minWidth: 180 }}>
-                  <div className="text-muted small fw-bold text-uppercase mb-1">Open</div>
-                  <div className="h3 fw-bolder mb-0">{stats.open}</div>
+            {/* Stats Row */}
+            <div className="row g-3 mb-4">
+              {[
+                { label: "Active Threads", val: stats.open, color: "var(--y-main)", icon: <Clock size={20} /> },
+                { label: "Locked Threads", val: stats.locked, color: "#64748b", icon: <Lock size={20} /> },
+                { label: "Total Volume", val: stats.total, color: "var(--p-main)", icon: <Layers size={20} /> }
+              ].map((s, i) => (
+                <div key={i} className="col-md-4">
+                  <div className="stat-card d-flex align-items-center gap-3">
+                    <div className="p-3 rounded-4" style={{ background: s.color + '15', color: s.color }}>{s.icon}</div>
+                    <div>
+                      <small className="text-muted fw-bold text-uppercase" style={{ fontSize: '0.65rem' }}>{s.label}</small>
+                      <h4 className="mb-0 fw-800">{s.val}</h4>
+                    </div>
+                  </div>
                 </div>
-                <div className="forum-card p-3" style={{ minWidth: 180 }}>
-                  <div className="text-muted small fw-bold text-uppercase mb-1">Locked</div>
-                  <div className="h3 fw-bolder mb-0">{stats.locked}</div>
-                </div>
-                <div className="forum-card p-3" style={{ minWidth: 180 }}>
-                  <div className="text-muted small fw-bold text-uppercase mb-1">Total</div>
-                  <div className="h3 fw-bolder mb-0 text-primary">{stats.total}</div>
-                </div>
-              </div>
+              ))}
+            </div>
 
-              <div className="search-container d-flex align-items-center gap-2" style={{ width: "min(520px, 100%)" }}>
-                <Search size={18} className="text-muted" />
-                <input
-                  className="border-0 shadow-none outline-none"
-                  style={{ outline: "none", width: "100%" }}
-                  placeholder="Filter threads..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+            {/* Search */}
+            <div className="bg-light p-2 rounded-4 d-flex align-items-center mb-4 border">
+              <Search className="ms-3 text-muted" size={18} />
+              <input className="form-control border-0 bg-transparent shadow-none" placeholder="Search by title, course or user..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
             </div>
 
             {loadingDiscussions ? (
-              <div className="d-flex flex-column justify-content-center align-items-center" style={{ minHeight: "50vh" }}>
-                <div className="spinner-grow text-primary" role="status" style={{ width: "3rem", height: "3rem" }} />
-                <p className="mt-3 text-muted fw-medium">Loading discussions...</p>
-              </div>
+              <div className="text-center py-5"><div className="spinner-border text-primary" /></div>
             ) : (
-              <div className="forum-card">
-                <div className="table-responsive">
-                  <table className="table mb-0">
-                    <thead>
-                      <tr>
-                        <th className="ps-4">Discussion Detail</th>
-                        <th>Status</th>
-                        <th className="text-center">Engagement</th>
-                        <th className="text-end pe-4">Control</th>
-                      </tr>
-                    </thead>
+              <div className="table-responsive rounded-4 border overflow-hidden">
+                <table className="table data-table mb-0">
+                  <thead>
+                    <tr>
+                      <th className="ps-4">Discussion</th>
+                      <th>Status</th>
+                      <th className="text-center">Replies</th>
+                      <th className="text-end pe-4">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredQuestions.map(q => (
+                      <React.Fragment key={q._id}>
+                        <tr onClick={() => handleExpandRow(q._id)} style={{ cursor: 'pointer' }}>
+                          <td className="ps-4 text-start">
+                            <div className="d-flex align-items-center gap-3">
+                              {/* Expand Icon */}
+                              <div className={`p-1 rounded ${expandedId === q._id ? 'bg-primary text-white' : 'text-muted'}`}>
+                                <ChevronDown
+                                  size={16}
+                                  style={{ transform: expandedId === q._id ? 'rotate(180deg)' : 'rotate(0)' }}
+                                />
+                              </div>
 
-                    <tbody>
-                      {filteredQuestions.length === 0 ? (
-                        <tr>
-                          <td colSpan="4" className="text-center py-5">
-                            <div className="py-4">
-                              <AlertCircle size={48} className="text-muted mb-3 opacity-25" />
-                              <h5 className="text-muted fw-bold">No results found</h5>
-                              <p className="small text-muted">Try adjusting your search.</p>
+                              {/* Text Container: flex-grow-1 pushes this to occupy the left side */}
+                              <div className="flex-grow-1 text-start">
+                                <div className="fw-bold text-dark mb-0" style={{ fontSize: '0.95rem' }}>
+                                  {q.title}
+                                </div>
+                                <small className="text-muted d-block mt-n1">
+                                  {q.courseTitle || "General Forum"}
+                                </small>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="d-flex gap-2">
+                              <span className={`badge rounded-pill px-3 py-1 ${q.isSolved ? 'bg-success-subtle text-success border border-success' : 'bg-warning-subtle text-warning border border-warning'}`}>
+                                {q.isSolved ? 'Solved' : 'Active'}
+                              </span>
+                              {q.isLocked && <span className="badge rounded-pill bg-secondary text-white px-2"><Lock size={12} /></span>}
+                            </div>
+                          </td>
+                          <td className="text-center fw-bold text-muted">{q.answerCount || 0}</td>
+                          <td className="text-end pe-4" onClick={e => e.stopPropagation()}>
+                            <div className="d-flex justify-content-end gap-2">
+                              <button className="action-icon-btn" onClick={(e) => toggleLock(e, q._id, !q.isLocked)} disabled={actionLoadingId === q._id}>
+                                {q.isLocked ? <Unlock size={18} /> : <Lock size={18} />}
+                              </button>
+                              <button className="action-icon-btn btn-delete" onClick={(e) => deleteThread(e, q._id)} disabled={actionLoadingId === q._id}>
+                                <Trash2 size={18} />
+                              </button>
                             </div>
                           </td>
                         </tr>
-                      ) : (
-                        filteredQuestions.map((q) => (
-                          <React.Fragment key={q._id}>
-                            <tr className="row-hover cursor-pointer" onClick={() => handleExpandRow(q._id)} style={{ cursor: "pointer" }}>
-                              <td className="ps-4">
-                                <div className="d-flex align-items-center gap-3">
-                                  <div
-                                    className={`p-2 rounded-3 ${expandedId === q._id ? "bg-primary text-white" : "bg-light text-muted"}`}
-                                    style={{ transition: "0.3s" }}
-                                  >
-                                    <ChevronDown
-                                      size={18}
-                                      style={{ transform: expandedId === q._id ? "rotate(180deg)" : "rotate(0)" }}
-                                    />
-                                  </div>
-                                  <div>
-                                    <div className="question-title mb-1">{q.title}</div>
-                                    <div className="text-muted small fw-medium">{q.courseTitle || "General Forum"}</div>
-                                  </div>
-                                </div>
-                              </td>
-
-                              <td>
-                                <div className="d-flex gap-2">
-                                  <span className={`status-badge ${q.isSolved ? "status-solved" : "status-open"}`}>
-                                    {!q.isSolved && <span className="pulse-icon"></span>}
-                                    {q.isSolved ? <CheckCircle2 size={14} /> : <Clock size={14} />}
-                                    {q.isSolved ? "Solved" : "Active"}
-                                  </span>
-                                  {q.isLocked && (
-                                    <span className="status-badge status-locked">
-                                      <Lock size={12} /> Locked
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-
-                              <td className="text-center">
-                                <div className="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-light fw-bold text-dark small">
-                                  <MessageSquare size={14} className="text-muted" />
-                                  {q.answerCount || 0}
-                                </div>
-                              </td>
-
-                              <td className="text-end pe-4">
-                                <div className="d-flex justify-content-end gap-2">
-                                  <button
-                                    className="action-btn btn-lock-toggle"
-                                    onClick={(e) => toggleLock(e, q._id, !q.isLocked)}
-                                    disabled={actionLoadingId === q._id}
-                                    title={q.isLocked ? "Unlock" : "Lock"}
-                                  >
-                                    {q.isLocked ? <Unlock size={18} /> : <Lock size={18} />}
-                                  </button>
-                                  <button
-                                    className="action-btn btn-delete-thread"
-                                    onClick={(e) => deleteThread(e, q._id)}
-                                    disabled={actionLoadingId === q._id}
-                                    title="Delete"
-                                  >
-                                    <Trash2 size={18} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-
-                            {expandedId === q._id && (
-                              <tr>
-                                <td colSpan="4" className="p-0 border-0">
-                                  <div className="expanded-content-box">
-                                    <div className="row g-4">
-                                      <div className="col-lg-7 border-end-lg">
-                                        <h6 className="fw-bold text-uppercase small text-muted mb-3">Question Description</h6>
-                                        <p className="text-dark lh-base mb-3" style={{ fontSize: "0.925rem" }}>
-                                          {q.description || "No description provided."}
-                                        </p>
-
-                                        <div className="d-flex align-items-center gap-2 mt-4 text-muted">
-                                          <div className="bg-white rounded-circle p-2 border">
-                                            <User size={16} />
-                                          </div>
-                                          <span className="small">
-                                            Asked by{" "}
-                                            <strong className="text-dark">{q.userId?.name || q.asker?.name || "Anonymous"}</strong>
-                                          </span>
-                                        </div>
-
-                                        <div className="mt-3 small text-muted">
-                                          {repliesLoading[q._id]
-                                            ? "Loading replies..."
-                                            : repliesByQuestionId[q._id]
-                                              ? `Replies loaded: ${(repliesByQuestionId[q._id] || []).length}`
-                                              : "Replies not loaded yet."}
-                                        </div>
+                        {expandedId === q._id && (
+                          <tr>
+                            <td colSpan="4" className="p-0 border-0">
+                              <div className="expanded-box shadow-inner">
+                                <div className="row g-4">
+                                  <div className="col-lg-7">
+                                    <h6 className="fw-bold text-primary small text-uppercase mb-2"><Info size={14} /> Thread Content</h6>
+                                    <p className="text-muted bg-white p-3 rounded-3 border" style={{ whiteSpace: 'pre-line' }}>{q.description}</p>
+                                    <div className="mt-3 d-flex align-items-center justify-content-start gap-2 text-start">
+                                      <div className="bg-primary-subtle text-primary p-2 rounded-circle d-flex align-items-center justify-content-center">
+                                        <User size={14} />
                                       </div>
-
-                                      <div className="col-lg-5">
-                                        <h6 className="fw-bold text-uppercase small text-muted mb-3">
-                                          Responses ({q.answers?.length || 0})
-                                        </h6>
-
-                                        <div className="pe-2" style={{ maxHeight: "320px", overflowY: "auto" }}>
-                                          {(q.answers || []).map((ans) => {
-                                            const repList = getRepliesForAnswer(q._id, ans._id);
-
-                                            return (
-                                              <div key={ans._id} className="bg-white p-3 rounded-3 border mb-2 shadow-sm">
-                                                <div className="d-flex justify-content-between mb-1">
-                                                  <span className="fw-bold small text-primary">{safeName(ans.userId)}</span>
-                                                  <div className="d-flex gap-2">
-                                                    {ans.isAccepted && (
-                                                      <span className="badge bg-primary-subtle text-primary border border-primary-subtle small px-2">
-                                                        Accepted
-                                                      </span>
-                                                    )}
-                                                    {ans.isVerified && (
-                                                      <span className="badge bg-success-subtle text-success border border-success-subtle small px-2">
-                                                        Verified
-                                                      </span>
-                                                    )}
-                                                  </div>
-                                                </div>
-
-                                                <p className="small text-muted mb-0" style={{ whiteSpace: "pre-line" }}>
-                                                  {ans.answerText}
-                                                </p>
-
-                                                <div className="mt-2">
-                                                  <div className="d-flex align-items-center gap-2 text-muted small fw-bold">
-                                                    <CornerDownRight size={14} />
-                                                    Replies ({repList.length})
-                                                  </div>
-
-                                                  {repliesLoading[q._id] ? (
-                                                    <div className="small text-muted mt-2">Loading...</div>
-                                                  ) : repList.length === 0 ? (
-                                                    <div className="small text-muted mt-2">No replies for this answer.</div>
-                                                  ) : (
-                                                    repList.map((rep) => (
-                                                      <div key={rep._id} className="reply-card">
-                                                        <div className="d-flex justify-content-between align-items-center">
-                                                          <span className="small fw-bold text-primary">{safeName(rep.userId)}</span>
-                                                          <span className="small text-muted">
-                                                            {rep.createdAt ? new Date(rep.createdAt).toLocaleString() : ""}
-                                                          </span>
-                                                        </div>
-                                                        <div className="small text-muted" style={{ whiteSpace: "pre-line" }}>
-                                                          {rep.replyText}
-                                                        </div>
-                                                      </div>
-                                                    ))
-                                                  )}
-                                                </div>
-                                              </div>
-                                            );
-                                          })}
-
-                                          {(!q.answers || q.answers.length === 0) && (
-                                            <div className="text-center py-4 text-muted small">No answers yet</div>
-                                          )}
-                                        </div>
-                                      </div>
+                                      <small className="fw-bold text-dark">
+                                        Reported By: <span className="text-primary">{safeName(q.userId || q.asker)}</span>
+                                      </small>
                                     </div>
                                   </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                                  <div className="col-lg-5">
+                                    <h6 className="fw-bold text-warning small text-uppercase mb-2"><MessageSquare size={14} /> Response Audit</h6>
+                                    <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                                      {(q.answers || []).map(ans => {
+                                        const rList = getRepliesForAnswer(q._id, ans._id);
+                                        return (
+                                          <div key={ans._id} className="ans-pill shadow-sm">
+                                            <div className="d-flex justify-content-between mb-1">
+                                              <small className="fw-bold text-primary">{safeName(ans.userId)}</small>
+                                              {ans.isVerified && <span className="badge bg-warning text-white rounded-pill" style={{ fontSize: '8px' }}>OFFICIAL</span>}
+                                            </div>
+                                            <div className="small text-muted">{ans.answerText}</div>
+                                            {rList.length > 0 && (
+                                              <div className="mt-2 ps-2 border-start">
+                                                {rList.map(rep => (
+                                                  <div key={rep._id} className="reply-mini small">
+                                                    <strong>{safeName(rep.userId)}:</strong> {rep.replyText}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </>
-        )}
-
-        {/* ------------------- TAB: REPORTS ------------------- */}
-        {activeTab === "reports" && (
+        ) : (
+          /* --- REPORTS TAB --- */
           <>
-            <div className="d-flex flex-column flex-md-row gap-2 justify-content-between mb-3">
-              <div className="d-flex gap-2 flex-wrap">
-                <select
-                  className="form-select"
-                  style={{ maxWidth: 220 }}
-                  value={reportStatus}
-                  onChange={(e) => setReportStatus(e.target.value)}
-                >
-                  <option value="pending">Pending</option>
+            <div className="row g-3 mb-4">
+              <div className="col-md-4">
+                <select className="form-select rounded-4 border-2 shadow-sm fw-bold" value={reportStatus} onChange={e => setReportStatus(e.target.value)}>
+                  <option value="pending">Review Pending</option>
                   <option value="resolved">Resolved</option>
                   <option value="rejected">Rejected</option>
-                  <option value="all">All</option>
+                  <option value="all">Full History</option>
                 </select>
-
-                <input
-                  className="form-control"
-                  style={{ maxWidth: 360 }}
-                  placeholder="Search by reason / reporter / target user / course / status / action..."
-                  value={reportSearch}
-                  onChange={(e) => setReportSearch(e.target.value)}
-                />
               </div>
-
-              <div className="text-muted small d-flex align-items-center">
-                Showing <strong className="mx-1">{filteredReports.length}</strong> reports
+              <div className="col-md-8">
+                <div className="bg-white p-1 rounded-4 border-2 border d-flex align-items-center shadow-sm">
+                  <Search className="ms-3 text-muted" size={18} />
+                  <input className="form-control border-0 bg-transparent shadow-none" placeholder="Filter reports..." value={reportSearch} onChange={e => setReportSearch(e.target.value)} />
+                </div>
               </div>
             </div>
 
             {loadingReports ? (
-              <div className="d-flex justify-content-center py-5">
-                <div className="spinner-border text-primary" role="status" />
-              </div>
+              <div className="text-center py-5"><div className="spinner-border text-primary" /></div>
             ) : filteredReports.length === 0 ? (
-              <div className="alert alert-success rounded-4 m-0">No reports found for selected status / search.</div>
+              <div className="alert alert-success border-0 rounded-4 text-center py-4"><CheckCircle2 size={32} className="mb-2" /><h6 className="mb-0">No reports found!</h6></div>
             ) : (
               Object.entries(groupedReports).map(([type, list]) => (
                 <div key={type} className="mb-4">
-                  <h6 className="text-uppercase text-muted fw-bold mb-2">{type} reports</h6>
-
-                  <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
-                    <div className="table-responsive">
-                      {/* Compact table (minimal fields) */}
-                      <table className="table mb-0 align-middle report-table">
-                        <thead className="table-light">
-                          <tr>
-                            <th>Target</th>
-                            <th>Reason</th>
-                            <th>Status</th>
-                            <th>Reporter</th>
-                            <th>Created</th>
-                            <th>Details</th>
-                            <th className="text-end">Action</th>
+                  <h6 className="fw-800 text-uppercase text-muted small mb-3 border-start border-4 border-primary ps-2">{type} Cases</h6>
+                  <div className="table-responsive rounded-4 border overflow-hidden">
+                    <table className="table data-table mb-0">
+                      <thead className="bg-light">
+                        <tr>
+                          <th className="ps-4">Target</th>
+                          <th>Reason</th>
+                          <th>Status</th>
+                          <th>Reporter</th>
+                          <th className="text-end pe-4">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {list.map(r => (
+                          <tr key={r._id} onClick={() => setSelectedReport(r)} style={{ cursor: 'pointer' }}>
+                            <td className="ps-4 text-capitalize fw-bold text-primary">{r.targetType}</td>
+                            <td>{r.reason}</td>
+                            <td>{renderStatusBadge(r.status)}</td>
+                            <td>{safeName(r.reporterId)}</td>
+                            <td className="text-end pe-4">
+                              <button className="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" onClick={() => setSelectedReport(r)}>Inspect</button>
+                            </td>
                           </tr>
-                        </thead>
-
-                        <tbody>
-                          {list.map((r) => {
-                            const status = (r.status || "pending").toLowerCase();
-
-                            return (
-                              <tr key={r._id}>
-                                <td className="text-capitalize">{r.targetType || "-"}</td>
-
-                                <td className="fw-bold text-capitalize">{r.reason || "-"}</td>
-
-                                <td>{renderStatusBadge(status)}</td>
-
-                                <td className="report-wrap">{r.reporterId?.name || "User"}</td>
-
-                                <td className="text-muted">
-                                  {r.createdAt ? new Date(r.createdAt).toLocaleString() : "-"}
-                                </td>
-
-                                <td>
-                                  <button
-                                    className="btn btn-sm btn-outline-primary rounded-pill"
-                                    onClick={() => setSelectedReport(r)}
-                                  >
-                                    View
-                                  </button>
-                                </td>
-
-                                <td className="text-end">
-                                  {status === "pending" ? (
-                                    <div className="d-flex justify-content-end gap-2">
-                                      <button
-                                        className="btn btn-sm btn-success rounded-pill d-flex align-items-center gap-1"
-                                        disabled={reportActionId === r._id}
-                                        onClick={() => actOnReport(r._id, "resolved")}
-                                      >
-                                        <CheckCircle2 size={16} /> Resolve
-                                      </button>
-
-                                      <button
-                                        className="btn btn-sm btn-outline-danger rounded-pill d-flex align-items-center gap-1"
-                                        disabled={reportActionId === r._id}
-                                        onClick={() => actOnReport(r._id, "rejected")}
-                                      >
-                                        <XCircle size={16} /> Reject
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <span className="badge bg-secondary rounded-pill">Closed</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               ))
@@ -700,125 +398,89 @@ const ForumDiscussions = () => {
         )}
       </div>
 
-      {/* ------------------- Report Details Modal (State-based) ------------------- */}
+      {/* --- REPORT DETAILS MODAL --- */}
       {selectedReport && (
-        <>
-          <div className="modal-backdrop-custom" onClick={() => setSelectedReport(null)} />
-          <div className="modal-custom" role="dialog" aria-modal="true">
-            <div className="modal-card">
-              <div className="d-flex justify-content-between align-items-start p-3 border-bottom">
+        <div className="modal-overlay" onClick={() => setSelectedReport(null)}>
+          <div className="modal-card-custom" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-bottom d-flex justify-content-between align-items-center" style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', color: 'white' }}>
+              <div className="d-flex align-items-center gap-3">
+                <div className="bg-white text-warning p-2 rounded-3"><ShieldAlert size={24} /></div>
                 <div>
-                  <div className="fw-bolder" style={{ fontSize: "1.05rem" }}>
-                    Report Details
-                  </div>
-                  <div className="text-muted small">
-                    {selectedReport.targetType || "unknown"} • {selectedReport.reason || "-"} •{" "}
-                    {renderStatusBadge(selectedReport.status)}
-                  </div>
+                  <h5 className="mb-0 fw-800">Review Investigation</h5>
+                  <small className="opacity-75">Ref: {selectedReport._id.slice(-8)} • {selectedReport.status}</small>
                 </div>
-
-                <button className="btn btn-sm btn-light" onClick={() => setSelectedReport(null)}>
-                  ✕
-                </button>
               </div>
+              <button className="btn-close btn-close-white shadow-none" onClick={() => setSelectedReport(null)}></button>
+            </div>
 
-              <div className="p-3">
-                <div className="row g-3">
-                  <div className="col-md-6">
-                    <div className="text-muted small fw-bold text-uppercase">Reported User</div>
-                    <div className="fw-semibold">{selectedReport.targetUserId?.name || "-"}</div>
+            <div className="p-4">
+              <div className="row g-4">
+                {/* Meta Grid */}
+                {[
+                  { label: "Reported User", value: selectedReport.targetUserId?.name },
+                  { label: "Course Reference", value: selectedReport.courseId?.title },
+                  { label: "Reporter", value: selectedReport.reporterId?.name },
+                  { label: "Date Filed", value: new Date(selectedReport.createdAt).toLocaleString() }
+                ].map((m, i) => (
+                  <div key={i} className="col-md-3 col-6">
+                    <small className="text-muted fw-bold text-uppercase d-block mb-1" style={{ fontSize: '0.6rem' }}>{m.label}</small>
+                    <div className="fw-bold small">{m.value || "N/A"}</div>
                   </div>
+                ))}
 
-                  <div className="col-md-6">
-                    <div className="text-muted small fw-bold text-uppercase">Course</div>
-                    <div className="fw-semibold">{selectedReport.courseId?.title || "-"}</div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="text-muted small fw-bold text-uppercase">Reporter</div>
-                    <div className="fw-semibold">{selectedReport.reporterId?.name || "-"}</div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="text-muted small fw-bold text-uppercase">Created</div>
-                    <div className="fw-semibold">
-                      {selectedReport.createdAt ? new Date(selectedReport.createdAt).toLocaleString() : "-"}
+                {/* Evidence Panel */}
+                <div className="col-12 mt-4">
+                  <h6 className="fw-800 text-uppercase text-muted small mb-2">Offending Evidence</h6>
+                  <div className="p-3 rounded-4 bg-light border-2 border-dashed">
+                    <div className="d-flex justify-content-between mb-2">
+                      <span className="badge bg-warning text-dark rounded-pill px-3">{selectedReport.targetType?.toUpperCase()}</span>
+                      {selectedReport.targetContent?.kind && <span className="small text-muted fw-bold">{selectedReport.targetContent.kind}</span>}
                     </div>
-                  </div>
-
-                  <div className="col-12">
-                    <div className="text-muted small fw-bold text-uppercase">Target Content</div>
-                    {selectedReport?.targetContent?.isDeleted ? (
-                      <div className="text-muted">Deleted content</div>
+                    {selectedReport.targetContent?.isDeleted ? (
+                      <div className="text-center py-3 text-muted">Data purged from database.</div>
                     ) : (
-                      <div className="bg-light rounded-3 p-3 border report-wrap">
-                        <div className="small fw-bold text-capitalize">
-                          {selectedReport?.targetContent?.kind || selectedReport?.targetType}
-                          {selectedReport?.targetContent?.questionTitle ? (
-                            <span className="text-muted"> • {selectedReport.targetContent.questionTitle}</span>
-                          ) : null}
-                        </div>
-                        <div className="small text-muted mt-2" style={{ whiteSpace: "pre-line" }}>
-                          {selectedReport?.targetContent?.text || "-"}
-                        </div>
-                      </div>
+                      <p className="mb-0 text-dark fw-medium" style={{ whiteSpace: 'pre-line' }}>{selectedReport.targetContent?.text}</p>
                     )}
                   </div>
-
-                  <div className="col-12">
-                    <div className="text-muted small fw-bold text-uppercase">Reporter Note</div>
-                    <div className="report-wrap">{selectedReport.note?.trim() ? selectedReport.note : "-"}</div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="text-muted small fw-bold text-uppercase">Action By</div>
-                    <div className="fw-semibold">{selectedReport.actionBy?.name || "-"}</div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="text-muted small fw-bold text-uppercase">Action At</div>
-                    <div className="fw-semibold">
-                      {selectedReport.actionAt ? new Date(selectedReport.actionAt).toLocaleString() : "-"}
-                    </div>
-                  </div>
-
-                  <div className="col-12">
-                    <div className="text-muted small fw-bold text-uppercase">Action Note</div>
-                    <div className="report-wrap">{selectedReport.actionNote?.trim() ? selectedReport.actionNote : "-"}</div>
-                  </div>
                 </div>
 
-                <div className="d-flex justify-content-end gap-2 mt-3 pt-3 border-top">
-                  {(selectedReport.status || "pending").toLowerCase() === "pending" ? (
-                    <>
-                      <button
-                        className="btn btn-success rounded-pill d-flex align-items-center gap-1"
-                        disabled={reportActionId === selectedReport._id}
-                        onClick={() => actOnReport(selectedReport._id, "resolved")}
-                      >
-                        <CheckCircle2 size={16} /> Resolve
-                      </button>
+                {/* Testimony */}
+                {/* <div className="col-12">
+                  <h6 className="fw-800 text-uppercase text-muted small mb-2">Reporter Testimony</h6>
+                  <div className="p-3 rounded-4 border-start border-4 border-danger bg-danger-subtle fw-bold small">
+                    {selectedReport.note || "No specific comments provided."}
+                  </div>
+                </div> */}
 
-                      <button
-                        className="btn btn-outline-danger rounded-pill d-flex align-items-center gap-1"
-                        disabled={reportActionId === selectedReport._id}
-                        onClick={() => actOnReport(selectedReport._id, "rejected")}
-                      >
-                        <XCircle size={16} /> Reject
-                      </button>
-                    </>
-                  ) : (
-                    <span className="badge bg-secondary rounded-pill align-self-center">Closed</span>
-                  )}
-
-                  <button className="btn btn-light rounded-pill" onClick={() => setSelectedReport(null)}>
-                    Close
-                  </button>
+                {/* Auditor History */}
+                <div className="col-12 pt-4 border-top">
+                  <div className="bg-light p-3 rounded-4 border row g-3">
+                    <div className="col-md-6"><small className="text-muted fw-bold">ADMIN CHARGE</small><div className="fw-bold text-primary">{selectedReport.actionBy?.name || "Unassigned"}</div></div>
+                    <div className="col-md-6"><small className="text-muted fw-bold">RESOLUTION DATE</small><div className="fw-bold">{selectedReport.actionAt ? new Date(selectedReport.actionAt).toLocaleString() : "Pending"}</div></div>
+                    <div className="col-12"><small className="text-muted fw-bold">ACTION LOG</small><div className="bg-white p-2 rounded border small fst-italic">{selectedReport.actionNote || "No final notes documented."}</div></div>
+                  </div>
                 </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="d-flex justify-content-end gap-3 pt-4 border-top mt-4">
+                {selectedReport.status === 'pending' ? (
+                  <>
+                    <button className="btn btn-success px-4 rounded-pill fw-bold" onClick={() => actOnReport(selectedReport._id, 'resolved')}>
+                      <CheckCircle2 size={18} className="me-2" /> Resolve Case
+                    </button>
+                    <button className="btn btn-outline-danger px-4 rounded-pill fw-bold" onClick={() => actOnReport(selectedReport._id, 'rejected')}>
+                      <XCircle size={18} className="me-2" /> Discard Report
+                    </button>
+                  </>
+                ) : (
+                  <div className="me-auto text-success fw-bold d-flex align-items-center gap-2 small"><ShieldCheck size={18} /> Case Investigative Complete</div>
+                )}
+                <button className="btn btn-dark px-4 rounded-pill fw-bold" onClick={() => setSelectedReport(null)}>Exit View</button>
               </div>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

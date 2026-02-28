@@ -24,8 +24,13 @@ const enrollmentSchema = new mongoose.Schema({
   },
   paymentStatus: {
     type: String,
-    enum: ["pending", "complete", "failed"],
+    enum: ["pending", "complete", "failed", "subscription"],
     default: "pending",
+  },
+  source: {
+    type: String,
+    enum: ["purchase", "subscription", "free"],
+    default: "purchase",
   },
   paymentDate: {
     type: Date,

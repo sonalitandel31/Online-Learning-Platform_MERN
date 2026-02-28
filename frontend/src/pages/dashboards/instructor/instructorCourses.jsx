@@ -26,6 +26,29 @@ export default function InstructorCourses() {
     thumbnail: "",
   });
 
+  // ---- FILTERS / SEARCH / SORT ----
+  const [filters, setFilters] = useState({
+    q: "",
+    category: "all",
+    status: "all",
+    level: "all",
+    priceType: "all", // all | free | paid
+    sort: "newest",   // newest | oldest | priceAsc | priceDesc | titleAsc | titleDesc
+  });
+
+  const normalize = (v) => String(v ?? "").trim().toLowerCase();
+
+  const getCourseCategoryId = (course) => {
+    if (!course?.category) return "";
+    return typeof course.category === "object" ? course.category._id : course.category;
+  };
+
+  const getCourseStatus = (course) => normalize(course?.status);
+
+  const getCourseLevel = (course) => normalize(course?.level);
+
+  const getCoursePrice = (course) => Number(course?.price || 0);
+
   const BASE_URL = import.meta.env.VITE_BASE_URL;
 
   useEffect(() => {
@@ -200,6 +223,95 @@ export default function InstructorCourses() {
     }
   };
 
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      q: "",
+      category: "all",
+      status: "all",
+      level: "all",
+      priceType: "all",
+      sort: "newest",
+    });
+  };
+
+  const filteredCourses = React.useMemo(() => {
+    const q = normalize(filters.q);
+
+    let list = [...courses];
+
+    // Search
+    if (q) {
+      list = list.filter((c) => {
+        const title = normalize(c?.title);
+        const desc = normalize(c?.description);
+        return title.includes(q) || desc.includes(q);
+      });
+    }
+
+    // Category filter
+    if (filters.category !== "all") {
+      list = list.filter((c) => getCourseCategoryId(c) === filters.category);
+    }
+
+    // Status filter
+    if (filters.status !== "all") {
+      list = list.filter((c) => getCourseStatus(c) === normalize(filters.status));
+    }
+
+    // Level filter
+    if (filters.level !== "all") {
+      list = list.filter((c) => getCourseLevel(c) === normalize(filters.level));
+    }
+
+    // Price filter
+    if (filters.priceType !== "all") {
+      list = list.filter((c) => {
+        const p = getCoursePrice(c);
+        return filters.priceType === "free" ? p === 0 : p > 0;
+      });
+    }
+
+    // Sort
+    const byTitle = (a, b) => normalize(a?.title).localeCompare(normalize(b?.title));
+    const byPrice = (a, b) => getCoursePrice(a) - getCoursePrice(b);
+    const byDate = (a, b) => {
+      // if you have createdAt/updatedAt in course, it will work automatically
+      const da = new Date(a?.createdAt || a?.updatedAt || 0).getTime();
+      const db = new Date(b?.createdAt || b?.updatedAt || 0).getTime();
+      return da - db;
+    };
+
+    switch (filters.sort) {
+      case "oldest":
+        list.sort((a, b) => byDate(a, b));
+        break;
+      case "newest":
+        list.sort((a, b) => byDate(b, a));
+        break;
+      case "priceAsc":
+        list.sort((a, b) => byPrice(a, b));
+        break;
+      case "priceDesc":
+        list.sort((a, b) => byPrice(b, a));
+        break;
+      case "titleAsc":
+        list.sort((a, b) => byTitle(a, b));
+        break;
+      case "titleDesc":
+        list.sort((a, b) => byTitle(b, a));
+        break;
+      default:
+        break;
+    }
+
+    return list;
+  }, [courses, filters]);
+
   // --- STYLING CONSTANTS ---
   const colors = {
     primary: "#6d28d9", // Deep Purple
@@ -223,12 +335,125 @@ export default function InstructorCourses() {
 
   return (
     <div style={{ padding: "clamp(15px, 5vw, 40px)", backgroundColor: colors.bg, minHeight: "100vh", fontFamily: "'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>
-      
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", flexWrap: "wrap", gap: "10px" }}>
         <h2 style={{ margin: 0, color: colors.primary, fontWeight: "700", fontSize: "1.8rem" }}>My Courses</h2>
         <span style={{ fontSize: "0.9rem", color: "#6b7280", background: "#fff", padding: "5px 12px", borderRadius: "20px", border: `1px solid ${colors.border}` }}>
           Total: {courses.length}
         </span>
+      </div>
+
+      {/* FILTER BAR */}
+      <div
+        style={{
+          background: "#fff",
+          border: `1px solid ${colors.border}`,
+          borderRadius: "16px",
+          padding: "14px",
+          marginBottom: "20px",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.04)",
+        }}
+      >
+        <div style={{ display: "flex", gridTemplateColumns: "1.4fr repeat(5, 1fr)", gap: "10px" }}>
+          <input
+            name="q"
+            value={filters.q}
+            onChange={handleFilterChange}
+            placeholder="Search course title/description..."
+            style={{
+              padding: "10px 12px",
+              borderRadius: "10px",
+              border: `1px solid ${colors.border}`,
+              outlineColor: colors.primary,
+            }}
+          />
+
+          <select
+            name="category"
+            value={filters.category}
+            onChange={handleFilterChange}
+            style={{ padding: "10px 12px", borderRadius: "10px", border: `1px solid ${colors.border}` }}
+          >
+            <option value="all">All Categories</option>
+            {categories.map((cat) => (
+              <option value={cat._id} key={cat._id}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            name="status"
+            value={filters.status}
+            onChange={handleFilterChange}
+            style={{ padding: "10px 12px", borderRadius: "10px", border: `1px solid ${colors.border}` }}
+          >
+            <option value="all">All Status</option>
+            <option value="draft">Draft</option>
+            <option value="pendingApproval">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+
+          <select
+            name="level"
+            value={filters.level}
+            onChange={handleFilterChange}
+            style={{ padding: "10px 12px", borderRadius: "10px", border: `1px solid ${colors.border}` }}
+          >
+            <option value="all">All Levels</option>
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
+          </select>
+
+          <select
+            name="priceType"
+            value={filters.priceType}
+            onChange={handleFilterChange}
+            style={{ padding: "10px 12px", borderRadius: "10px", border: `1px solid ${colors.border}` }}
+          >
+            <option value="all">All Prices</option>
+            <option value="free">Free</option>
+            <option value="paid">Paid</option>
+          </select>
+
+          <select
+            name="sort"
+            value={filters.sort}
+            onChange={handleFilterChange}
+            style={{ padding: "10px 12px", borderRadius: "10px", border: `1px solid ${colors.border}` }}
+          >
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="priceAsc">Price: Low → High</option>
+            <option value="priceDesc">Price: High → Low</option>
+            <option value="titleAsc">Title: A → Z</option>
+            <option value="titleDesc">Title: Z → A</option>
+          </select>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px", gap: "10px", flexWrap: "wrap" }}>
+          <div style={{ fontSize: "0.9rem", color: "#6b7280" }}>
+            Showing <strong style={{ color: colors.text }}>{filteredCourses.length}</strong> of{" "}
+            <strong style={{ color: colors.text }}>{courses.length}</strong>
+          </div>
+
+          <button
+            onClick={clearFilters}
+            style={{
+              padding: "10px 14px",
+              borderRadius: "10px",
+              border: `1px solid ${colors.border}`,
+              background: "#fff",
+              cursor: "pointer",
+              fontWeight: 600,
+              color: colors.text,
+            }}
+          >
+            Clear
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -237,15 +462,17 @@ export default function InstructorCourses() {
         </div>
       )}
 
-      {courses.length === 0 ? (
+      {filteredCourses.length === 0 ? (
         <div style={{ textAlign: "center", padding: "50px", background: "#fff", borderRadius: "15px", border: `2px dashed ${colors.border}` }}>
-          <p style={{ color: "#6b7280", fontSize: "1.1rem" }}>No courses created yet. Start by creating your first course!</p>
+          <p style={{ color: "#6b7280", fontSize: "1.1rem" }}>
+            {courses.length === 0 ? "No courses created yet. Start by creating your first course!" : "No courses match your filters."}
+          </p>
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "25px" }}>
-          {courses.map((course) => (
+          {filteredCourses.map((course) => (
             <div key={course._id} style={{ background: "#fff", borderRadius: "16px", overflow: "hidden", boxShadow: "0 4px 15px rgba(0,0,0,0.05)", border: `1px solid ${colors.border}`, display: "flex", flexDirection: "column", transition: "transform 0.2s" }}>
-              
+
               <div style={{ position: "relative" }}>
                 <img
                   src={course.thumbnail ? `${BASE_URL}${course.thumbnail}` : "https://via.placeholder.com/300x150"}
@@ -259,16 +486,76 @@ export default function InstructorCourses() {
 
               <div style={{ padding: "20px", flexGrow: 1, display: "flex", flexDirection: "column" }}>
                 <h3 style={{ margin: "0 0 10px 0", fontSize: "1.2rem", color: colors.text, lineHeight: "1.4" }}>{course.title}</h3>
-                
+
                 <div style={{ fontSize: "0.9rem", color: "#4b5563", marginBottom: "15px" }}>
                   <div style={{ marginBottom: "5px" }}><strong>Category:</strong> {course.category?.name || "Uncategorized"}</div>
                   <div style={{ marginBottom: "5px" }}><strong>Price:</strong> <span style={{ color: colors.secondary, fontWeight: "bold" }}>{course.price > 0 ? `₹${course.price}` : "Free"}</span></div>
                   <div>
-                    <strong>Status:</strong> 
-                    <span style={{ marginLeft: "5px", padding: "2px 8px", borderRadius: "4px", fontSize: "0.8rem", background: course.status === 'published' ? '#dcfce7' : '#fef3c7', color: course.status === 'published' ? '#166534' : '#92400e' }}>
-                      {course.status}
-                    </span>
+                    <strong>Status:</strong>
+                    {(() => {
+                      const s = String(course.status || "").toLowerCase();
+
+                      const badgeMap = {
+                        approved: { bg: "#dcfce7", color: "#166534", label: "approved" },
+                        pendingapproval: { bg: "#fef3c7", color: "#92400e", label: "pending" },
+                        rejected: { bg: "#fee2e2", color: "#991b1b", label: "rejected" },
+                        draft: { bg: "#e5e7eb", color: "#374151", label: "draft" },
+                      };
+
+                      const b = badgeMap[s] || { bg: "#e5e7eb", color: "#374151", label: s || "unknown" };
+
+                      return (
+                        <span
+                          style={{
+                            marginLeft: "5px",
+                            padding: "2px 8px",
+                            borderRadius: "6px",
+                            fontSize: "0.8rem",
+                            background: b.bg,
+                            color: b.color,
+                            fontWeight: "700",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          {b.label}
+                        </span>
+                      );
+                    })()}
                   </div>
+
+                  {course.status === "rejected" && (
+                    <div
+                      style={{
+                        marginTop: "12px",
+                        padding: "10px",
+                        borderRadius: "10px",
+                        background: "#fff1f2",
+                        border: `1px solid ${colors.danger}33`,
+                        color: "#7f1d1d",
+                        fontSize: "0.85rem",
+                        lineHeight: "1.4",
+                      }}
+                    >
+                      <div style={{ fontWeight: "800", marginBottom: "6px" }}>Why rejected?</div>
+
+                      <div style={{ marginBottom: "6px" }}>
+                        <strong>Reason:</strong>{" "}
+                        {course.review?.rejectionReason || "Not provided"}
+                      </div>
+
+                      {course.review?.reviewNote ? (
+                        <div style={{ marginBottom: "6px" }}>
+                          <strong>Admin Note:</strong> {course.review.reviewNote}
+                        </div>
+                      ) : null}
+
+                      {course.review?.reviewedAt ? (
+                        <div style={{ fontSize: "0.78rem", color: "#991b1b" }}>
+                          Reviewed on: {new Date(course.review.reviewedAt).toLocaleString()}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ marginTop: "auto" }}>
@@ -276,7 +563,7 @@ export default function InstructorCourses() {
                     <button onClick={() => openEditModal(course)} style={{ flex: 1, padding: "8px", borderRadius: "8px", border: `1px solid ${colors.primary}`, background: "#fff", color: colors.primary, cursor: "pointer", fontWeight: "600" }}>
                       Edit Details
                     </button>
-                    
+
                     {course.status === "draft" && (
                       <button onClick={() => handleStatusUpdate(course, "pendingApproval")} style={{ flex: 1.5, padding: "8px", borderRadius: "8px", border: "none", background: colors.secondary, color: "#fff", cursor: "pointer", fontWeight: "600" }}>
                         Submit
@@ -289,6 +576,26 @@ export default function InstructorCourses() {
                       </button>
                     )}
                   </div>
+
+                  {course.status === "rejected" && (
+                    <button
+                      onClick={() => handleStatusUpdate(course, "draft")}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: colors.warning,
+                        color: "#fff",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                        fontSize: "0.85rem",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      Move to Draft (Fix & Resubmit)
+                    </button>
+                  )}
 
                   {(course.status === "draft" || course.status === "pendingApproval") && (
                     <button onClick={() => confirmDelete(course)} disabled={deleting} style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "none", background: "#fee2e2", color: colors.danger, cursor: deleting ? "not-allowed" : "pointer", fontWeight: "600", fontSize: "0.85rem" }}>

@@ -15,6 +15,12 @@ const courseSchema = new mongoose.Schema({
         enum: ["draft", "pendingApproval", "approved", "rejected"],
         default: "draft"
     },
+    review: {
+        reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "user", default: null },
+        reviewedAt: { type: Date, default: null },
+        rejectionReason: { type: String, default: null }, 
+        reviewNote: { type: String, default: "" },
+    },
     totalDuration: {
         type: Number,
         default: 0
@@ -27,6 +33,12 @@ courseSchema.virtual("formattedDuration").get(function () {
     const m = Math.floor((totalSeconds % 3600) / 60);
     return `${h > 0 ? h + "h " : ""}${m}m`;
 });
+
+courseSchema.index({ status: 1 });
+courseSchema.index({ title: "text" });
+courseSchema.index({ category: 1 });
+courseSchema.index({ price: 1 });
+courseSchema.index({ createdAt: -1 });
 
 const courseModel = mongoose.model("course", courseSchema);
 module.exports = courseModel;

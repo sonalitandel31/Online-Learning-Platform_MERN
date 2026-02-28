@@ -20,6 +20,10 @@ const Navbar = ({ user, setUser }) => {
     return null;
   }, [role]);
 
+  // ✅ Student dropdown routes (keep consistent everywhere)
+  const subscriptionPlansPath = "/subscription-plans"; // change if your route is different
+  const mySubscriptionPath = "/me/subscription"; // change if your route is different
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     setSearchQuery(params.get("search") || "");
@@ -39,12 +43,10 @@ const Navbar = ({ user, setUser }) => {
   const handleSearch = (e) => {
     e.preventDefault();
     closeMenu();
-    navigate(
-      `/courses${searchQuery.trim() ? `?search=${encodeURIComponent(searchQuery)}` : ""}`
-    );
+    navigate(`/courses${searchQuery.trim() ? `?search=${encodeURIComponent(searchQuery)}` : ""}`);
   };
 
-  // ✅ Mobile: profile click pe collapse close kar do (dropdown conflict reduce)
+  // Mobile: profile click pe collapse close kar do (dropdown conflict reduce)
   const handleProfileClick = () => {
     if (isOpen) setIsOpen(false);
   };
@@ -227,7 +229,6 @@ const Navbar = ({ user, setUser }) => {
                 </li>
               ) : (
                 <li className="nav-item dropdown ms-lg-3">
-                  {/* ✅ IMPORTANT FIX: Link -> button (Bootstrap dropdown reliable) */}
                   <button
                     type="button"
                     className="nav-link dropdown-toggle d-flex align-items-center bg-transparent border-0 p-0"
@@ -270,7 +271,6 @@ const Navbar = ({ user, setUser }) => {
                       <small className="text-muted">{user.email}</small>
                     </div>
 
-                    {/* ✅ Dashboard link only for admin/instructor */}
                     {dashboardPath && (
                       <>
                         <li>
@@ -306,6 +306,34 @@ const Navbar = ({ user, setUser }) => {
                         My Learnings
                       </Link>
                     </li>
+
+                    {role === "student" && (
+                      <>
+                        <li>
+                          <hr className="dropdown-divider" />
+                        </li>
+
+                        <li>
+                          <Link
+                            className="dropdown-item rounded-2 py-2"
+                            to={subscriptionPlansPath}
+                            onClick={closeMenu}
+                          >
+                            Subscription Plans
+                          </Link>
+                        </li>
+                        <li>
+                          <Link
+                            className="dropdown-item rounded-2 py-2"
+                            to={mySubscriptionPath}
+                            onClick={closeMenu}
+                          >
+                            My Subscription
+                          </Link>
+                        </li>
+                      </>
+                    )}
+
                     <li>
                       <hr className="dropdown-divider" />
                     </li>

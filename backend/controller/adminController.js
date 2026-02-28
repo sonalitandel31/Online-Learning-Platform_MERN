@@ -6,6 +6,7 @@ const Result = require("../models/resultModel");
 const mongoose = require("mongoose");
 const Instructor = require("../models/instructorModel");
 const Student = require("../models/studentModel");
+const SystemSettings = require("../models/SystemSettings");
 
 const multer = require("multer");
 const path = require("path");
@@ -174,10 +175,42 @@ exports.getPendingCourses = async (req, res) => {
   try {
     const courses = await Course.find({ status: "pendingApproval" })
       .populate("instructor", "name email")
-      .populate("category", "name");
+      .populate("category", "name")
+      .populate("lessons", "title contentType") 
+      .populate("exams", "title duration");     
+
     res.json(courses);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+exports.getCourseContentForReview = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+
+    const course = await Course.findById(courseId)
+      .populate("instructor", "name email")
+      .populate("category", "name")
+      .populate({
+        path: "lessons",
+        // include everything needed to display actual content
+        select: "title contentType fileUrl description isPreviewFree createdAt",
+        options: { sort: { createdAt: 1 } },
+      })
+      .populate({
+        path: "exams",
+        // include questions + correctAnswer for admin review
+        select: "title duration questions createdAt",
+        options: { sort: { createdAt: 1 } },
+      });
+
+    if (!course) return res.status(404).json({ message: "Course not found" });
+
+    return res.json({ course });
+  } catch (err) {
+    console.error("getCourseContentForReview error:", err);
+    return res.status(500).json({ message: "Failed to fetch course content", error: err.message });
   }
 };
 
@@ -185,7 +218,10 @@ exports.getRejectedCourses = async (req, res) => {
   try {
     const courses = await Course.find({ status: "rejected" })
       .populate("instructor", "name email")
-      .populate("category", "name");
+      .populate("category", "name")
+      .populate("lessons", "title contentType")
+      .populate("exams", "title duration");
+      
     res.json(courses);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -195,8 +231,19 @@ exports.getRejectedCourses = async (req, res) => {
 exports.approveCourse = async (req, res) => {
   try {
     const { id } = req.params;
-    const course = await Course.findByIdAndUpdate(id, { status: "approved" }, { new: true });
+
+    const course = await Course.findById(id);
     if (!course) return res.status(404).json({ error: "Course not found" });
+
+    course.status = "approved";
+    course.review = {
+      reviewedBy: req.user._id,
+      reviewedAt: new Date(),
+      rejectionReason: null,
+      reviewNote: "",
+    };
+
+    await course.save();
     res.json(course);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -206,8 +253,32 @@ exports.approveCourse = async (req, res) => {
 exports.rejectCourse = async (req, res) => {
   try {
     const { id } = req.params;
-    const course = await Course.findByIdAndUpdate(id, { status: "rejected" }, { new: true });
+    const { rejectionReason, reviewNote } = req.body;
+
+    const course = await Course.findById(id);
     if (!course) return res.status(404).json({ error: "Course not found" });
+
+    const settings = await SystemSettings.findOne();
+    const reasons = settings?.contentApproval?.rejectionReasons || [];
+
+    if (!rejectionReason || !reasons.includes(rejectionReason)) {
+      return res.status(400).json({ error: "Invalid rejectionReason" });
+    }
+
+    const noteRequired = settings?.contentApproval?.reviewNoteRequiredOnReject ?? true;
+    if (noteRequired && !String(reviewNote || "").trim()) {
+      return res.status(400).json({ error: "reviewNote is required" });
+    }
+
+    course.status = "rejected";
+    course.review = {
+      reviewedBy: req.user._id,
+      reviewedAt: new Date(),
+      rejectionReason,
+      reviewNote: String(reviewNote || "").trim(),
+    };
+
+    await course.save();
     res.json(course);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -14,7 +14,13 @@ function Courses() {
 
   // Custom UI States (Replacing toast and alert)
   const [notification, setNotification] = useState({ show: false, message: "", type: "success" });
-  const [confirmModal, setConfirmModal] = useState({ show: false, title: "", message: "", onConfirm: null, data: null });
+  const [confirmModal, setConfirmModal] = useState({
+    show: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+    data: null,
+  });
 
   const coursesPerPage = 9;
   const location = useLocation();
@@ -29,13 +35,17 @@ function Courses() {
 
   const BASE_URL = import.meta.env.VITE_BASE_URL || "";
 
+  // your actual subscription routes
+  const PLANS_ROUTE = "/subscription-plans";
+  const MY_SUB_ROUTE = "/me/subscription";
+
   // Helper to show custom notification
   const notify = (message, type = "success") => {
     setNotification({ show: true, message, type });
     setTimeout(() => setNotification({ show: false, message: "", type: "success" }), 4000);
   };
 
-  // ✅ courses page view
+  // courses page view
   useEffect(() => {
     track("courses_view", {});
   }, []);
@@ -103,6 +113,7 @@ function Courses() {
   useEffect(() => {
     fetchCategories();
     fetchEnrollments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -120,13 +131,14 @@ function Courses() {
     if (searchQuery.trim() !== "") filters.search = searchQuery;
     if (selectedCategories.length > 0) filters.categories = selectedCategories.join(",");
 
-    // ✅ track filter usage (before fetch)
+    // track filter usage (before fetch)
     track("courses_filter_apply", {
       search: searchQuery || "",
       categories: selectedCategories,
     });
 
     fetchCourses(filters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategories, location.search]);
 
   const handleCategoryChange = (catName) => {
@@ -155,7 +167,7 @@ function Courses() {
   };
 
   const handleEnroll = async (course) => {
-    // ✅ enroll intent
+    // enroll intent
     track("enroll_click", {
       courseId: course._id,
       price: Number(course.price || 0),
@@ -172,12 +184,12 @@ function Courses() {
         return;
       }
 
-      // ✅ Free enroll
+      // Free enroll
       if (!course.price || course.price === 0) {
         const { data } = await api.post("/enrollments", { courseId: course._id, amount: 0 });
 
         if (data.success) {
-          track("enroll_success", { courseId: course._id, price: 0 }); // ✅ analytics
+          track("enroll_success", { courseId: course._id, price: 0 });
           notify("Enrolled successfully!");
           fetchEnrollments();
         } else notify(data.message || "Enrollment failed.", "danger");
@@ -190,7 +202,7 @@ function Courses() {
         return;
       }
 
-      // ✅ create order
+      // create order
       const { data } = await api.post("/payment/create-order", {
         courseId: course._id,
         studentId: user._id,
@@ -198,7 +210,6 @@ function Courses() {
 
       if (!data.success) return notify(data.message, "danger");
 
-      // ✅ order created tracking
       track("payment_order_created", {
         courseId: course._id,
         amount: data.amount,
@@ -222,9 +233,16 @@ function Courses() {
           });
 
           if (verify.data.success) {
-            track("enroll_success", { courseId: course._id, price: Number(course.price || 0) }); // ✅ analytics
+            track("enroll_success", { courseId: course._id, price: Number(course.price || 0) });
+
             notify("Enrollment successful!");
             fetchEnrollments();
+
+            // OPEN RECEIPT HERE
+            if (verify.data.receiptUrl) {
+              const base = (import.meta.env.VITE_BASE_URL || "").replace(/\/+$/, "");
+              window.open(`${base}${verify.data.receiptUrl}`, "_blank");
+            }
           } else notify("Payment verification failed!", "danger");
         },
         prefill: { name: user.name, email: user.email, contact: user.phone || "" },
@@ -241,33 +259,7 @@ function Courses() {
     }
   };
 
-  const confirmUnenroll = (courseId) => {
-    // ✅ unenroll click
-    track("unenroll_click", { courseId });
-
-    setConfirmModal({
-      show: true,
-      title: "Unenroll Course",
-      message: "Are you sure you want to unenroll? This will remove your access to the content.",
-      onConfirm: executeUnenroll,
-      data: courseId,
-    });
-  };
-
-  const executeUnenroll = async (courseId) => {
-    try {
-      await api.put(`/enrollments/unenroll/${courseId}`, {});
-      notify("Unenrolled successfully");
-      fetchEnrollments();
-    } catch (err) {
-      notify("Failed to unenroll", "danger");
-    } finally {
-      setConfirmModal({ ...confirmModal, show: false });
-    }
-  };
-
   const confirmReenroll = (course) => {
-    // ✅ renew click
     track("renew_click", { courseId: course._id, price: Number(course.price || 0) });
 
     setConfirmModal({
@@ -285,10 +277,15 @@ function Courses() {
       const user = JSON.parse(localStorage.getItem("user"));
       const token = localStorage.getItem("token");
 
+      if (!user || !token) {
+        notify("Please log in again.", "danger");
+        return;
+      }
+
       if (!course.price || course.price === 0) {
         const { data } = await api.post("/enrollments", { courseId: course._id, amount: 0 });
         if (data.success) {
-          track("enroll_success", { courseId: course._id, price: 0 }); // ✅ analytics
+          track("enroll_success", { courseId: course._id, price: 0 });
           notify("Re-enrolled successfully!");
           fetchEnrollments();
         } else notify(data.message, "danger");
@@ -327,7 +324,7 @@ function Courses() {
           });
 
           if (verify.data.success) {
-            track("enroll_success", { courseId: course._id, price: Number(course.price || 0) }); // ✅ analytics
+            track("enroll_success", { courseId: course._id, price: Number(course.price || 0) });
             notify("Re-enrollment successful!");
             fetchEnrollments();
           } else notify("Payment verification failed!", "danger");
@@ -372,7 +369,7 @@ function Courses() {
         padding: "40px 20px",
         background: "#f0f2f5",
         minHeight: "100vh",
-        marginTop: "60px",
+        marginTop: "-1%",
         position: "relative",
       }}
     >
@@ -473,17 +470,17 @@ function Courses() {
             style={
               isSidebarOpen
                 ? {
-                    position: "fixed",
-                    top: 0,
-                    left: 0,
-                    height: "100vh",
-                    width: "280px",
-                    zIndex: 1050,
-                    background: "#fff",
-                    padding: "30px",
-                    boxShadow: "10px 0 30px rgba(0,0,0,0.1)",
-                    overflowY: "auto",
-                  }
+                  position: "fixed",
+                  top: 0,
+                  left: 0,
+                  height: "100vh",
+                  width: "280px",
+                  zIndex: 1050,
+                  background: "#fff",
+                  padding: "30px",
+                  boxShadow: "10px 0 30px rgba(0,0,0,0.1)",
+                  overflowY: "auto",
+                }
                 : {}
             }
           >
@@ -494,17 +491,13 @@ function Courses() {
               </div>
               <div className="d-flex flex-column gap-2">
                 {categories.map((cat) => (
-                  <label
-                    key={cat._id}
-                    className="d-flex align-items-center gap-2 p-1"
-                    style={{ cursor: "pointer" }}
-                  >
+                  <label key={cat._id} className="d-flex align-items-center gap-2 p-1" style={{ cursor: "pointer" }}>
                     <input
                       type="checkbox"
                       className="form-check-input"
-                      checked={selectedCategories.includes(cat.name)}
+                      checked={selectedCategories.includes(cat._id)}
                       onChange={() => {
-                        handleCategoryChange(cat.name);
+                        handleCategoryChange(cat._id);
                         if (window.innerWidth < 992) setIsSidebarOpen(false);
                       }}
                     />
@@ -555,10 +548,7 @@ function Courses() {
 
                       return (
                         <div key={course._id} className="col-md-6 col-xl-4">
-                          <div
-                            className="card h-100 border-0 shadow-sm"
-                            style={{ borderRadius: "16px", transition: "transform 0.3s" }}
-                          >
+                          <div className="card h-100 border-0 shadow-sm" style={{ borderRadius: "16px", transition: "transform 0.3s" }}>
                             <div className="position-relative">
                               <img
                                 src={
@@ -592,10 +582,7 @@ function Courses() {
 
                             <div className="card-body d-flex flex-column">
                               <div className="d-flex justify-content-between align-items-center mb-2">
-                                <span
-                                  className="text-primary fw-bold small text-uppercase"
-                                  style={{ color: "#9f64f7" }}
-                                >
+                                <span className="text-primary fw-bold small text-uppercase" style={{ color: "#9f64f7" }}>
                                   {course.level}
                                 </span>
                                 <span className="text-muted small">
@@ -608,7 +595,7 @@ function Courses() {
                                 <Link
                                   to={`/courses/${course._id}`}
                                   className="text-dark text-decoration-none"
-                                  onClick={() => track("course_open", { courseId: course._id, source: "courses_list_title" })} // ✅ analytics
+                                  onClick={() => track("course_open", { courseId: course._id, source: "courses_list_title" })}
                                 >
                                   {course.title}
                                 </Link>
@@ -639,7 +626,7 @@ function Courses() {
                                 {isEnrolled ? (
                                   <button
                                     onClick={() => {
-                                      track("course_open", { courseId: course._id, source: "courses_list_learn_btn" }); // ✅ analytics
+                                      track("course_open", { courseId: course._id, source: "courses_list_learn_btn" });
                                       navigate(`/courses/${course._id}`);
                                     }}
                                     className="btn btn-sm btn-primary rounded-pill px-3"
@@ -648,26 +635,31 @@ function Courses() {
                                     Learn
                                   </button>
                                 ) : (
-                                  <button
-                                    onClick={() =>
-                                      isExpiredOrCancelled ? confirmReenroll(course) : handleEnroll(course)
-                                    }
-                                    disabled={enrollLoadingIds.includes(course._id)}
-                                    className={`btn btn-sm rounded-pill px-3 fw-bold ${
-                                      isExpiredOrCancelled ? "btn-outline-warning" : "btn-dark"
-                                    }`}
-                                  >
-                                    {enrollLoadingIds.includes(course._id)
-                                      ? "..."
-                                      : isExpiredOrCancelled
-                                      ? "Renew"
-                                      : "Enroll"}
-                                  </button>
+                                  <div className="d-flex gap-2">
+                                    <button
+                                      onClick={() => (isExpiredOrCancelled ? confirmReenroll(course) : handleEnroll(course))}
+                                      disabled={enrollLoadingIds.includes(course._id)}
+                                      className={`btn btn-sm rounded-pill px-3 fw-bold ${isExpiredOrCancelled ? "btn-outline-warning" : "btn-dark"
+                                        }`}
+                                    >
+                                      {enrollLoadingIds.includes(course._id) ? "..." : isExpiredOrCancelled ? "Renew" : "Enroll"}
+                                    </button>
+
+                                    {/* ✅ Subscribe CTA (paid courses only) */}
+                                    {Number(course.price || 0) > 0 && (
+                                      <button
+                                        className="btn btn-sm btn-outline-info rounded-pill px-3 fw-bold"
+                                        onClick={() => {
+                                          track("subscribe_cta_click", { courseId: course._id, source: "courses_list" });
+                                          navigate(PLANS_ROUTE);
+                                        }}
+                                      >
+                                        Subscribe
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </div>
-
-                              {/* If you add an Unenroll button later, call confirmUnenroll(course._id) */}
-                              {/* Example: <button onClick={() => confirmUnenroll(course._id)}>Unenroll</button> */}
                             </div>
                           </div>
                         </div>

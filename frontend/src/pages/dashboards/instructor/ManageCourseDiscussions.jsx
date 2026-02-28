@@ -1,689 +1,316 @@
-// src/pages/Instructor/Forum/CourseDiscussions.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  CheckCircle,
-  User,
-  BookOpen,
-  Send,
-  ShieldCheck,
-  ChevronDown,
-  ChevronUp,
-  Lock,
-  Unlock,
-  ShieldAlert,
-  CheckCircle2,
-  XCircle,
-  RefreshCcw,
-  CornerDownRight,
+  CheckCircle, User, BookOpen, Send, ShieldCheck, ChevronDown, ChevronUp,
+  Lock, Unlock, ShieldAlert, CheckCircle2, XCircle, CornerDownRight,
+  Search, Filter, Clock, Info, Hash, MessageSquare, AlertCircle,
+  Award, Bell, Sparkles
 } from "lucide-react";
 import api from "../../../api/api";
 
 const CourseDiscussions = () => {
-  const [activeTab, setActiveTab] = useState("discussions"); // discussions | reports
-
-  // discussions state
+  const [activeTab, setActiveTab] = useState("discussions");
   const [groupedQuestions, setGroupedQuestions] = useState({});
   const [loadingDiscussions, setLoadingDiscussions] = useState(true);
   const [expandedCourse, setExpandedCourse] = useState(null);
-  const [draftAnswers, setDraftAnswers] = useState({}); // questionId -> text
-
-  // replies state (read-only here)
-  // repliesByQuestionId[qid] = array of replies
+  const [draftAnswers, setDraftAnswers] = useState({});
   const [repliesByQuestionId, setRepliesByQuestionId] = useState({});
-  const [repliesLoading, setRepliesLoading] = useState({}); // qid -> boolean
-
-  // reports state
+  const [repliesLoading, setRepliesLoading] = useState({});
   const [reports, setReports] = useState([]);
   const [loadingReports, setLoadingReports] = useState(true);
   const [actionId, setActionId] = useState(null);
-
-  const [reportStatus, setReportStatus] = useState("pending"); // pending | resolved | rejected | all
+  const [reportStatus, setReportStatus] = useState("pending");
   const [reportSearch, setReportSearch] = useState("");
-
-  // NEW: modal state for report details
   const [selectedReport, setSelectedReport] = useState(null);
 
-  // ------------------- Helpers -------------------
   const safeName = (u) => u?.name || "User";
 
-  const getRepliesForAnswer = (questionId, answerId) => {
-    const list = repliesByQuestionId[questionId] || [];
-    return list.filter((r) => String(r.answerId) === String(answerId));
-  };
-
-  // ------------------- Fetch Discussions -------------------
+  // ------------------- LOGIC -------------------
   const fetchDiscussions = async () => {
     try {
       setLoadingDiscussions(true);
       const res = await api.get("/forum/instructor/questions");
-
       const groups = (res.data || []).reduce((acc, q) => {
         const courseName = q.courseTitle || "Other Discussions";
         if (!acc[courseName]) acc[courseName] = [];
         acc[courseName].push(q);
         return acc;
       }, {});
-
       setGroupedQuestions(groups);
-    } catch (err) {
-      console.error("Failed to load discussions", err);
-    } finally {
-      setLoadingDiscussions(false);
-    }
+    } catch (err) { console.error(err); } finally { setLoadingDiscussions(false); }
   };
 
-  // ------------------- Fetch Replies (per question) -------------------
-  const fetchRepliesForQuestion = async (questionId) => {
-    if (!questionId) return;
-
-    // Prevent duplicate fetch
-    if (repliesLoading[questionId]) return;
-
+  const fetchRepliesForQuestion = async (qId) => {
+    if (!qId || repliesLoading[qId]) return;
     try {
-      setRepliesLoading((prev) => ({ ...prev, [questionId]: true }));
-      const res = await api.get(`/forum/question/${questionId}/replies`);
-      setRepliesByQuestionId((prev) => ({ ...prev, [questionId]: res.data || [] }));
-    } catch (err) {
-      console.error("Failed to fetch replies for question:", questionId, err);
-      // Keep empty array to avoid UI crash
-      setRepliesByQuestionId((prev) => ({ ...prev, [questionId]: prev[questionId] || [] }));
-    } finally {
-      setRepliesLoading((prev) => ({ ...prev, [questionId]: false }));
-    }
+      setRepliesLoading(p => ({ ...p, [qId]: true }));
+      const res = await api.get(`/forum/question/${qId}/replies`);
+      setRepliesByQuestionId(p => ({ ...p, [qId]: res.data || [] }));
+    } catch (err) { console.error(err); } finally { setRepliesLoading(p => ({ ...p, [qId]: false })); }
   };
 
-  // Prefetch replies for a list of questionIds (used when course expanded)
-  const prefetchRepliesForQuestions = async (questionIds = []) => {
-    // fetch only for ids not already cached
-    const idsToFetch = questionIds.filter((id) => !repliesByQuestionId[id] && !repliesLoading[id]);
-    if (idsToFetch.length === 0) return;
-
-    // Run in parallel but safe
-    await Promise.all(
-      idsToFetch.map((id) =>
-        api
-          .get(`/forum/question/${id}/replies`)
-          .then((res) => ({ id, data: res.data || [] }))
-          .catch((err) => {
-            console.error("Reply prefetch failed for:", id, err);
-            return { id, data: [] };
-          })
-      )
-    ).then((results) => {
-      setRepliesByQuestionId((prev) => {
-        const next = { ...prev };
-        for (const r of results) next[r.id] = r.data;
-        return next;
+  const prefetchRepliesForQuestions = async (ids = []) => {
+    const fetchList = ids.filter(id => !repliesByQuestionId[id] && !repliesLoading[id]);
+    if (fetchList.length === 0) return;
+    await Promise.all(fetchList.map(id => api.get(`/forum/question/${id}/replies`).then(res => ({ id, data: res.data || [] })).catch(() => ({ id, data: [] }))))
+      .then(resList => {
+        setRepliesByQuestionId(p => {
+          const n = { ...p };
+          resList.forEach(r => n[r.id] = r.data);
+          return n;
+        });
       });
-    });
   };
 
-  // ------------------- Discussion Actions -------------------
-  const verifyAnswer = async (questionId, answerId) => {
-    try {
-      await api.put(`/forum/question/${questionId}/verify`, { answerId });
-      fetchDiscussions();
-    } catch (err) {
-      console.error("Failed to verify answer", err);
-    }
-  };
-
-  const toggleLock = async (questionId, lockState) => {
-    try {
-      await api.put(`/forum/question/${questionId}/lock`, { isLocked: lockState });
-      fetchDiscussions();
-    } catch (err) {
-      console.error("Failed to update lock", err);
-    }
-  };
-
-  const postAnswer = async (questionId) => {
-    const answerText = (draftAnswers[questionId] || "").trim();
-    if (!answerText) return;
-
-    try {
-      await api.post("/forum/answer", { questionId, answerText });
-      setDraftAnswers((prev) => ({ ...prev, [questionId]: "" }));
-      fetchDiscussions();
-      // replies may change later; no need to refetch here
-    } catch (err) {
-      console.error("Failed to post answer", err);
-    }
+  const verifyAnswer = async (qId, aId) => { try { await api.put(`/forum/question/${qId}/verify`, { answerId: aId }); fetchDiscussions(); } catch (err) { console.error(err); } };
+  const toggleLock = async (qId, s) => { try { await api.put(`/forum/question/${qId}/lock`, { isLocked: s }); fetchDiscussions(); } catch (err) { console.error(err); } };
+  const postAnswer = async (qId) => {
+    const txt = (draftAnswers[qId] || "").trim();
+    if (!txt) return;
+    try { await api.post("/forum/answer", { questionId: qId, answerText: txt }); setDraftAnswers(p => ({ ...p, [qId]: "" })); fetchDiscussions(); } catch (err) { console.error(err); }
   };
 
   const fetchReports = async () => {
-    try {
-      setLoadingReports(true);
-      const res = await api.get(`/forum/instructor/reports?status=${reportStatus}`);
-      setReports(res.data || []);
-    } catch (err) {
-      console.error("Failed to fetch instructor reports", err);
-    } finally {
-      setLoadingReports(false);
-    }
+    try { setLoadingReports(true); const res = await api.get(`/forum/instructor/reports?status=${reportStatus}`); setReports(res.data || []); }
+    catch (err) { console.error(err); } finally { setLoadingReports(false); }
   };
 
-  const actOnReport = async (reportId, action) => {
-    const actionNote = window.prompt("Action note (optional):", "");
+  const actOnReport = async (id, action) => {
+    const note = window.prompt("Official Action Note:", "");
     try {
-      setActionId(reportId);
-      await api.put(`/forum/report/${reportId}/action`, {
-        action,
-        actionNote: actionNote || "",
-      });
-      await fetchReports();
-    } catch (err) {
-      console.error("Failed to update report", err);
-    } finally {
-      setActionId(null);
-    }
+      setActionId(id);
+      await api.put(`/forum/report/${id}/action`, { action, actionNote: note || "" });
+      fetchReports();
+      if (selectedReport?._id === id) setSelectedReport(null);
+    } catch (err) { console.error(err); } finally { setActionId(null); }
   };
 
   const filteredReports = useMemo(() => {
-    const s = reportSearch.trim().toLowerCase();
-    if (!s) return reports || [];
-
-    return (reports || []).filter((r) => {
-      const fields = [
-        r?.reason,
-        r?.targetType,
-        r?.status,
-        r?.reporterId?.name,
-        r?.targetUserId?.name,
-        r?.courseId?.title,
-        r?.actionBy?.name,
-        r?.actionNote,
-        r?.note,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return fields.includes(s);
-    });
+    const s = reportSearch.toLowerCase();
+    return reports.filter(r => [r?.reason, r?.targetType, r?.reporterId?.name, r?.targetUserId?.name].join(" ").toLowerCase().includes(s));
   }, [reports, reportSearch]);
 
   const groupedReports = useMemo(() => {
-    const byType = {};
-    for (const r of filteredReports) {
-      const k = r.targetType || "unknown";
-      if (!byType[k]) byType[k] = [];
-      byType[k].push(r);
-    }
-    return byType;
+    return filteredReports.reduce((acc, r) => { (acc[r.targetType || "unknown"] = acc[r.targetType || "unknown"] || []).push(r); return acc; }, {});
   }, [filteredReports]);
 
-  useEffect(() => {
-    if (activeTab === "reports") fetchReports();
-    // eslint-disable-next-line
-  }, [reportStatus, activeTab]);
-
-  // ------------------- Initial Load -------------------
-  useEffect(() => {
-    fetchDiscussions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ------------------- UI -------------------
-  const handleToggleCourse = async (courseName, questions) => {
-    const next = expandedCourse === courseName ? null : courseName;
-    setExpandedCourse(next);
-
-    // Prefetch replies when opening a course
-    if (next) {
-      const ids = (questions || []).map((q) => q._id);
-      await prefetchRepliesForQuestions(ids);
-    }
-  };
-
-  const renderStatusBadge = (statusRaw) => {
-    const status = (statusRaw || "pending").toLowerCase();
-    return (
-      <span
-        className={`badge rounded-pill ${
-          status === "pending" ? "bg-warning text-dark" : status === "resolved" ? "bg-success" : "bg-danger"
-        }`}
-      >
-        {status}
-      </span>
-    );
-  };
+  useEffect(() => { activeTab === "reports" ? fetchReports() : fetchDiscussions(); }, [activeTab, reportStatus]);
+  useEffect(() => { fetchDiscussions(); }, []);
 
   return (
-    <div className="container-fluid py-4 px-2 px-md-4" style={{ backgroundColor: "#f8f9fd", minHeight: "100vh" }}>
+    <div className="min-vh-100 p-2 p-md-4" style={{ backgroundColor: "#F9FAFB", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <style>{`
-        :root { --brand-purple:#7e50d3; --brand-light-purple:#f3effb; --brand-orange:#fd7e14; }
-        .hub-card{ background:#fff; border-radius:18px; border:1px solid #eef0f7; box-shadow:0 10px 30px rgba(82,63,105,0.05); overflow:hidden; }
-        .tab-btn{ border:0; background:transparent; font-weight:800; padding:12px 16px; border-radius:12px; color:#5e6278; display:inline-flex; align-items:center; gap:8px; }
-        .tab-btn.active{ background:var(--brand-light-purple); color:var(--brand-purple); }
-        .course-card{ border:none; border-radius:20px; background:white; box-shadow:0 10px 30px rgba(111,66,193,0.05); margin-bottom:20px; border:1px solid rgba(111,66,193,0.1); }
-        .course-header{ background:linear-gradient(90deg,var(--brand-purple),#8e67d5); color:white; padding:18px 20px; border-radius:19px 19px 0 0; cursor:pointer; }
-        .question-item{ border-bottom:1px solid #f0f0f0; padding:18px 20px; }
-        .question-item:last-child{ border-bottom:none; }
-        .answer-box{ background:#f8f9fa; border-radius:12px; padding:12px; margin-top:10px; border-left:4px solid #dee2e6; }
-        .verified-box{ background:#fff9db; border-left-color:var(--brand-orange); }
-        .accepted-box{ background:#eef4ff; border-left-color:#0d6efd; }
-        .btn-post{ background:var(--brand-purple); color:white; border-radius:10px; font-weight:700; }
-        .btn-post:hover{ background:#5a32a3; color:white; }
-        .badge-count{ background:rgba(255,255,255,0.2); padding:2px 10px; border-radius:10px; font-size:0.8rem; }
-        .mini-btn{ border-radius:12px; font-weight:800; padding:0.55rem 0.9rem; }
+        :root { --p-main: #7c3aed; --p-soft: #f5f3ff; --y-main: #f59e0b; --y-soft: #fffbeb; }
+        .glass-card { background: white; border-radius: 24px; border: 1px solid #eef2f6; box-shadow: 0 10px 25px rgba(124, 58, 237, 0.05); }
+        .tab-btn { border: none; background: transparent; padding: 10px 20px; border-radius: 12px; font-weight: 700; color: #64748b; transition: 0.3s; }
+        .tab-btn.active { background: var(--p-soft); color: var(--p-main); }
+        .course-card { background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; cursor: pointer; transition: 0.3s; }
+        .course-card:hover { border-color: var(--p-main); transform: translateY(-2px); }
+        .course-card.active { background: var(--p-main); color: white; border-color: var(--p-main); }
+        .q-item { background: white; border-radius: 18px; padding: 20px; border: 1px solid #f1f5f9; margin-bottom: 15px; }
+        .ans-pill { border-radius: 16px; padding: 15px; margin-top: 10px; border-left: 4px solid #e2e8f0; }
+        .ans-pill.verified { border-left-color: var(--y-main); background: var(--y-soft); }
+        .ans-pill.accepted { border-left-color: #3b82f6; background: #eff6ff; }
+        .reply-input { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 10px 15px; width: 100%; outline: none; transition: 0.3s; }
+        .reply-input:focus { border-color: var(--p-main); background: white; }
+        .p-btn { background: var(--p-main); color: white; border: none; border-radius: 12px; padding: 8px 20px; font-weight: 700; transition: 0.3s; }
+        .p-btn:hover { background: #6d28d9; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3); }
+        /* Inhi styles ko existing style tag mein update/add karein */
 
-        .reply-box {
-          background: #ffffff;
-          border: 1px solid #eef0f7;
-          border-radius: 10px;
-          padding: 10px;
-          margin-top: 8px;
-        }
-        .reply-meta {
-          display:flex;
-          align-items:center;
-          justify-content:space-between;
-          gap:10px;
-          margin-bottom: 4px;
-        }
+.glass-card { 
+  width: 100%; 
+  max-width: 100%; 
+  /* Isse width fix rahegi */
+  display: flex;
+  flex-direction: column;
+}
 
-        /* ------------------- Responsive Additions (Discussions) ------------------- */
-        .course-header, .question-item, .answer-box, .reply-box { word-break: break-word; overflow-wrap: anywhere; }
-        .tab-btn, .btn, button { touch-action: manipulation; }
+.course-card {
+  /* Isse ensure hoga ki card header hamesha 100% width par rahe */
+  width: 100%;
+}
 
-        @media (max-width: 768px) {
-          .hub-card { border-radius: 16px; }
-          .course-card { border-radius: 18px; }
-          .course-header { padding: 14px 14px; }
-          .question-item { padding: 14px 14px; }
-          .course-header .d-flex { flex-wrap: wrap; gap: 10px; }
-          .course-header h5 { font-size: 1rem; }
-          .tab-btn { padding: 10px 12px; border-radius: 12px; }
-          .badge-count { font-size: 0.78rem; }
-          .ms-3 { margin-left: 0.5rem !important; }
-          .btn.btn-sm { white-space: nowrap; }
-        }
+.q-item { 
+  width: 100%; 
+  /* Important: Content ko card ke andar hi wrap karega */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
 
-        @media (max-width: 576px) {
-          .container-fluid { padding-left: 10px !important; padding-right: 10px !important; }
-          .hub-card { padding: 14px !important; }
-          .course-header { padding: 12px 12px; border-radius: 16px 16px 0 0; }
-          .question-item { padding: 12px 12px; }
-          h3 { font-size: 1.1rem; }
-          .course-header h5 { font-size: 0.98rem; }
-          .course-header .d-flex.align-items-center.gap-3 { gap: 10px !important; }
-          .question-item > .d-flex.justify-content-between { flex-wrap: wrap; }
-          .ms-3 { margin-left: 0rem !important; }
-          .answer-box .d-flex.justify-content-between { flex-wrap: wrap; }
-          .question-item .mt-3.d-flex.gap-2 { flex-direction: column; }
-          .question-item .mt-3.d-flex.gap-2 .btn-post { width: 100%; justify-content: center; }
-          .form-select, .form-control { width: 100% !important; max-width: 100% !important; }
-        }
+/* Replies section ke liye extra safety */
+.bg-white.p-2.rounded-3.border {
+  max-width: 100%;
+  overflow: hidden;
+}
+  /* Isse flexbox forced expansion ruk jayegi */
+.course-card, .q-item, .ans-pill {
+    min-width: 0 !important;
+    word-break: break-word;
+}
 
-        @media (max-width: 360px) {
-          .tab-btn { padding: 9px 10px; font-size: 0.9rem; }
-          .badge-count { display: inline-block; margin-top: 4px; }
-        }
-
-        /* ------------------- Reports responsiveness (NEW) ------------------- */
-        .report-table th, .report-table td { white-space: nowrap; }
-        .report-wrap { white-space: normal !important; word-break: break-word; overflow-wrap: anywhere; }
-
-        .modal-backdrop-custom {
-          position: fixed; inset: 0;
-          background: rgba(0,0,0,0.5);
-          z-index: 1040;
-        }
-        .modal-custom {
-          position: fixed; inset: 0;
-          z-index: 1050;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 16px;
-        }
-        .modal-card {
-          width: min(920px, 100%);
-          max-height: 90vh;
-          overflow: auto;
-          background: #fff;
-          border-radius: 16px;
-          border: 1px solid #eef0f7;
-          box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-        }
-        @media (max-width: 576px) {
-          .modal-custom { padding: 10px; }
-          .modal-card { border-radius: 14px; }
-        }
+/* Sidebar ko stable rakhne ke liye parent container par */
+.glass-card {
+    table-layout: fixed; /* Even if it's not a table, it helps with some grid layouts */
+}
+        /* Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(30, 27, 75, 0.4); backdrop-filter: blur(8px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-content { background: white; width: 100%; max-width: 900px; border-radius: 28px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
       `}</style>
 
-      {/* Header + Tabs */}
-      <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+      {/* Header Section */}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
         <div>
-          <h3 className="fw-bolder mb-1" style={{ color: "#1e1e2d" }}>
-            Instructor Forum
-          </h3>
-          <div className="text-muted fw-medium">Manage doubts, verify answers, and handle reports.</div>
+          <h2 className="fw-800 mb-0" style={{ color: "#1e1b4b" }}>
+            {/* <Sparkles size={24} className="text-warning me-2"/>  */}Instructor <span style={{ color: "var(--p-main)" }}>Hub</span>
+          </h2>
+          <p className="text-muted small fw-medium">Manage discussions and platform safety</p>
         </div>
-
-        <div className="d-flex align-items-center gap-2">
+        <div className="d-flex bg-white p-2 rounded-4 shadow-sm border gap-2">
           <button className={`tab-btn ${activeTab === "discussions" ? "active" : ""}`} onClick={() => setActiveTab("discussions")}>
-            <BookOpen size={18} /> Discussions
+            <MessageSquare size={18} className="me-2" /> Discussions
           </button>
-
           <button className={`tab-btn ${activeTab === "reports" ? "active" : ""}`} onClick={() => setActiveTab("reports")}>
-            <ShieldAlert size={18} /> Reports
-            {reports?.length > 0 && <span className="badge rounded-pill bg-danger ms-1">{reports.length}</span>}
+            <ShieldAlert size={18} className="me-2" /> Reports
+            {reports.length > 0 && <span className="ms-2 badge rounded-pill bg-danger">{reports.length}</span>}
           </button>
-
-          {/* <button
-            className="btn btn-outline-primary mini-btn d-flex align-items-center gap-2"
-            onClick={() => {
-              fetchDiscussions();
-              fetchReports();
-            }}
-            title="Refresh"
-          >
-            <RefreshCcw size={16} /> Refresh
-          </button> */}
         </div>
       </div>
 
-      <div className="hub-card p-3 p-md-4">
-        {activeTab === "discussions" && (
+      <div className="glass-card p-3 p-md-4">
+        {activeTab === "discussions" ? (
           <>
             {loadingDiscussions ? (
-              <div className="d-flex justify-content-center py-5">
-                <div className="spinner-border text-primary" role="status" />
-              </div>
-            ) : Object.keys(groupedQuestions).length === 0 ? (
-              <div className="alert alert-info rounded-4 m-0">No questions found.</div>
+              <div className="text-center py-5"><div className="spinner-border text-primary" /></div>
             ) : (
-              Object.entries(groupedQuestions).map(([courseName, questions]) => (
-                <div key={courseName} className="course-card">
-                  <div
-                    className="course-header d-flex justify-content-between align-items-center"
-                    onClick={() => handleToggleCourse(courseName, questions)}
-                  >
+              Object.entries(groupedQuestions).map(([course, questions]) => (
+                <div key={course} className="mb-3">
+                  <div className={`course-card d-flex justify-content-between align-items-center ${expandedCourse === course ? 'active shadow-lg' : ''}`} onClick={() => { setExpandedCourse(expandedCourse === course ? null : course); prefetchRepliesForQuestions(questions.map(q => q._id)); }}>
                     <div className="d-flex align-items-center gap-3">
-                      <BookOpen size={24} />
-                      <div>
-                        <h5 className="m-0 fw-bold">{courseName}</h5>
-                        <span className="badge-count">{questions.length} Questions</span>
-                      </div>
+                      <div className={`p-3 rounded-4 ${expandedCourse === course ? 'bg-white text-dark' : 'bg-light text-primary'}`}><BookOpen size={20} /></div>
+                      <h6 className="mb-0 fw-bold">{course}</h6>
                     </div>
-                    {expandedCourse === courseName ? <ChevronUp /> : <ChevronDown />}
+                    {expandedCourse === course ? <ChevronUp /> : <ChevronDown />}
                   </div>
 
-                  {(expandedCourse === courseName || Object.keys(groupedQuestions).length === 1) && (
-                    <div className="card-body p-0">
-                      {questions.map((q) => {
-                        const isClosed = q.isSolved || q.isLocked;
+                  {expandedCourse === course && (
+                    <div className="mt-3 ps-md-4">
+                      {questions.map((q) => (
+                        <div key={q._id} className="q-item shadow-sm">
+                          <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
+                            <div>
+                              <div className="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                <h6 className="fw-bold mb-0" style={{ color: "#334155", maxWidth: '100%' }}>{q.title}</h6>
+                                {q.isSolved && <span className="badge bg-success-subtle text-success small border border-success px-2">Solved</span>}
+                                {q.isLocked && <span className="badge bg-warning-subtle text-warning small border border-warning px-2"><Lock size={12} /> Locked</span>}
+                              </div>
+                              <small className="text-muted d-flex align-items-center gap-1"><User size={12} /> {safeName(q.asker || q.userId)} • {new Date(q.createdAt).toLocaleDateString()}</small>
+                            </div>
+                            <button className={`btn btn-sm rounded-pill px-3 ${q.isLocked ? 'btn-outline-success' : 'btn-outline-warning'}`} onClick={() => toggleLock(q._id, !q.isLocked)}>
+                              {q.isLocked ? 'Unlock' : 'Lock'}
+                            </button>
+                          </div>
+                          <p className="small text-secondary my-3" style={{ whiteSpace: 'pre-line' }}>{q.description}</p>
 
-                        return (
-                          <div key={q._id} className="question-item">
-                            <div className="d-flex justify-content-between align-items-start gap-2">
-                              <div>
-                                <h6 className="fw-bold text-dark mb-1">{q.title}</h6>
-                                <small className="text-muted d-block">
-                                  <User size={12} /> Asked by {q.asker?.name || q.userId?.name || "User"}
-                                </small>
+                          {/* Answers */}
+                          <div className="mt-3">
+                            {(q.answers || []).map(ans => (
+                              <div key={ans._id} className={`ans-pill ${ans.isVerified ? 'verified' : 'bg-light'}`}>
+                                <div className="d-flex justify-content-between gap-2">
+                                  <p className="small mb-1 fw-semibold">{ans.answerText}</p>
+                                  {ans.isVerified && <Award size={18} className="text-warning" />}
+                                </div>
+                                <div className="d-flex justify-content-between align-items-center mt-2">
+                                  <small className="fw-bold text-primary">— {safeName(ans.userId)}</small>
+                                  {!ans.isVerified && !q.isLocked && <button className="btn btn-sm text-warning fw-bold p-0" onClick={() => verifyAnswer(q._id, ans._id)}>Verify</button>}
+                                </div>
 
-                                <div className="mt-2 d-flex flex-wrap gap-2">
-                                  {q.isSolved && (
-                                    <span className="text-success small fw-bold">
-                                      <CheckCircle size={14} /> Solved
-                                    </span>
-                                  )}
-                                  {q.isLocked && (
-                                    <span className="small fw-bold" style={{ color: "#a85d00" }}>
-                                      <Lock size={14} /> Locked
-                                    </span>
-                                  )}
+                                {/* Replies - Read Only */}
+                                <div className="mt-3 border-top pt-2">
+                                  <small className="fw-bold text-muted d-flex align-items-center gap-1 mb-2"><CornerDownRight size={14} /> Replies ({(repliesByQuestionId[q._id] || []).filter(r => String(r.answerId) === String(ans._id)).length})</small>
+                                  {(repliesByQuestionId[q._id] || []).filter(r => String(r.answerId) === String(ans._id)).map(rep => (
+                                    <div key={rep._id} className="bg-white p-2 rounded-3 border mb-1 small" style={{ overflowWrap: 'anywhere' }}>
+                                      <div className="d-flex justify-content-between fw-bold text-primary mb-1 gap-2">
+                                        <span className="text-truncate">{safeName(rep.userId)}</span> {/* text-truncate adds ... if name is long */}
+                                        <span className="opacity-50 flex-shrink-0" style={{ fontSize: '10px' }}>{new Date(rep.createdAt).toLocaleDateString()}</span>
+                                      </div>
+                                      <div className="text-muted">{rep.replyText}</div>
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
-
-                              <div className="d-flex gap-2">
-                                {!q.isLocked ? (
-                                  <button className="btn btn-sm btn-outline-warning" onClick={() => toggleLock(q._id, true)}>
-                                    <Lock size={14} className="me-1" /> Lock
-                                  </button>
-                                ) : (
-                                  <button className="btn btn-sm btn-outline-success" onClick={() => toggleLock(q._id, false)}>
-                                    <Unlock size={14} className="me-1" /> Unlock
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="mt-3 text-muted small" style={{ whiteSpace: "pre-line" }}>
-                              {q.description}
-                            </div>
-
-                            {/* Answers */}
-                            <div className="ms-3 mt-3">
-                              {(q.answers || [])
-                                .sort(
-                                  (a, b) =>
-                                    (b.isAccepted === true) - (a.isAccepted === true) ||
-                                    (b.isVerified === true) - (a.isVerified === true)
-                                )
-                                .map((ans) => {
-                                  const boxClass = ans.isAccepted
-                                    ? "answer-box accepted-box"
-                                    : ans.isVerified
-                                      ? "answer-box verified-box"
-                                      : "answer-box";
-
-                                  const replyList = getRepliesForAnswer(q._id, ans._id);
-
-                                  return (
-                                    <div key={ans._id} className={boxClass}>
-                                      <div className="d-flex justify-content-between align-items-start gap-2">
-                                        <p className="small mb-1">{ans.answerText}</p>
-
-                                        <div className="d-flex align-items-center gap-2">
-                                          {ans.isAccepted && (
-                                            <span className="badge bg-primary-subtle text-primary border border-primary-subtle small px-2">
-                                              Accepted
-                                            </span>
-                                          )}
-                                          {ans.isVerified && (
-                                            <span className="badge bg-success-subtle text-success border border-success-subtle small px-2">
-                                              Verified
-                                            </span>
-                                          )}
-                                          {ans.isVerified && <ShieldCheck size={16} className="text-warning" />}
-                                        </div>
-                                      </div>
-
-                                      <div className="d-flex justify-content-between align-items-center mt-2">
-                                        <small className="fw-bold" style={{ color: "var(--brand-purple)" }}>
-                                          {safeName(ans.userId)}
-                                        </small>
-
-                                        {!q.isLocked && !ans.isVerified && (
-                                          <button
-                                            className="btn btn-sm py-0 fw-bold"
-                                            style={{ color: "var(--brand-orange)" }}
-                                            onClick={() => verifyAnswer(q._id, ans._id)}
-                                          >
-                                            Verify
-                                          </button>
-                                        )}
-                                      </div>
-
-                                      {/* Replies under this answer (READ-ONLY) */}
-                                      <div className="mt-2">
-                                        <div className="d-flex align-items-center gap-2 text-muted small fw-bold">
-                                          <CornerDownRight size={14} />
-                                          Replies ({replyList.length})
-                                          {!repliesByQuestionId[q._id] && (
-                                            <button className="btn btn-sm py-0 px-2" onClick={() => fetchRepliesForQuestion(q._id)}>
-                                              Load
-                                            </button>
-                                          )}
-                                        </div>
-
-                                        {repliesLoading[q._id] ? (
-                                          <div className="small text-muted mt-2">Loading replies...</div>
-                                        ) : replyList.length === 0 ? (
-                                          <div className="small text-muted mt-2">No replies on this answer.</div>
-                                        ) : (
-                                          <div className="d-flex flex-column gap-2 mt-2">
-                                            {replyList.map((rep) => (
-                                              <div key={rep._id} className="reply-box">
-                                                <div className="reply-meta">
-                                                  <span className="small fw-bold text-primary">{safeName(rep.userId)}</span>
-                                                  <span className="small text-muted">
-                                                    {rep.createdAt ? new Date(rep.createdAt).toLocaleString() : ""}
-                                                  </span>
-                                                </div>
-                                                <div className="small text-muted" style={{ whiteSpace: "pre-line" }}>
-                                                  {rep.replyText}
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                            </div>
-
-                            {!isClosed ? (
-                              <div className="mt-3 d-flex gap-2">
-                                <input
-                                  type="text"
-                                  className="form-control form-control-sm border-0 bg-light"
-                                  placeholder="Reply to this student..."
-                                  value={draftAnswers[q._id] || ""}
-                                  onChange={(e) => setDraftAnswers((prev) => ({ ...prev, [q._id]: e.target.value }))}
-                                />
-                                <button className="btn btn-sm btn-post px-3" onClick={() => postAnswer(q._id)}>
-                                  <Send size={14} />
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="mt-3 small text-muted">
-                                {q.isLocked ? "Discussion locked. Replies disabled." : "Solved thread. Replies disabled."}
-                              </div>
-                            )}
+                            ))}
                           </div>
-                        );
-                      })}
+
+                          {!q.isLocked && !q.isSolved && (
+                            <div className="mt-3 d-flex gap-2">
+                              <input className="reply-input" placeholder="Type an official answer..." value={draftAnswers[q._id] || ""} onChange={e => setDraftAnswers(p => ({ ...p, [q._id]: e.target.value }))} />
+                              <button className="p-btn" onClick={() => postAnswer(q._id)}><Send size={18} /></button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
               ))
             )}
           </>
-        )}
-
-        {/* ------------------- TAB: REPORTS (COMPACT + MODAL) ------------------- */}
-        {activeTab === "reports" && (
+        ) : (
+          /* --- REPORTS INTERFACE --- */
           <>
-            <div className="d-flex flex-column flex-md-row gap-2 justify-content-between mb-3">
-              <div className="d-flex gap-2 flex-wrap">
-                <select
-                  className="form-select"
-                  style={{ maxWidth: 220 }}
-                  value={reportStatus}
-                  onChange={(e) => setReportStatus(e.target.value)}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="all">All</option>
+            <div className="row g-3 mb-4">
+              <div className="col-md-4">
+                <select className="form-select rounded-4 border-2 shadow-sm fw-bold" value={reportStatus} onChange={e => setReportStatus(e.target.value)}>
+                  <option value="pending">Review Pending</option>
+                  <option value="resolved">Resolved Cases</option>
+                  <option value="rejected">Rejected Cases</option>
+                  <option value="all">View All</option>
                 </select>
-
-                <input
-                  className="form-control"
-                  style={{ maxWidth: 360 }}
-                  placeholder="Search by reason / reporter / target user / course / status / action..."
-                  value={reportSearch}
-                  onChange={(e) => setReportSearch(e.target.value)}
-                />
               </div>
-
-              <div className="text-muted small d-flex align-items-center">
-                Showing <strong className="mx-1">{filteredReports.length}</strong> reports
+              <div className="col-md-8">
+                <div className="position-relative">
+                  <Search className="position-absolute top-50 translate-middle-y ms-3 text-muted" size={18} />
+                  <input className="form-control rounded-4 ps-5 border-2 shadow-sm" placeholder="Search by reason or user..." value={reportSearch} onChange={e => setReportSearch(e.target.value)} />
+                </div>
               </div>
             </div>
 
             {loadingReports ? (
-              <div className="d-flex justify-content-center py-5">
-                <div className="spinner-border text-primary" role="status" />
-              </div>
+              <div className="text-center py-5"><div className="spinner-grow text-primary" /></div>
             ) : filteredReports.length === 0 ? (
-              <div className="alert alert-success rounded-4 m-0">No reports found for selected status / search.</div>
+              <div className="alert alert-light text-center border-2 py-5">No reports found for this filter.</div>
             ) : (
               Object.entries(groupedReports).map(([type, list]) => (
                 <div key={type} className="mb-4">
-                  <h6 className="text-uppercase text-muted fw-bold mb-2">{type} reports</h6>
-
-                  <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
-                    <div className="table-responsive">
-                      <table className="table mb-0 align-middle report-table">
-                        <thead className="table-light">
-                          <tr>
-                            <th>Target</th>
-                            <th>Reason</th>
-                            <th>Status</th>
-                            <th>Reporter</th>
-                            <th>Created</th>
-                            <th>Details</th>
-                            <th className="text-end">Action</th>
+                  <h6 className="fw-800 text-uppercase text-muted small mb-3 border-start border-4 border-primary ps-2">{type} Reports</h6>
+                  <div className="table-responsive bg-white rounded-4 border overflow-hidden">
+                    <table className="table table-hover align-middle mb-0">
+                      <thead className="bg-light">
+                        <tr className="small fw-bold text-muted">
+                          <th className="ps-4">Reason</th>
+                          <th>Status</th>
+                          <th>Reporter</th>
+                          <th>Date</th>
+                          <th className="text-end pe-4">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {list.map(r => (
+                          <tr key={r._id} onClick={() => setSelectedReport(r)} style={{ cursor: 'pointer' }}>
+                            <td className="ps-4 fw-bold">{r.reason}</td>
+                            <td>
+                              <span className={`badge rounded-pill px-3 py-1 ${r.status === 'pending' ? 'bg-warning-subtle text-warning' : 'bg-light text-muted'}`}>
+                                {r.status.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="small">{safeName(r.reporterId)}</td>
+                            <td className="small text-muted">{new Date(r.createdAt).toLocaleDateString()}</td>
+                            <td className="text-end pe-4">
+                              <button className="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" onClick={() => setSelectedReport(r)}>Inspect</button>
+                            </td>
                           </tr>
-                        </thead>
-
-                        <tbody>
-                          {list.map((r) => {
-                            const status = (r.status || "pending").toLowerCase();
-
-                            return (
-                              <tr key={r._id}>
-                                <td className="text-capitalize">{r.targetType || "-"}</td>
-                                <td className="fw-bold text-capitalize">{r.reason || "-"}</td>
-                                <td>{renderStatusBadge(status)}</td>
-                                <td className="report-wrap">{r.reporterId?.name || "User"}</td>
-                                <td className="text-muted">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "-"}</td>
-
-                                <td>
-                                  <button
-                                    className="btn btn-sm btn-outline-primary rounded-pill"
-                                    onClick={() => setSelectedReport(r)}
-                                  >
-                                    View
-                                  </button>
-                                </td>
-
-                                <td className="text-end">
-                                  {status === "pending" ? (
-                                    <div className="d-flex justify-content-end gap-2">
-                                      <button
-                                        className="btn btn-sm btn-success rounded-pill d-flex align-items-center gap-1"
-                                        disabled={actionId === r._id}
-                                        onClick={() => actOnReport(r._id, "resolved")}
-                                      >
-                                        <CheckCircle2 size={16} /> Resolve
-                                      </button>
-
-                                      <button
-                                        className="btn btn-sm btn-outline-danger rounded-pill d-flex align-items-center gap-1"
-                                        disabled={actionId === r._id}
-                                        onClick={() => actOnReport(r._id, "rejected")}
-                                      >
-                                        <XCircle size={16} /> Reject
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <span className="badge bg-secondary rounded-pill">Closed</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               ))
@@ -692,128 +319,94 @@ const CourseDiscussions = () => {
         )}
       </div>
 
-      {/* ------------------- Report Details Modal (State-based) ------------------- */}
+      {/* --- PURPLE & GOLD MODAL --- */}
       {selectedReport && (
-        <>
-          <div className="modal-backdrop-custom" onClick={() => setSelectedReport(null)} />
-          <div className="modal-custom" role="dialog" aria-modal="true">
-            <div className="modal-card">
-              <div className="d-flex justify-content-between align-items-start p-3 border-bottom">
+        <div className="modal-overlay" onClick={() => setSelectedReport(null)}>
+          <div className="modal-content animate__animated animate__zoomIn animate__faster" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-bottom d-flex justify-content-between align-items-center" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)", color: "white" }}>
+              <div className="d-flex align-items-center gap-3">
+                <div className="bg-white text-warning p-2 rounded-3 shadow-sm"><ShieldAlert size={24} /></div>
                 <div>
-                  <div className="fw-bolder" style={{ fontSize: "1.05rem" }}>
-                    Report Details
-                  </div>
-                  <div className="text-muted small">
-                    {selectedReport.targetType || "unknown"} • {selectedReport.reason || "-"} •{" "}
-                    {renderStatusBadge(selectedReport.status)}
-                  </div>
+                  <h5 className="mb-0 fw-800">Review Report</h5>
+                  <small className="opacity-75">Ref ID: {selectedReport._id.slice(-8)}</small>
+                </div>
+              </div>
+              <button className="btn-close btn-close-white" onClick={() => setSelectedReport(null)}></button>
+            </div>
+
+            <div className="p-4">
+              <div className="row g-4 mb-4">
+                {/* Meta Cards */}
+                <div className="col-6 col-md-3">
+                  <small className="text-muted fw-bold d-block mb-1">TARGET USER</small>
+                  <div className="fw-bold">{selectedReport.targetUserId?.name || "N/A"}</div>
+                </div>
+                <div className="col-6 col-md-3">
+                  <small className="text-muted fw-bold d-block mb-1">COURSE</small>
+                  <div className="fw-bold">{selectedReport.courseId?.title || "N/A"}</div>
+                </div>
+                <div className="col-6 col-md-3">
+                  <small className="text-muted fw-bold d-block mb-1">REPORTER</small>
+                  <div className="fw-bold">{selectedReport.reporterId?.name || "N/A"}</div>
+                </div>
+                <div className="col-6 col-md-3">
+                  <small className="text-muted fw-bold d-block mb-1">SUBMITTED</small>
+                  <div className="fw-bold">{new Date(selectedReport.createdAt).toLocaleDateString()}</div>
                 </div>
 
-                <button className="btn btn-sm btn-light" onClick={() => setSelectedReport(null)}>
-                  ✕
-                </button>
-              </div>
-
-              <div className="p-3">
-                <div className="row g-3">
-                  <div className="col-md-6">
-                    <div className="text-muted small fw-bold text-uppercase">Reported User</div>
-                    <div className="fw-semibold">{selectedReport.targetUserId?.name || "-"}</div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="text-muted small fw-bold text-uppercase">Course</div>
-                    <div className="fw-semibold">{selectedReport.courseId?.title || "-"}</div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="text-muted small fw-bold text-uppercase">Reporter</div>
-                    <div className="fw-semibold">{selectedReport.reporterId?.name || "-"}</div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="text-muted small fw-bold text-uppercase">Created</div>
-                    <div className="fw-semibold">
-                      {selectedReport.createdAt ? new Date(selectedReport.createdAt).toLocaleString() : "-"}
+                {/* Content Area */}
+                <div className="col-12">
+                  <div className="bg-light p-4 rounded-4 border-2 border-dashed">
+                    <div className="d-flex justify-content-between mb-2">
+                      <span className="badge bg-warning text-dark rounded-pill px-3">{selectedReport.targetType?.toUpperCase()}</span>
+                      {selectedReport.targetContent?.kind && <span className="small text-muted fw-bold">{selectedReport.targetContent.kind}</span>}
                     </div>
-                  </div>
-
-                  <div className="col-12">
-                    <div className="text-muted small fw-bold text-uppercase">Target Content</div>
-                    {selectedReport?.targetContent?.isDeleted ? (
-                      <div className="text-muted">Deleted content</div>
+                    {selectedReport.targetContent?.isDeleted ? (
+                      <div className="text-center text-muted py-3">Content was purged.</div>
                     ) : (
-                      <div className="bg-light rounded-3 p-3 border report-wrap">
-                        <div className="small fw-bold text-capitalize">
-                          {selectedReport?.targetContent?.kind || selectedReport?.targetType}
-                          {selectedReport?.targetContent?.questionTitle ? (
-                            <span className="text-muted"> • {selectedReport.targetContent.questionTitle}</span>
-                          ) : null}
-                        </div>
-                        <div className="small text-muted mt-2" style={{ whiteSpace: "pre-line" }}>
-                          {selectedReport?.targetContent?.text || "-"}
-                        </div>
-                      </div>
+                      <div className="fw-medium text-dark" style={{ whiteSpace: 'pre-line' }}>{selectedReport.targetContent?.text}</div>
                     )}
                   </div>
+                </div>
 
-                  <div className="col-12">
-                    <div className="text-muted small fw-bold text-uppercase">Reporter Note</div>
-                    <div className="report-wrap">{selectedReport.note?.trim() ? selectedReport.note : "-"}</div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="text-muted small fw-bold text-uppercase">Action By</div>
-                    <div className="fw-semibold">{selectedReport.actionBy?.name || "-"}</div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="text-muted small fw-bold text-uppercase">Action At</div>
-                    <div className="fw-semibold">
-                      {selectedReport.actionAt ? new Date(selectedReport.actionAt).toLocaleString() : "-"}
+                {/* Reporter Note */}
+                {/* <div className="col-12">
+                    <div className="p-3 rounded-4 border-start border-4 border-danger bg-danger-subtle fw-semibold">
+                        <strong>Reporter Note:</strong> {selectedReport.note || "No comments provided."}
                     </div>
-                  </div>
+                </div> */}
 
-                  <div className="col-12">
-                    <div className="text-muted small fw-bold text-uppercase">Action Note</div>
-                    <div className="report-wrap">{selectedReport.actionNote?.trim() ? selectedReport.actionNote : "-"}</div>
+                {/* Resolution Info */}
+                <div className="col-12 pt-4 border-top">
+                  <div className="row g-3 bg-light p-3 rounded-4 border">
+                    <div className="col-md-6"><small className="text-muted fw-bold">ACTION BY</small><div className="fw-bold text-primary">{selectedReport.actionBy?.name || "Pending Review"}</div></div>
+                    <div className="col-md-6"><small className="text-muted fw-bold">RESOLUTION DATE</small><div className="fw-bold">{selectedReport.actionAt ? new Date(selectedReport.actionAt).toLocaleString() : "-"}</div></div>
+                    <div className="col-12"><small className="text-muted fw-bold">ADMIN NOTE</small><p className="mb-0 small text-muted fst-italic">{selectedReport.actionNote || "No final notes documented."}</p></div>
                   </div>
                 </div>
+              </div>
 
-                <div className="d-flex justify-content-end gap-2 mt-3 pt-3 border-top">
-                  {(selectedReport.status || "pending").toLowerCase() === "pending" ? (
-                    <>
-                      <button
-                        className="btn btn-success rounded-pill d-flex align-items-center gap-1"
-                        disabled={actionId === selectedReport._id}
-                        onClick={() => actOnReport(selectedReport._id, "resolved")}
-                      >
-                        <CheckCircle2 size={16} /> Resolve
-                      </button>
-
-                      <button
-                        className="btn btn-outline-danger rounded-pill d-flex align-items-center gap-1"
-                        disabled={actionId === selectedReport._id}
-                        onClick={() => actOnReport(selectedReport._id, "rejected")}
-                      >
-                        <XCircle size={16} /> Reject
-                      </button>
-                    </>
-                  ) : (
-                    <span className="badge bg-secondary rounded-pill align-self-center">Closed</span>
-                  )}
-
-                  <button className="btn btn-light rounded-pill" onClick={() => setSelectedReport(null)}>
-                    Close
-                  </button>
-                </div>
+              <div className="d-flex justify-content-end gap-3 pt-3 border-top">
+                {selectedReport.status === 'pending' ? (
+                  <>
+                    <button className="btn btn-success px-4 rounded-pill fw-bold" onClick={() => actOnReport(selectedReport._id, 'resolved')}>
+                      <CheckCircle2 size={18} className="me-2" /> Resolve
+                    </button>
+                    <button className="btn btn-outline-danger px-4 rounded-pill fw-bold" onClick={() => actOnReport(selectedReport._id, 'rejected')}>
+                      <XCircle size={18} className="me-2" /> Reject
+                    </button>
+                  </>
+                ) : (
+                  <span className="me-auto text-success fw-bold d-flex align-items-center gap-2 small"><ShieldCheck /> This case is closed.</span>
+                )}
+                <button className="btn btn-dark px-4 rounded-pill fw-bold" onClick={() => setSelectedReport(null)}>Close</button>
               </div>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
 };
 
-export default CourseDiscussions;
+export default CourseDiscussions; 

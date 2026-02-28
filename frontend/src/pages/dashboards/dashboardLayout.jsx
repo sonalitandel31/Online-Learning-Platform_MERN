@@ -7,7 +7,6 @@ import {
   FaChartLine,
   FaClipboardList,
   FaChevronDown,
-  FaChevronUp,
   FaSignOutAlt,
   FaUsers,
   FaRupeeSign,
@@ -21,7 +20,6 @@ const findActiveSectionLabel = (links, pathname) => {
   for (const section of links) {
     if (!section) continue;
 
-    // if section itself has a path (future-proof)
     if (section.path && pathname.startsWith(section.path)) return section.label;
 
     if (Array.isArray(section.children)) {
@@ -35,11 +33,10 @@ const findActiveSectionLabel = (links, pathname) => {
   return null;
 };
 
-
 export default function DashboardLayout({ sidebarLinks, children }) {
-  const [openSections, setOpenSections] = useState({});
-  // Mobile par default false (close) rahega
-  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 992);
+  // Changed state to hold only a single active section name (string)
+  const [openSection, setOpenSection] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 992);
 
   const location = useLocation();
@@ -50,7 +47,6 @@ export default function DashboardLayout({ sidebarLinks, children }) {
     const handleResize = () => {
       const mobile = window.innerWidth < 992;
       setIsMobile(mobile);
-      // Agar screen resize hoke mobile size pe aaye toh sidebar close kar do
       if (mobile) {
         setIsSidebarOpen(false);
       } else {
@@ -58,6 +54,7 @@ export default function DashboardLayout({ sidebarLinks, children }) {
       }
     };
 
+    handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
@@ -66,14 +63,13 @@ export default function DashboardLayout({ sidebarLinks, children }) {
     const activeLabel = findActiveSectionLabel(sidebarLinks, location.pathname);
     if (!activeLabel) return;
 
-    setOpenSections({ [activeLabel]: true });
+    // Open the section corresponding to the current URL route
+    setOpenSection(activeLabel);
   }, [location.pathname, sidebarLinks]);
 
   const toggleSection = (label) => {
-    setOpenSections((prev) => ({
-      ...prev,
-      [label]: !prev[label],
-    }));
+    // If clicking the already open section, close it. Otherwise, open the new one (closing others).
+    setOpenSection((prev) => (prev === label ? "" : label));
   };
 
   const handleLogout = () => {
@@ -84,64 +80,21 @@ export default function DashboardLayout({ sidebarLinks, children }) {
     window.location.reload();
   };
 
+  const isActive = (path) => location.pathname.startsWith(path);
+
   const styles = {
-    sidebar: {
-      backgroundColor: "#6f42c1",
-      minHeight: "100vh",
-      width: isSidebarOpen ? "340px" : "0px",
+    layout: {
       display: "flex",
-      flexDirection: "column",
-      padding: isSidebarOpen ? "2rem 1rem" : "0px",
-      position: isMobile ? "fixed" : "relative",
-      zIndex: 1050,
-      transition: "all 0.3s ease",
-      overflowX: "hidden",
-      boxShadow: isMobile && isSidebarOpen ? "4px 0px 10px rgba(0,0,0,0.2)" : "none",
-    },
-    sidebarLink: {
-      color: "white",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: "10px",
-      padding: "10px 15px",
-      borderRadius: "8px",
-      marginBottom: "8px",
-      textDecoration: "none",
-      fontWeight: 500,
-      cursor: "pointer",
-      transition: "background 0.3s",
-      whiteSpace: "nowrap",
-    },
-    nestedLink: {
-      paddingLeft: "35px",
-      fontSize: "0.9rem",
-      display: "flex",
-      alignItems: "center",
-      gap: "10px",
-      marginBottom: "6px",
-      textDecoration: "none",
-      color: "white",
-      borderRadius: "6px",
-      padding: "8px 12px",
-      transition: "background 0.3s",
-      whiteSpace: "nowrap",
-    },
-    main: {
-      flexGrow: 1,
-      padding: isMobile ? "15px" : "30px",
-      backgroundColor: "#f9f7fc",
-      minHeight: "100vh",
-      width: "100%",
-      transition: "all 0.3s ease",
-      marginTop: isMobile ? "60px" : "0px",
+      height: "100vh",
+      overflow: "hidden",
+      backgroundColor: "#f8f9fc",
     },
     mobileHeader: {
       display: isMobile ? "flex" : "none",
       alignItems: "center",
       justifyContent: "space-between",
       padding: "0 20px",
-      height: "60px",
+      height: "65px",
       backgroundColor: "#6f42c1",
       color: "white",
       position: "fixed",
@@ -149,113 +102,279 @@ export default function DashboardLayout({ sidebarLinks, children }) {
       left: 0,
       right: 0,
       zIndex: 1040,
-    }
+      boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+    },
+    sidebar: {
+      backgroundColor: "#6f42c1",
+      width: "280px",
+      display: "flex",
+      flexDirection: "column",
+      position: isMobile ? "fixed" : "relative",
+      top: 0,
+      bottom: 0,
+      left: 0,
+      zIndex: 1050,
+      transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+      transform: isMobile
+        ? isSidebarOpen
+          ? "translateX(0)"
+          : "translateX(-100%)"
+        : "translateX(0)",
+      boxShadow: isMobile && isSidebarOpen ? "4px 0px 20px rgba(0,0,0,0.25)" : "none",
+    },
+    sidebarHeader: {
+      padding: "24px 20px",
+      textAlign: "center",
+    },
+    navContainer: {
+      flexGrow: 1,
+      overflowY: "auto",
+      padding: "0 12px 20px 12px",
+    },
+    sidebarLink: {
+      color: "white",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "12px",
+      padding: "12px 16px",
+      borderRadius: "8px",
+      marginBottom: "6px",
+      textDecoration: "none",
+      fontWeight: 600,
+      fontSize: "0.95rem",
+      cursor: "pointer",
+      transition: "background-color 0.2s ease",
+      userSelect: "none",
+    },
+    nestedContainer: {
+      paddingLeft: "26px",
+      borderLeft: "2px solid rgba(255, 255, 255, 0.2)",
+      marginLeft: "24px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "4px",
+      overflow: "hidden",
+      transition: "max-height 0.35s ease-in-out, opacity 0.3s ease-in-out, margin 0.3s ease-in-out",
+    },
+    nestedLink: {
+      fontSize: "0.85rem",
+      display: "flex",
+      alignItems: "center",
+      textDecoration: "none",
+      color: "rgba(255, 255, 255, 0.8)",
+      borderRadius: "6px",
+      padding: "10px 12px",
+      fontWeight: 500,
+      whiteSpace: "nowrap",
+    },
+    main: {
+      flexGrow: 1,
+      padding: isMobile ? "85px 15px 20px 15px" : "30px 40px",
+      overflowY: "auto",
+      position: "relative",
+    },
+    backdrop: {
+      position: "fixed",
+      inset: 0,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      zIndex: 1045,
+      opacity: isSidebarOpen ? 1 : 0,
+      visibility: isSidebarOpen ? "visible" : "hidden",
+      transition: "all 0.3s ease",
+    },
+    logoutBtn: {
+      margin: "15px",
+      backgroundColor: "rgba(220, 53, 69, 0.9)",
+      justifyContent: "center",
+      padding: "12px",
+    },
   };
 
-  // const isActive = (path) => location.pathname === path;
-  const isActive = (path) => location.pathname.startsWith(path);
-
   return (
-    <div style={{ display: "flex", position: "relative" }}>
+    <>
+      <style>{`
+        .sidebar-scroll::-webkit-scrollbar {
+          width: 6px;
+        }
+        .sidebar-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .sidebar-scroll::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.15);
+          border-radius: 10px;
+        }
+        .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+        .nav-item:hover {
+          background-color: rgba(255, 255, 255, 0.1) !important;
+        }
+        .child-nav {
+          transition: all 0.2s ease;
+        }
+        .child-nav:hover {
+          background-color: rgba(255, 255, 255, 0.15) !important;
+          color: white !important;
+          transform: translateX(4px);
+        }
+      `}</style>
 
-      <div style={styles.mobileHeader}>
-        <h5 className="m-0 fw-bold">Dashboard</h5>
-        <button
-          className="btn text-white p-0"
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        >
-          {isSidebarOpen ? <FaTimes size={24} /> : <FaBars size={24} />}
-        </button>
-      </div>
-
-      {isMobile && isSidebarOpen && (
-        <div
-          onClick={() => setIsSidebarOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            zIndex: 1049
-          }}
-        />
-      )}
-
-      <div style={styles.sidebar}>
-        <h3 className="text-center fw-bold mb-5 text-white">
-          <Link
-            to={userRole === "admin" ? "/admin-dashboard" : "/instructor-dashboard"}
-            style={{ textDecoration: "none", color: "white" }}
+      <div style={styles.layout}>
+        <div style={styles.mobileHeader}>
+          <h5 className="m-0 fw-bold" style={{ letterSpacing: "0.5px" }}>
+            My Dashboard
+          </h5>
+          <button
+            className="btn text-white p-0"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           >
-            Dashboard
-          </Link>
-        </h3>
-
-        <div className="flex-grow-1">
-          {Array.isArray(sidebarLinks) &&
-            sidebarLinks.map((link, idx) => (
-              <div key={idx}>
-                <div
-                  style={{
-                    ...styles.sidebarLink,
-                    backgroundColor: openSections[link.label] ? "#5931a0" : "transparent",
-                  }}
-                  onClick={() => toggleSection(link.label)}
-                >
-                  <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    {link.icon} {link.label}
-                  </span>
-                  {Array.isArray(link.children) &&
-                    (openSections[link.label] ? <FaChevronUp /> : <FaChevronDown />)}
-                </div>
-
-                {Array.isArray(link.children) &&
-                  openSections[link.label] &&
-                  link.children.map((child, cidx) =>
-                    child?.path && child?.label ? (
-                      <Link
-                        key={cidx}
-                        to={child.path}
-                        onClick={() => isMobile && setIsSidebarOpen(false)}
-                        style={{
-                          ...styles.nestedLink,
-                          backgroundColor: isActive(child.path) ? "#5931a0" : "transparent",
-                        }}
-                      >
-                        - {child.label}
-                      </Link>
-                    ) : null
-                  )}
-              </div>
-            ))}
+            {isSidebarOpen ? <FaTimes size={24} /> : <FaBars size={24} />}
+          </button>
         </div>
 
-        <hr style={{ borderColor: "rgba(255,255,255,0.3)" }} />
+        {isMobile && (
+          <div style={styles.backdrop} onClick={() => setIsSidebarOpen(false)} />
+        )}
 
-        <div
-          style={{
-            ...styles.sidebarLink,
-            backgroundColor: "#dc3545",
-            justifyContent: "center",
-          }}
-          onClick={handleLogout}
-        >
-          <FaSignOutAlt style={{ marginRight: "10px" }} />
-          Logout
+        <div style={styles.sidebar}>
+          <div style={styles.sidebarHeader}>
+            <h4 className="m-0 fw-bold">
+              <Link
+                to={userRole === "admin" ? "/admin-dashboard" : "/instructor-dashboard"}
+                style={{ textDecoration: "none", color: "white", letterSpacing: "1px" }}
+              >
+                Dashboard
+              </Link>
+            </h4>
+          </div>
+
+          <div style={styles.navContainer} className="sidebar-scroll">
+            {Array.isArray(sidebarLinks) &&
+              sidebarLinks.map((link, idx) => {
+                // Check if this specific link is the currently open one
+                const isOpen = openSection === link.label;
+
+                return (
+                  <div key={idx}>
+                    <div
+                      className="nav-item"
+                      style={{
+                        ...styles.sidebarLink,
+                        backgroundColor: isOpen ? "rgba(0, 0, 0, 0.15)" : "transparent",
+                      }}
+                      onClick={() => toggleSection(link.label)}
+                    >
+                      <span style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <span style={{ opacity: isOpen ? 1 : 0.8, fontSize: "1.1rem" }}>
+                          {link.icon}
+                        </span>
+                        {link.label}
+                      </span>
+                      {Array.isArray(link.children) && (
+                        <FaChevronDown
+                          size={12}
+                          style={{
+                            transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                            transition: "transform 0.3s ease-in-out"
+                          }}
+                        />
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        ...styles.nestedContainer,
+                        maxHeight: isOpen ? "500px" : "0px",
+                        opacity: isOpen ? 1 : 0,
+                        marginTop: isOpen ? "4px" : "0px",
+                        marginBottom: isOpen ? "12px" : "0px",
+                      }}
+                    >
+                      {Array.isArray(link.children) &&
+                        link.children.map((child, cidx) =>
+                          child?.path && child?.label ? (
+                            <Link
+                              key={cidx}
+                              to={child.path}
+                              onClick={() => isMobile && setIsSidebarOpen(false)}
+                              className="child-nav"
+                              style={{
+                                ...styles.nestedLink,
+                                backgroundColor: isActive(child.path)
+                                  ? "rgba(255, 255, 255, 0.2)"
+                                  : "transparent",
+                                color: isActive(child.path) ? "white" : "rgba(255, 255, 255, 0.7)",
+                                fontWeight: isActive(child.path) ? 600 : 500,
+                              }}
+                            >
+                              {child.label}
+                            </Link>
+                          ) : null
+                        )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+
+          <div
+            className="nav-item"
+            style={{ ...styles.sidebarLink, ...styles.logoutBtn }}
+            onClick={handleLogout}
+          >
+            <FaSignOutAlt /> Logout
+          </div>
+        </div>
+
+        <div style={styles.main} className="sidebar-scroll">
+          <div className="container-fluid p-0">
+            {children}
+          </div>
         </div>
       </div>
-
-      <div style={styles.main}>
-        <div className="container-fluid">
-          {children}
-        </div>
-      </div>
-    </div>
+    </>
   );
 }
 
 export const instructorSidebarLinks = [
   {
-    label: "Dashboard & Insights",
+    label: "Course Management",
+    icon: <FaBook />,
+    children: [
+      { label: "My Courses", path: "/instructor-dashboard/instructor_courses" },
+      { label: "Add New Course", path: "/instructor-dashboard/add_courses" },
+      { label: "Pending Approvals", path: "/instructor-dashboard/pending_approvals" },
+      { label: "Manage Lessons", path: "/instructor-dashboard/manage_lessons" },
+      { label: "Manage Exams", path: "/instructor-dashboard/manage_exams" },
+    ],
+  },
+  {
+    label: "Students & Community",
+    icon: <FaUsers />,
+    children: [
+      { label: "Enrolled Students", path: "/instructor-dashboard/enrolled_students" },
+      { label: "Course Discussions", path: "/instructor-dashboard/course-discussions" },
+    ],
+  },
+  {
+    label: "Categories",
+    icon: <FaClipboardList />,
+    children: [
+      { label: "Request Category", path: "/instructor-dashboard/request-category" },
+    ],
+  },
+  {
+    label: "Earnings & Payouts",
+    icon: <FaRupeeSign />,
+    children: [
+      { label: "My Earnings", path: "/instructor-dashboard/earnings" },
+      { label: "Payout History", path: "/instructor-dashboard/payout-history" },
+      { label: "Platform Policies", path: "/instructor-dashboard/platform-rules" }
+    ],
+  },
+  {
+    label: "Platform Insights",
     icon: <FaChartLine />,
     children: [
       { label: "Engagement (DAU)", path: "/instructor-dashboard/engagement-analytics" },
@@ -268,44 +387,6 @@ export const instructorSidebarLinks = [
       { label: "Student Progress", path: "/instructor-dashboard/student_progress" },
     ],
   },
-
-  {
-    label: "Course Management",
-    icon: <FaBook />,
-    children: [
-      { label: "My Courses", path: "/instructor-dashboard/instructor_courses" },
-      { label: "Add New Course", path: "/instructor-dashboard/add_courses" },
-      { label: "Pending Approvals", path: "/instructor-dashboard/pending_approvals" },
-      { label: "Manage Lessons", path: "/instructor-dashboard/manage_lessons" },
-      { label: "Manage Exams", path: "/instructor-dashboard/manage_exams" },
-    ],
-  },
-
-  {
-    label: "Students & Community",
-    icon: <FaUsers />,
-    children: [
-      { label: "Enrolled Students", path: "/instructor-dashboard/enrolled_students" },
-      { label: "Course Discussions", path: "/instructor-dashboard/course-discussions" },
-    ],
-  },
-
-  {
-    label: "Categories",
-    icon: <FaClipboardList />,
-    children: [
-      { label: "Request Category", path: "/instructor-dashboard/request-category" },
-    ],
-  },
-
-  {
-    label: "Earnings & Payouts",
-    icon: <FaRupeeSign />,
-    children: [
-      { label: "My Earnings", path: "/instructor-dashboard/earnings" },
-      { label: "Payout History", path: "/instructor-dashboard/payout-history" },
-    ],
-  },
 ];
 
 export const adminSidebarLinks = [
@@ -316,7 +397,6 @@ export const adminSidebarLinks = [
       { label: "All Users", path: "/admin-dashboard/users" },
     ],
   },
-
   {
     label: "Course Management",
     icon: <FaBook />,
@@ -326,7 +406,6 @@ export const adminSidebarLinks = [
       { label: "Rejected Courses", path: "/admin-dashboard/rejected-courses" },
     ],
   },
-
   {
     label: "Categories",
     icon: <FaClipboardList />,
@@ -335,7 +414,6 @@ export const adminSidebarLinks = [
       { label: "Suggestions", path: "/admin-dashboard/category-suggestions" },
     ],
   },
-
   {
     label: "Payments & Finance",
     icon: <FaRupeeSign />,
@@ -345,7 +423,13 @@ export const adminSidebarLinks = [
       { label: "Transactions", path: "/admin-dashboard/transactions" },
     ],
   },
-
+  {
+    label: "Subscription & Plans",
+    icon: <FaRupeeSign />,
+    children: [
+      { label: "Manage Plans", path: "/admin-dashboard/subscription-plans" },
+    ],
+  },
   {
     label: "Analytics & Reports",
     icon: <FaChartLine />,
@@ -358,13 +442,19 @@ export const adminSidebarLinks = [
       { label: "Course Performance", path: "/admin-dashboard/reports/courses" },
     ],
   },
-
   {
     label: "Support & Messages",
     icon: <FaBell />,
     children: [
       { label: "Contact Messages", path: "/admin-dashboard/contact-messages" },
       { label: "Forum Discussions", path: "/admin-dashboard/discussions" },
+    ],
+  },
+  {
+    label: "Settings",
+    icon: <FaClipboardList />,
+    children: [
+      { label: "System Settings", path: "/admin-dashboard/system-settings" },
     ],
   },
 ];

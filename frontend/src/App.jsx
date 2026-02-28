@@ -67,6 +67,11 @@ import InstructorScore from "./pages/dashboards/instructor/Analytics/InstructorS
 import AdminInstructorRanking from "./pages/dashboards/admin/Analytics/AdminInstructorRanking";
 import AdminHeatmap from "./pages/dashboards/admin/Analytics/AdminHeatmap";
 import AdminPlatformRisk from "./pages/dashboards/admin/Analytics/AdminPlatformRisk";
+import SubscriptionPlans from "./pages/dashboards/student/SubscriptionPlans";
+import MySubscription from "./pages/dashboards/student/MySubscription";
+import AdminSubscriptionPlans from "./pages/dashboards/admin/AdminSubscriptionPlans";
+import SystemSettingsPage from "./pages/dashboards/admin/SystemSettingsPage";
+import PlatformRules from "./pages/dashboards/instructor/platformRules";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -104,6 +109,8 @@ function App() {
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/support" element={<Support />} />
+        <Route path="/subscription-plans" element={<SubscriptionPlans />} />
+        <Route path="/me/subscription" element={<MySubscription />} />
 
         <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
           <Route path="/admin-dashboard" element={<AdminDashboard />}>
@@ -128,6 +135,8 @@ function App() {
             <Route path="reports/courses" element={<CoursePerformance />} />
             <Route path="contact-messages" element={<AdminContactMessages />} />
             <Route path="discussions" element={<ForumDiscussions />} />
+            <Route path="subscription-plans" element={<AdminSubscriptionPlans />} />
+            <Route path="system-settings" element={<SystemSettingsPage />} />
           </Route>
         </Route>
 
@@ -141,6 +150,7 @@ function App() {
             <Route path="enrolled_students" element={<EnrolledStudents />} />
             <Route path="manage_exams" element={<ManageExams />} />
             <Route path="exam_results" element={<ExamResults />} />
+            <Route path="platform-rules" element={<PlatformRules />} />
             <Route path="earnings" element={<InstructorEarnings />} />
             <Route path="payout-history" element={<PayoutHistory />} />
             <Route path="engagement-analytics" element={<EngagementAnalytics />} />

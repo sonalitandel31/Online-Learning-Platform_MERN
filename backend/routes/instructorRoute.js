@@ -2,41 +2,48 @@ const express = require("express");
 const router = express.Router();
 const instructorController = require("../controller/instructorController");
 const authMiddleware = require("../middleware/authMiddleware");
+const roleMiddleware = require("../middleware/roleMiddleware");
 
 const { uploadLessonFile, uploadThumbnailFile } = instructorController;
 
-router.get("/dashboard", authMiddleware, instructorController.dashboard);
+// protect all instructor routes
+router.use(authMiddleware, roleMiddleware(["instructor"]));
 
-router.get("/courses", authMiddleware, instructorController.courses);
-router.post("/create-course", authMiddleware, instructorController.createCourse);
-router.put("/course/:courseId", authMiddleware, instructorController.updateCourse);
+router.get("/dashboard", instructorController.dashboard);
 
-router.put("/course/:courseId/status",authMiddleware,instructorController.updateCourseStatus);
-router.delete("/course/:courseId", authMiddleware, instructorController.deleteCourse);
+router.get("/courses", instructorController.courses);
+router.post("/create-course", instructorController.createCourse);
+router.put("/course/:courseId", instructorController.updateCourse);
 
-router.post("/lesson/upload",authMiddleware,uploadLessonFile.single("file"),instructorController.uploadLesson);
-router.post("/course/upload-thumbnail",authMiddleware,uploadThumbnailFile.single("thumbnail"),instructorController.uploadThumbnail);
+router.put("/course/:courseId/status", instructorController.updateCourseStatus);
+router.delete("/course/:courseId", instructorController.deleteCourse);
 
-router.get("/course/:courseId/lessons",authMiddleware,instructorController.getLessonsByCourse);
-router.post("/course/:courseId/add-lesson",authMiddleware,instructorController.addLesson);
-router.put("/lesson/:lessonId", authMiddleware, instructorController.updateLesson);
-router.delete("/lesson/:lessonId", authMiddleware, instructorController.deleteLesson);
-router.put("/course/:courseId/reorder-lessons",authMiddleware,instructorController.reorderLessons);
+router.post("/lesson/upload", uploadLessonFile.single("file"), instructorController.uploadLesson);
+router.post( "/course/upload-thumbnail", uploadThumbnailFile.single("thumbnail"), instructorController.uploadThumbnail);
 
-router.get("/course/:courseId/students",authMiddleware,instructorController.getStudents);
-router.get("/enrolled-students",authMiddleware,instructorController.getEnrolledStudents);
-router.get("/students-progress",authMiddleware,instructorController.getStudentProgress);
+router.get("/course/:courseId/lessons", instructorController.getLessonsByCourse);
+router.post("/course/:courseId/add-lesson", instructorController.addLesson);
+router.put("/lesson/:lessonId", instructorController.updateLesson);
+router.delete("/lesson/:lessonId", instructorController.deleteLesson);
+router.put("/course/:courseId/reorder-lessons", instructorController.reorderLessons);
 
-router.get("/course/:courseId/exams",authMiddleware,instructorController.getCourseExams);
-router.post("/course/:courseId/add-exam",authMiddleware,instructorController.addExam);
-router.put("/exam/:examId", authMiddleware, instructorController.updateExam);
-router.delete("/exam/:examId", authMiddleware, instructorController.deleteExam);
+router.get("/course/:courseId/students", instructorController.getStudents);
+router.get("/enrolled-students", instructorController.getEnrolledStudents);
+router.get("/students-progress", instructorController.getStudentProgress);
+
+router.get("/course/:courseId/exams", instructorController.getCourseExams);
+router.post("/course/:courseId/add-exam", instructorController.addExam);
+router.put("/exam/:examId", instructorController.updateExam);
+router.delete("/exam/:examId", instructorController.deleteExam);
+
+// MUST be protected
 router.get("/exam-results/:examId", instructorController.getExamResults);
 
-router.get("/course-analytics", authMiddleware, instructorController.getCourseAnalytics);
-router.get("/earnings", authMiddleware, instructorController.getInstructorEarnings);
-router.get("/payouts", authMiddleware, instructorController.getPayoutHistory);
+router.get("/course-analytics", instructorController.getCourseAnalytics);
+router.get("/earnings", instructorController.getInstructorEarnings);
+router.get("/payouts", instructorController.getPayoutHistory);
 
-router.get("/:courseId", authMiddleware, instructorController.getCourseDetail);
+// safer route name than "/:courseId"
+router.get("/course/:courseId/detail", instructorController.getCourseDetail);
 
 module.exports = router;
