@@ -12,6 +12,7 @@ function Home() {
   const [recLevel, setRecLevel] = useState("");
   const [showAllRecommended, setShowAllRecommended] = useState(false);
   const [showAllTrending, setShowAllTrending] = useState(false);
+  const [durationFilter, setDurationFilter] = useState("");
 
   const navigate = useNavigate();
   const BASE_URL = import.meta.env.VITE_BASE_URL;
@@ -29,7 +30,7 @@ function Home() {
 
   useEffect(() => {
     if (isLoggedIn) fetchRecommended();
-  }, [recLevel, isLoggedIn]);
+  }, [recLevel, durationFilter, isLoggedIn]);
 
   const fetchTrending = async () => {
     try {
@@ -40,9 +41,18 @@ function Home() {
 
   const fetchRecommended = async () => {
     try {
-      const res = await api.get(`/courses/recommended?level=${recLevel}`, { withCredentials: true });
+      const { minDuration, maxDuration } = durationRangeToSeconds(durationFilter);
+
+      const params = {};
+      if (recLevel) params.level = recLevel;
+      if (minDuration !== null) params.minDuration = minDuration;
+      if (maxDuration !== null) params.maxDuration = maxDuration;
+
+      const res = await api.get("/courses/recommended", { params, withCredentials: true });
       setRecommendedCourses(res.data.courses || []);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const fetchCategories = async () => {
@@ -104,7 +114,23 @@ function Home() {
             {course.description?.length > 70 ? course.description.substring(0, 70) + "..." : course.description}
           </p>
           <div className="mt-auto d-flex justify-content-between align-items-center">
-            <div className="small text-muted"><i className="fa fa-user-friends me-1"></i> {course.enrolledCount || 0}</div>
+            <div className="d-flex flex-column gap-1">
+              <div className="small text-muted">
+                <i className="fa fa-user-friends me-1"></i> {course.enrolledCount || 0}
+              </div>
+
+              {Number(course.totalDuration || 0) > 0 && (
+                <div className="small text-muted">
+                  ⏱ {formatDuration(course.totalDuration)}
+                </div>
+              )}
+
+              {formatRating(course.averageRating) && (
+                <div className="small text-muted">
+                  ⭐ {formatRating(course.averageRating)} ({course.totalRatings || 0})
+                </div>
+              )}
+            </div>
             <div className="fw-bold" style={{ color: BRAND_COLOR, fontSize: "1.1rem" }}>
               {course.price ? `₹${course.price}` : "Free"}
             </div>
@@ -114,8 +140,49 @@ function Home() {
     </div>
   );
 
+  const formatDuration = (seconds = 0) => {
+    const s = Math.max(0, Math.floor(Number(seconds || 0)));
+
+    if (s < 60) return `${s}s`;
+
+    const totalMinutes = Math.floor(s / 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours > 0) return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+    return `${totalMinutes}m`;
+  };
+
+  const durationRangeToSeconds = (val) => {
+    switch (val) {
+      case "lt_60":
+        return { minDuration: 0, maxDuration: 60 * 60 - 1 };
+
+      case "60_90":
+        return { minDuration: 60 * 60, maxDuration: 90 * 60 };
+
+      case "90_120":
+        return { minDuration: 90 * 60 + 1, maxDuration: 120 * 60 };
+
+      case "120_180":
+        return { minDuration: 120 * 60 + 1, maxDuration: 180 * 60 };
+
+      case "gt_180":
+        return { minDuration: 180 * 60 + 1, maxDuration: null };
+
+      default:
+        return { minDuration: null, maxDuration: null };
+    }
+  };
+
+  const formatRating = (avg = 0) => {
+    const n = Number(avg || 0);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return n.toFixed(1);
+  };
+
   return (
-    <div style={{ backgroundColor: "#fff", minHeight: "100vh", fontFamily: "'Inter', sans-serif", marginTop:"-1%" }}>
+    <div style={{ backgroundColor: "#fff", minHeight: "100vh", fontFamily: "'Inter', sans-serif", marginTop: "-1%" }}>
       <style>
         {`
           @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -142,12 +209,33 @@ function Home() {
         <section className="container py-5">
           <div className="d-flex justify-content-between align-items-end mb-4">
             <div><h2 className="fw-bold">Tailored for You</h2><p className="text-muted">Based on your interests</p></div>
-            <select className="form-select border-0 shadow-sm" style={{ width: "150px", backgroundColor: SOFT_BG }} value={recLevel} onChange={(e) => setRecLevel(e.target.value)}>
-              <option value="">All Levels</option>
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
-            </select>
+            <div className="d-flex gap-2">
+              <select
+                className="form-select border-0 shadow-sm"
+                style={{ width: "150px", backgroundColor: SOFT_BG }}
+                value={recLevel}
+                onChange={(e) => setRecLevel(e.target.value)}
+              >
+                <option value="">All Levels</option>
+                <option value="beginner">Beginner</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+
+              <select
+                className="form-select border-0 shadow-sm"
+                style={{ width: "190px", backgroundColor: SOFT_BG }}
+                value={durationFilter}
+                onChange={(e) => setDurationFilter(e.target.value)}
+              >
+                <option value="">Any Duration</option>
+                <option value="lt_60">&lt; 60 min</option>
+                <option value="60_90">1:00 – 1:30 hr</option>
+                <option value="90_120">1:30 – 2:00 hr</option>
+                <option value="120_180">2:00 – 3:00 hr</option>
+                <option value="gt_180">&gt; 3 hr</option>
+              </select>
+            </div>
           </div>
           <div className="row">
             {recommendedCourses.slice(0, showAllRecommended ? 8 : 4).map(course => <CourseCard key={course._id} course={course} />)}

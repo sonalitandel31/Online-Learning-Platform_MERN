@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+
 const Course = require("../models/courseModel");
 const Lesson = require("../models/lessonModel");
 const Exam = require("../models/examModel");
@@ -11,7 +13,55 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
+const ffmpeg = require("fluent-ffmpeg");
+const ffmpegPath = require("ffmpeg-static");
+const ffprobePath = require("ffprobe-static").path;
+
+ffmpeg.setFfmpegPath(ffmpegPath);
+ffmpeg.setFfprobePath(ffprobePath);
+
 const { checkSubscriptionForCourse } = require("../utils/subscriptionAccess");
+
+const getMediaDurationSeconds = (filePath) =>
+  new Promise((resolve) => {
+    ffmpeg.ffprobe(filePath, (err, metadata) => {
+      if (err) return resolve(0);
+      const sec = metadata?.format?.duration;
+      resolve(Number.isFinite(sec) ? Math.round(sec) : 0);
+    });
+  });
+
+const recalcCourseTotalDuration = async (courseId) => {
+  // always convert to ObjectId
+  const cid = mongoose.Types.ObjectId.isValid(courseId)
+    ? new mongoose.Types.ObjectId(courseId)
+    : courseId; // (fallback)
+
+  // Sum lesson durations (seconds)
+  const lessonAgg = await Lesson.aggregate([
+    { $match: { course: cid } },
+    { $group: { _id: "$course", total: { $sum: { $ifNull: ["$duration", 0] } } } },
+  ]);
+
+  // Sum exam durations (minutes -> seconds)
+  const examAgg = await Exam.aggregate([
+    { $match: { course: cid } },
+    { $group: { _id: "$course", totalMins: { $sum: { $ifNull: ["$duration", 0] } } } },
+  ]);
+
+  const lessonSeconds = lessonAgg?.[0]?.total || 0;
+  const examSeconds = (examAgg?.[0]?.totalMins || 0) * 60;
+
+  const total = lessonSeconds + examSeconds;
+
+  await Course.findByIdAndUpdate(cid, { totalDuration: total });
+};
+
+const getFixedLessonDurationSeconds = (contentType) => {
+  if (contentType === "pdf") return 15 * 60;  // 15 min = 900 sec
+  if (contentType === "text") return 10 * 60; // 10 min = 600 sec
+  return 0;
+};
 
 const lessonStorage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -26,10 +76,52 @@ const lessonStorage = multer.diskStorage({
 });
 const uploadLessonFile = multer({ storage: lessonStorage });
 
-const uploadLesson = (req, res) => {
+/* const uploadLesson = (req, res) => {
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
   const fullUrl = `${req.protocol}://${req.get("host")}/uploads/lessons/${req.file.filename}`;
   res.json({ fileUrl: fullUrl });
+}; */
+
+const uploadLesson = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+    // Full URL for client
+    const fullUrl = `${req.protocol}://${req.get("host")}/uploads/lessons/${req.file.filename}`;
+
+    // Absolute path for ffprobe
+    const absPath = path.join(process.cwd(), "uploads", "lessons", req.file.filename);
+
+    // Detect file type by extension
+    const ext = path.extname(req.file.originalname).toLowerCase();
+
+    let duration = 0;
+
+    // If video => calculate real duration
+    const videoExts = [".mp4", ".mkv", ".mov", ".avi", ".webm"];
+    if (videoExts.includes(ext)) {
+      duration = await getMediaDurationSeconds(absPath);
+    }
+
+    // If pdf => fixed 15 mins (optional, your rule)
+    if (ext === ".pdf") {
+      duration = 15 * 60;
+    }
+
+    // If text file uploaded (optional) => fixed 10 mins
+    const textExts = [".txt", ".md", ".doc", ".docx"];
+    if (textExts.includes(ext)) {
+      duration = 10 * 60;
+    }
+
+    return res.json({
+      fileUrl: fullUrl,
+      duration, // seconds
+    });
+  } catch (error) {
+    console.error("uploadLesson error:", error);
+    return res.status(500).json({ message: "Upload failed", error: error.message });
+  }
 };
 
 const thumbnailStorage = multer.diskStorage({
@@ -118,7 +210,7 @@ const courses = async (req, res) => {
       .populate("category", "name")
       .populate({
         path: "lessons",
-        select: "title contentType fileUrl description isPreviewFree createdAt",
+        select: "title contentType fileUrl description isPreviewFree duration createdAt",
         options: { sort: { createdAt: 1 } },
       })
       .populate({
@@ -214,19 +306,18 @@ const getCourseDetail = async (req, res) => {
       .populate("instructor", "name email profilePic")
       .populate({
         path: "lessons",
-        select: "title contentType fileUrl description isPreviewFree createdAt",
+        select: "title contentType fileUrl description isPreviewFree duration createdAt",
         options: { sort: { createdAt: 1 } },
       })
       .populate({
         path: "exams",
-        // IMPORTANT: do NOT blindly include questions
         select: "title duration questions createdAt",
         options: { sort: { createdAt: 1 } },
       });
 
     if (!course) return res.status(404).json({ message: "Course not found" });
 
-    // ✅ free course: allow everything (but still sanitize exam answers)
+    // free course: allow everything (but still sanitize exam answers)
     const isPaid = Number(course.price || 0) > 0;
 
     let access = { ok: true, type: "free" };
@@ -364,8 +455,10 @@ const getLessonsByCourse = async (req, res) => {
     const course = await Course.findOne({ _id: courseId, instructor: instructorId });
     if (!course) return res.status(404).json({ message: "Course not found" });
 
-    const lessons = await Lesson.find({ course: courseId }).sort({ createdAt: 1 });
-
+    const lessons = await Lesson.find({ course: courseId })
+      .select("title contentType fileUrl description isPreviewFree duration createdAt")
+      .sort({ createdAt: 1 });
+      
     return res.json({
       lessons,
       lessonsCount: lessons.length,
@@ -379,7 +472,7 @@ const getLessonsByCourse = async (req, res) => {
 const addLesson = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const { title, contentType, fileUrl, description, isPreviewFree } = req.body;
+    const { title, contentType, fileUrl, description, isPreviewFree, duration } = req.body;
 
     if (!title || !contentType)
       return res.status(400).json({ message: "Title and contentType are required" });
@@ -390,17 +483,29 @@ const addLesson = async (req, res) => {
     if ((contentType === "video" || contentType === "pdf") && !fileUrl)
       return res.status(400).json({ message: "fileUrl is required for video/pdf lessons" });
 
+    // duration in seconds
+    let lessonDuration = 0;
+
+    if (contentType === "video") {
+      lessonDuration = Number(duration || 0); // from uploadLesson response
+    } else {
+      lessonDuration = getFixedLessonDurationSeconds(contentType); // pdf/text fixed
+    }
+
     const lesson = await Lesson.create({
       course: courseId,
       title,
       contentType,
-      fileUrl: fileUrl || null,
+      fileUrl: contentType === "text" ? null : (fileUrl || null),
       description,
       isPreviewFree: !!isPreviewFree,
+      duration: lessonDuration,
     });
 
-    course.lessons.push(lesson._id);
-    await course.save();
+    await Course.findByIdAndUpdate(courseId, { $push: { lessons: lesson._id } });
+
+    // recalc course total duration (lessons + exams)
+    await recalcCourseTotalDuration(courseId);
 
     res.status(201).json({ message: "Lesson added", lesson });
   } catch (error) {
@@ -412,16 +517,32 @@ const addLesson = async (req, res) => {
 const updateLesson = async (req, res) => {
   try {
     const { lessonId } = req.params;
-    const { title, contentType, fileUrl, description, isPreviewFree } = req.body;
+    const { title, contentType, fileUrl, description, isPreviewFree, duration } = req.body;
 
-    const lesson = await Lesson.findByIdAndUpdate(
+    const oldLesson = await Lesson.findById(lessonId);
+    if (!oldLesson) return res.status(404).json({ message: "Lesson not found" });
+
+    // duration in seconds
+    let lessonDuration = 0;
+    if (contentType === "video") lessonDuration = Number(duration || 0);
+    else lessonDuration = getFixedLessonDurationSeconds(contentType);
+
+    const updated = await Lesson.findByIdAndUpdate(
       lessonId,
-      { title, contentType, fileUrl: fileUrl || null, description, isPreviewFree: !!isPreviewFree },
+      {
+        title,
+        contentType,
+        fileUrl: contentType === "text" ? null : (fileUrl || null),
+        description,
+        isPreviewFree: !!isPreviewFree,
+        duration: lessonDuration,
+      },
       { new: true }
     );
 
-    if (!lesson) return res.status(404).json({ message: "Lesson not found" });
-    res.json({ message: "Lesson updated successfully", lesson });
+    await recalcCourseTotalDuration(updated.course);
+
+    res.json({ message: "Lesson updated successfully", lesson: updated });
   } catch (error) {
     console.error("Update lesson failed:", error);
     res.status(500).json({ message: "Lesson update failed", error });
@@ -431,10 +552,14 @@ const updateLesson = async (req, res) => {
 const deleteLesson = async (req, res) => {
   try {
     const { lessonId } = req.params;
+
     const lesson = await Lesson.findByIdAndDelete(lessonId);
     if (!lesson) return res.status(404).json({ message: "Lesson not found" });
 
     await Course.findByIdAndUpdate(lesson.course, { $pull: { lessons: lesson._id } });
+
+    await recalcCourseTotalDuration(lesson.course);
+
     res.json({ message: "Lesson deleted successfully" });
   } catch (error) {
     console.error("Delete lesson failed:", error);
@@ -587,6 +712,8 @@ const addExam = async (req, res) => {
     const exam = await Exam.create({ course: courseId, title, duration, questions });
     await Course.findByIdAndUpdate(courseId, { $push: { exams: exam._id } });
 
+    await recalcCourseTotalDuration(courseId);
+
     res.status(201).json({ message: "Exam created", exam });
   } catch (error) {
     console.error(error);
@@ -617,6 +744,9 @@ const updateExam = async (req, res) => {
     exam.duration = duration || exam.duration;
 
     await exam.save();
+
+    await recalcCourseTotalDuration(exam.course);
+
     res.status(200).json({ message: "Exam updated", exam });
   } catch (error) {
     console.error(error);
@@ -654,6 +784,8 @@ const deleteExam = async (req, res) => {
 
     await Exam.findByIdAndDelete(exam._id);
 
+    await recalcCourseTotalDuration(course._id);
+
     res.status(200).json({ message: "Exam deleted successfully" });
   } catch (error) {
     console.error("Exam deletion failed:", error);
@@ -661,7 +793,7 @@ const deleteExam = async (req, res) => {
   }
 };
 
-const getCourseExams = async (req, res) => {
+/* const getCourseExams = async (req, res) => {
   try {
     const { courseId } = req.params;
     const userId = req.user?._id;
@@ -695,7 +827,7 @@ const getCourseExams = async (req, res) => {
             questionsCount: Array.isArray(e.questions) ? e.questions.length : 0,
           }));
 
-          return res.status(200).json({ exams: formatted, access: true });  
+          return res.status(200).json({ exams: formatted, access: true });
         }
       }
     }
@@ -720,6 +852,65 @@ const getCourseExams = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Fetch exams failed" });
+  }
+}; */
+
+const getInstructorCourseExams = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const instructorId = req.user._id;
+
+    // Instructor ownership check
+    const course = await Course.findOne({ _id: courseId, instructor: instructorId })
+      .select("_id")
+      .lean();
+
+    if (!course) return res.status(404).json({ message: "Course not found" });
+
+    // Fetch all exams for this course
+    const exams = await Exam.find({ course: courseId })
+      .select("title duration questions createdAt")
+      .sort({ createdAt: 1 })
+      .lean();
+
+    // optional: add questionsCount for UI
+    const formatted = exams.map((e) => ({
+      ...e,
+      questionsCount: Array.isArray(e.questions) ? e.questions.length : 0,
+    }));
+
+    return res.json({ exams: formatted, examsCount: formatted.length });
+  } catch (err) {
+    console.error("getInstructorCourseExams error:", err);
+    return res.status(500).json({ message: "Failed to fetch exams" });
+  }
+};
+
+const getCourseDetailForInstructor = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const instructorId = req.user._id;
+
+    const course = await Course.findOne({ _id: courseId, instructor: instructorId })
+      .populate("category", "name")
+      .populate("instructor", "name email profilePic")
+      .populate({
+        path: "lessons",
+        select: "title contentType fileUrl description isPreviewFree duration createdAt",
+        options: { sort: { createdAt: 1 } },
+      })
+      .populate({
+        path: "exams",
+        select: "title duration questions createdAt",
+        options: { sort: { createdAt: 1 } },
+      });
+
+    if (!course) return res.status(404).json({ message: "Course not found" });
+
+    return res.json({ course: course.toObject() });
+  } catch (err) {
+    console.error("getCourseDetailForInstructor error:", err);
+    return res.status(500).json({ message: "Failed to fetch course detail" });
   }
 };
 
@@ -833,9 +1024,9 @@ module.exports = {
   addExam,
   updateExam,
   deleteExam,
-  getCourseExams,
-  updateExam,
-  deleteExam,
+  // getCourseExams,
+  getInstructorCourseExams,
+  getCourseDetailForInstructor,
   uploadLesson,
   uploadLessonFile,
   uploadThumbnail,

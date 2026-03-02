@@ -27,6 +27,12 @@ export default function ManageExams() {
   const [currentCourseId, setCurrentCourseId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // --- Exam Preview Modal (View Exams Only) ---
+  const [showExamPreview, setShowExamPreview] = useState(false);
+  const [previewCourse, setPreviewCourse] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+
   const [form, setForm] = useState({
     title: "",
     duration: "",
@@ -57,7 +63,10 @@ export default function ManageExams() {
 
         const coursesData = (res.data.courses || []).map((course) => ({
           ...course,
-          exams: [],
+          exams: (course.exams || []).map((ex) => ({
+            ...ex,
+            questionsCount: Array.isArray(ex.questions) ? ex.questions.length : 0,
+          })),
           examsCount:
             course.examsCount ??
             course.totalExams ??
@@ -89,45 +98,39 @@ export default function ManageExams() {
   }, [selectedCourseId]);
 
   const toggleCourse = async (courseId) => {
-    // toggle UI first
+    let shouldFetch = false;
+
     setCourses((prev) =>
-      prev.map((course) =>
-        course._id === courseId ? { ...course, expanded: !course.expanded } : course
-      )
+      prev.map((c) => {
+        if (c._id !== courseId) return c;
+        if (!c.expanded && (c.exams?.length || 0) === 0) shouldFetch = true;
+        return { ...c, expanded: !c.expanded };
+      })
     );
 
-    // if not fetched yet, fetch exams
-    const course = courses.find((c) => c._id === courseId);
-    if (course && course.exams.length === 0) {
-      try {
-        setCourses((prev) =>
-          prev.map((c) => (c._id === courseId ? { ...c, examsLoading: true } : c))
-        );
+    if (!shouldFetch) return;
 
-        const res = await api.get(`/instructor/course/${courseId}/exams`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    try {
+      setCourses((prev) =>
+        prev.map((c) => (c._id === courseId ? { ...c, examsLoading: true } : c))
+      );
 
-        const exams = res.data.exams || [];
+      const res = await api.get(`/instructor/course/${courseId}/exams`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-        setCourses((prev) =>
-          prev.map((c) =>
-            c._id === courseId
-              ? {
-                  ...c,
-                  exams,
-                  examsCount: res.data.examsCount ?? exams.length ?? c.examsCount ?? 0,
-                  examsLoading: false,
-                }
-              : c
-          )
-        );
-      } catch (err) {
-        setError("Failed to fetch exams");
-        setCourses((prev) =>
-          prev.map((c) => (c._id === courseId ? { ...c, examsLoading: false } : c))
-        );
-      }
+      setCourses((prev) =>
+        prev.map((c) =>
+          c._id === courseId
+            ? { ...c, exams: res.data.exams || [], examsCount: res.data.examsCount ?? (res.data.exams || []).length, examsLoading: false }
+            : c
+        )
+      );
+    } catch {
+      setError("Failed to fetch exams");
+      setCourses((prev) =>
+        prev.map((c) => (c._id === courseId ? { ...c, examsLoading: false } : c))
+      );
     }
   };
 
@@ -221,11 +224,11 @@ export default function ManageExams() {
             c._id !== currentCourseId
               ? c
               : {
-                  ...c,
-                  exams: c.exams.map((ex) =>
-                    ex._id === editingExam._id ? res.data.exam : ex
-                  ),
-                }
+                ...c,
+                exams: c.exams.map((ex) =>
+                  ex._id === editingExam._id ? res.data.exam : ex
+                ),
+              }
           )
         );
       } else {
@@ -238,10 +241,10 @@ export default function ManageExams() {
             c._id !== currentCourseId
               ? c
               : {
-                  ...c,
-                  exams: [...c.exams, res.data.exam],
-                  examsCount: (c.examsCount || 0) + 1, 
-                }
+                ...c,
+                exams: [...c.exams, res.data.exam],
+                examsCount: (c.examsCount || 0) + 1,
+              }
           )
         );
       }
@@ -269,15 +272,65 @@ export default function ManageExams() {
           c._id !== courseId
             ? c
             : {
-                ...c,
-                exams: c.exams.filter((ex) => ex._id !== examId),
-                examsCount: Math.max((c.examsCount || 1) - 1, 0), 
-              }
+              ...c,
+              exams: c.exams.filter((ex) => ex._id !== examId),
+              examsCount: Math.max((c.examsCount || 1) - 1, 0),
+            }
         )
       );
     } catch (err) {
       setError("Failed to delete exam");
     }
+  };
+
+  const openExamsPreview = async (courseId) => {
+    try {
+      setShowExamPreview(true);
+      setPreviewLoading(true);
+      setPreviewError("");
+
+      const course = courses.find((c) => c._id === courseId) || null;
+
+      // If exams already present
+      if (course && Array.isArray(course.exams) && course.exams.length > 0) {
+        setPreviewCourse(course);
+        return;
+      }
+
+      // Otherwise fetch
+      const res = await api.get(`/instructor/course/${courseId}/exams`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const exams = res.data?.exams || [];
+
+      // update main list too
+      setCourses((prev) =>
+        prev.map((c) =>
+          c._id === courseId
+            ? {
+              ...c,
+              exams,
+              examsCount: res.data.examsCount ?? exams.length,
+            }
+            : c
+        )
+      );
+
+      // preview course
+      setPreviewCourse({ ...(course || {}), _id: courseId, title: course?.title || "", exams });
+    } catch (err) {
+      console.error(err);
+      setPreviewError(err?.response?.data?.message || "Failed to load exams");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const closeExamsPreview = () => {
+    setShowExamPreview(false);
+    setPreviewCourse(null);
+    setPreviewError("");
   };
 
   if (loading) {
@@ -436,6 +489,19 @@ export default function ManageExams() {
               disabled={!isCourseEditable(course.status)}
             >
               <FaPlus size={12} /> Add New Exam
+            </button>
+            <button
+              className="btn-add"
+              type="button"
+              onClick={() => openExamsPreview(course._id)}
+              style={{
+                background: "rgba(111,66,193,0.12)",
+                color: colors.primary,
+                border: `1px solid rgba(111,66,193,0.25)`,
+                marginTop: 0,
+              }}
+            >
+              View Exams
             </button>
 
             {course.examsLoading ? (
@@ -704,6 +770,153 @@ export default function ManageExams() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {showExamPreview && (
+        <div style={modalOverlayStyle}>
+          <div
+            style={{
+              ...modalContentStyle,
+              maxWidth: "950px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <h3 style={{ margin: 0, color: colors.primary, fontWeight: 900 }}>
+                Exams Preview
+              </h3>
+
+              <button
+                onClick={closeExamsPreview}
+                style={{ border: "none", background: "transparent", fontSize: "28px", cursor: "pointer", color: "#94a3b8" }}
+              >
+                &times;
+              </button>
+            </div>
+
+            {previewLoading ? (
+              <div style={{ textAlign: "center", padding: "30px", color: colors.primary, fontWeight: 700 }}>
+                Loading exams...
+              </div>
+            ) : previewError ? (
+              <div style={{ background: "#fee2e2", color: "#991b1b", padding: "12px", borderRadius: "10px" }}>
+                {previewError}
+              </div>
+            ) : !previewCourse ? (
+              <div style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>
+                No course found.
+              </div>
+            ) : (previewCourse.exams || []).length === 0 ? (
+              <div style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>
+                No exams attached.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {(previewCourse.exams || []).map((ex, exIdx) => (
+                  <div
+                    key={ex._id || exIdx}
+                    style={{
+                      background: "#fff",
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: "14px",
+                      padding: "14px",
+                    }}
+                  >
+                    {/* Exam header */}
+                    <div style={{ fontWeight: 900, color: "#0f172a", display: "flex", alignItems: "center", gap: "10px" }}>
+                      <span>{exIdx + 1}. {ex.title}</span>
+
+                      <span
+                        style={{
+                          fontSize: "0.78rem",
+                          fontWeight: 900,
+                          background: "#e6f4ea",
+                          color: "#15803d",
+                          padding: "2px 10px",
+                          borderRadius: "999px",
+                        }}
+                      >
+                        {ex.duration} min
+                      </span>
+
+                      <span
+                        style={{
+                          fontSize: "0.78rem",
+                          fontWeight: 900,
+                          background: "#eef2ff",
+                          color: colors.primary,
+                          padding: "2px 10px",
+                          borderRadius: "999px",
+                        }}
+                      >
+                        {(ex.questions || []).length} Qs
+                      </span>
+                    </div>
+
+                    {/* Questions */}
+                    {(ex.questions || []).length === 0 ? (
+                      <div style={{ marginTop: "10px", color: "#94a3b8", fontStyle: "italic" }}>
+                        No questions provided.
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                        {(ex.questions || []).map((q, qIdx) => (
+                          <div
+                            key={q._id || qIdx}
+                            style={{
+                              background: "#f8fafc",
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: "12px",
+                              padding: "12px",
+                            }}
+                          >
+                            <div style={{ fontWeight: 800, marginBottom: "6px", color: "#0f172a" }}>
+                              Q{qIdx + 1}. {q.questionText}
+                            </div>
+
+                            <ul style={{ margin: 0, paddingLeft: "22px", color: "#334155" }}>
+                              {(q.options || []).map((opt, oIdx) => {
+                                const isCorrect = opt === q.correctAnswer;
+                                return (
+                                  <li
+                                    key={`${qIdx}-${oIdx}`}
+                                    style={{
+                                      marginBottom: "6px",
+                                      fontWeight: isCorrect ? 900 : 400,
+                                      color: isCorrect ? "#15803d" : "inherit",
+                                    }}
+                                  >
+                                    {opt} {isCorrect ? "✅" : ""}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+
+                           {/*  <div
+                              style={{
+                                marginTop: "10px",
+                                background: "#dcfce7",
+                                color: "#15803d",
+                                display: "inline-block",
+                                padding: "6px 10px",
+                                borderRadius: "10px",
+                                fontWeight: 900,
+                                fontSize: "0.85rem",
+                              }}
+                            >
+                              Correct Answer: {q.correctAnswer || "—"}
+                            </div> */}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

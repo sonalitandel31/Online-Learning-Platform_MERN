@@ -6,7 +6,6 @@ const roleMiddleware = require("../middleware/roleMiddleware");
 
 const { uploadLessonFile, uploadThumbnailFile } = instructorController;
 
-// protect all instructor routes
 router.use(authMiddleware, roleMiddleware(["instructor"]));
 
 router.get("/dashboard", instructorController.dashboard);
@@ -31,19 +30,19 @@ router.get("/course/:courseId/students", instructorController.getStudents);
 router.get("/enrolled-students", instructorController.getEnrolledStudents);
 router.get("/students-progress", instructorController.getStudentProgress);
 
-router.get("/course/:courseId/exams", instructorController.getCourseExams);
+// router.get("/course/:courseId/exams", instructorController.getCourseExams);
+router.get("/course/:courseId/exams", instructorController.getInstructorCourseExams);
 router.post("/course/:courseId/add-exam", instructorController.addExam);
 router.put("/exam/:examId", instructorController.updateExam);
 router.delete("/exam/:examId", instructorController.deleteExam);
 
-// MUST be protected
 router.get("/exam-results/:examId", instructorController.getExamResults);
 
 router.get("/course-analytics", instructorController.getCourseAnalytics);
 router.get("/earnings", instructorController.getInstructorEarnings);
 router.get("/payouts", instructorController.getPayoutHistory);
 
-// safer route name than "/:courseId"
 router.get("/course/:courseId/detail", instructorController.getCourseDetail);
+router.get("/course/:courseId/details", instructorController.getCourseDetailForInstructor);
 
 module.exports = router;

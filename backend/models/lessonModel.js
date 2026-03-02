@@ -25,14 +25,14 @@ const lessonSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  // 🕒 Add duration field
+  // Add duration field
   duration: {
     type: Number, // store in seconds
     default: 0
   }
 }, { timestamps: true });
 
-// 🧮 After lesson save/remove, recalc total course duration
+// After lesson save/remove, recalc total course duration
 lessonSchema.post(['save', 'remove'], async function () {
   const Course = require('./courseModel');
   const Lesson = mongoose.model("lesson");

@@ -2,17 +2,19 @@ const mongoose = require("mongoose");
 const courseModel = require("../models/courseModel");
 const categoryModel = require("../models/categoryModel");
 const studentModel = require("../models/studentModel");
-const instructorProfileModel = require("../models/instructorModel"); 
-const Enrollment = require("../models/enrollmentModel"); 
+const instructorProfileModel = require("../models/instructorModel");
+const Enrollment = require("../models/enrollmentModel");
+const Course = require("../models/courseModel");
+const Rating = require("../models/ratingModel");
 
 const { checkSubscriptionForCourse } = require("../utils/subscriptionAccess");
 
-const getCourses = async (req, res) => {
+/* const getCourses = async (req, res) => {
   try {
     const {
       search,
-      category,      // single
-      categories,    // multiple (comma-separated)
+      category,
+      categories,
       limit = 10,
       page = 1,
       approved,
@@ -51,6 +53,10 @@ const getCourses = async (req, res) => {
       .find(filter)
       .populate("instructor", "name email")
       .populate("category", "name")
+      .populate({
+        path: "lessons",
+        select: "duration",
+      })
       .sort(sortOption)
       .skip((parsedPage - 1) * parsedLimit)
       .limit(parsedLimit);
@@ -61,7 +67,128 @@ const getCourses = async (req, res) => {
           course: course._id,
           status: { $in: ["active", "completed"] },
         });
+
+        const lessonDurations = (course.lessons || []).map(l => Number(l.duration || 0));
+        const totalDuration = lessonDurations.reduce((sum, d) => sum + d, 0); // in minutes
+
         return { ...course.toObject(), totalEnrolled };
+      })
+    );
+
+    return res.json({
+      success: true,
+      courses: coursesWithEnrollment,
+      total,
+      page: parsedPage,
+      pages: Math.ceil(total / parsedLimit),
+    });
+  } catch (err) {
+    console.error("Get Courses Error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+}; */
+
+const getCourses = async (req, res) => {
+  try {
+    const {
+      search,
+      category,
+      categories,
+      limit = 10,
+      page = 1,
+      approved,
+      level,
+      minDuration,
+      maxDuration,
+      price,
+      paidOnly,
+      minRating,
+      sortBy = "newest",
+    } = req.query;
+
+    const parsedLimit = parseInt(limit);
+    const parsedPage = parseInt(page);
+
+    const filter = {};
+
+    // Only approved courses by default
+    if (approved === "true") filter.status = "approved";
+
+    // Search
+    if (search) {
+      filter.title = { $regex: search, $options: "i" };
+    }
+
+    // Category filter
+    if (categories) {
+      const ids = String(categories)
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
+
+      filter.category = { $in: ids };
+    } else if (category) {
+      filter.category = category;
+    }
+
+    // Level filter
+    if (level) {
+      filter.level = level;
+    }
+
+    // Price filter
+    if (price === "0") {
+      filter.price = 0;
+    }
+
+    if (paidOnly === "true") {
+      filter.price = { $gt: 0 };
+    }
+
+    // Duration filter (totalDuration stored in seconds)
+    if (minDuration || maxDuration) {
+      filter.totalDuration = {};
+      if (minDuration) filter.totalDuration.$gte = Number(minDuration);
+      if (maxDuration) filter.totalDuration.$lte = Number(maxDuration);
+    }
+
+    // Rating filter
+    if (minRating) {
+      filter.averageRating = { $gte: Number(minRating) };
+    }
+
+    // Sorting
+    let sortOption = { createdAt: -1 };
+
+    if (sortBy === "price_low") sortOption = { price: 1 };
+    if (sortBy === "price_high") sortOption = { price: -1 };
+    if (sortBy === "rating") sortOption = { averageRating: -1 };
+    if (sortBy === "newest") sortOption = { createdAt: -1 };
+
+    const total = await courseModel.countDocuments(filter);
+
+    const courses = await courseModel
+      .find(filter)
+      .populate("instructor", "name email")
+      .populate("category", "name")
+      .sort(sortOption)
+      .skip((parsedPage - 1) * parsedLimit)
+      .limit(parsedLimit)
+      .lean();
+
+    // Add enrollment count
+    const coursesWithEnrollment = await Promise.all(
+      courses.map(async (course) => {
+        const totalEnrolled = await Enrollment.countDocuments({
+          course: course._id,
+          status: { $in: ["active", "completed"] },
+        });
+
+        return {
+          ...course,
+          totalEnrolled,
+          enrolledCount: totalEnrolled,
+        };
       })
     );
 
@@ -91,10 +218,10 @@ const getTrendingCourses = async (req, res) => {
           course: course._id,
           status: { $in: ["active", "completed"] },
         });
-        return { 
-          ...course, 
+        return {
+          ...course,
           enrolledCount,
-          totalEnrolled: enrolledCount 
+          totalEnrolled: enrolledCount
         };
       })
     );
@@ -118,7 +245,20 @@ const getRecommendedCourses = async (req, res) => {
     let filter = { status: "approved" };
 
     if (level) {
-      filter.level = { $regex: new RegExp(`^${level}$`, "i") }; 
+      filter.level = { $regex: new RegExp(`^${level}$`, "i") };
+    }
+
+    const minD = Number(req.query.minDuration);
+    const maxD = Number(req.query.maxDuration);
+
+    if (!Number.isNaN(minD) && !Number.isNaN(maxD) && minD > maxD) {
+      return res.status(400).json({ success: false, message: "Invalid duration range" });
+    }
+
+    if (!Number.isNaN(minD) || !Number.isNaN(maxD)) {
+      filter.totalDuration = {};
+      if (!Number.isNaN(minD)) filter.totalDuration.$gte = minD;
+      if (!Number.isNaN(maxD)) filter.totalDuration.$lte = maxD;
     }
 
     let recommended = [];
@@ -134,9 +274,9 @@ const getRecommendedCourses = async (req, res) => {
           category: { $in: categoryIds },
           _id: { $nin: student.enrolledCourses || [] }
         })
-        .populate("category", "name")
-        .limit(8) // Increased to support the 'View More' row
-        .lean();
+          .populate("category", "name")
+          .limit(8) // Increased to support the 'View More' row
+          .lean();
       }
     }
 
@@ -201,7 +341,7 @@ const hasActiveEnrollment = async ({ userId, courseId }) => {
   const now = new Date();
   const enr = await Enrollment.findOne({ student: userId, course: courseId }).lean();
   return (
-    enr &&
+    !!enr &&
     enr.status !== "cancelled" &&
     (!enr.expiryDate || new Date(enr.expiryDate) >= now)
   );
@@ -222,7 +362,7 @@ const getCourseById = async (req, res) => {
       .populate("category", "name")
       .populate({
         path: "lessons",
-        select: "title contentType fileUrl description isPreviewFree createdAt",
+        select: "title contentType fileUrl description isPreviewFree duration createdAt",
         options: { sort: { createdAt: 1 } },
       })
       .populate({
@@ -247,6 +387,9 @@ const getCourseById = async (req, res) => {
     const userId = req.user?._id;
     if (!userId) {
       const obj = course.toObject();
+
+      obj.totalDuration = (obj.lessons || []).reduce((sum, l) => sum + Number(l.duration || 0), 0);
+
       obj.lessons = (obj.lessons || [])
         .filter((l) => l.isPreviewFree === true)
         .map(stripLessonUrl);
@@ -305,7 +448,7 @@ const getCourseById = async (req, res) => {
 const getCourseCategory = async (req, res) => {
   try {
     const categories = await categoryModel
-      .find({ status: "approved" })  
+      .find({ status: "approved" })
       .select("name _id status suggestedBy");
 
     res.json({ categories });
@@ -420,6 +563,120 @@ const deleteCourse = async (req, res) => {
   }
 };
 
+const getCourseRatings = async (req, res) => {
+  try {
+    const courseId = req.params.id;
+
+    if (!mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({ success: false, message: "Invalid course id" });
+    }
+
+    const page = Math.max(1, Number(req.query.page || 1));
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit || 10)));
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      Rating.find({ course: courseId })
+        .populate("student", "name email") // change fields if you want
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Rating.countDocuments({ course: courseId }),
+    ]);
+
+    return res.json({
+      success: true,
+      ratings: items,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    });
+  } catch (err) {
+    console.error("getCourseRatings error:", err);
+    return res.status(500).json({ success: false, message: err.message || "Server error" });
+  }
+};
+
+const getMyCourseRating = async (req, res) => {
+  try {
+    const courseId = req.params.id;
+    const userId = req.user?._id;
+
+    if (!mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({ success: false, message: "Invalid course id" });
+    }
+
+    const doc = await Rating.findOne({ course: courseId, student: userId })
+      .select("rating review createdAt updatedAt")
+      .lean();
+
+    return res.json({ success: true, rating: doc || null });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+};
+
+const rateCourse = async (req, res) => {
+  try {
+    const courseId = req.params.id;
+    const userId = req.user?._id;
+    const rating = Number(req.body.rating);
+    const review = String(req.body.review || "").trim();
+
+    if (!mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({ success: false, message: "Invalid course id" });
+    }
+
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ success: false, message: "Rating must be 1 to 5" });
+    }
+
+    // Only enrolled users can rate (recommended rule)
+    const ok = await hasActiveEnrollment({ userId, courseId });
+    if (!ok) {
+      return res.status(403).json({ success: false, message: "Enroll to rate this course" });
+    }
+
+    // upsert rating
+    await Rating.findOneAndUpdate(
+      { course: courseId, student: userId },
+      { $set: { rating, review } },
+      { upsert: true, new: true }
+    );
+
+    // recompute average from Rating collection
+    const agg = await Rating.aggregate([
+      { $match: { course: new mongoose.Types.ObjectId(courseId) } },
+      {
+        $group: {
+          _id: "$course",
+          avg: { $avg: "$rating" },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const avg = agg?.[0]?.avg || 0;
+    const count = agg?.[0]?.count || 0;
+
+    await Course.findByIdAndUpdate(courseId, {
+      averageRating: Number(avg.toFixed(2)),
+      totalRatings: count,
+    });
+
+    return res.json({
+      success: true,
+      message: "Rating saved",
+      averageRating: Number(avg.toFixed(2)),
+      totalRatings: count,
+    });
+  } catch (e) {
+    // duplicate key etc.
+    return res.status(500).json({ success: false, message: e.message });
+  }
+};
+
 module.exports = {
   getCourses,
   getCourseById,
@@ -430,4 +687,9 @@ module.exports = {
   createCategory,
   getRecommendedCourses,
   getTrendingCourses,
+  rateCourse,
+  getCourseRatings,
+  getMyCourseRating,
+  getMyCourseRating,
+  rateCourse,
 };

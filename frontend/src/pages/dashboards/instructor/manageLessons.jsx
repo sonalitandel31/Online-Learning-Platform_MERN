@@ -28,12 +28,19 @@ export default function ManageLessons() {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  // --- Lesson Preview Modal (View Lessons Only) ---
+  const [showLessonPreview, setShowLessonPreview] = useState(false);
+  const [previewCourse, setPreviewCourse] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+
   const [form, setForm] = useState({
     title: "",
     contentType: "video",
     fileUrl: "",
     description: "",
     isPreviewFree: false,
+    duration: 0,
   });
 
   // --- Theme Colors ---
@@ -45,6 +52,14 @@ export default function ManageLessons() {
     warning: "#d97706",
     bg: "#f8fafc",
     border: "#e2e8f0",
+  };
+
+  const buildFileUrl = (path) => {
+    if (!path) return "";
+    if (String(path).startsWith("http")) return path;
+
+    const base = (import.meta.env.VITE_BASE_URL || "").replace(/\/$/, "");
+    return `${base}/${String(path).replace(/^\//, "")}`;
   };
 
   useEffect(() => {
@@ -125,7 +140,10 @@ export default function ManageLessons() {
     const { name, value, type, checked } = e.target;
     setForm((prev) => {
       let newForm = { ...prev, [name]: type === "checkbox" ? checked : value };
-      if (name === "contentType" && value === "text") newForm.fileUrl = "";
+      if (name === "contentType") {
+        if (value === "text") newForm.fileUrl = "";
+        newForm.duration = 0;
+      }
       return newForm;
     });
   };
@@ -152,7 +170,8 @@ export default function ManageLessons() {
         uploadedPath = `/uploads/lessons/${filename}`;
       }
 
-      setForm((prev) => ({ ...prev, fileUrl: uploadedPath }));
+      // setForm((prev) => ({ ...prev, fileUrl: uploadedPath }));
+      setForm((prev) => ({ ...prev, fileUrl: uploadedPath, duration: Number(res.data.duration || 0) }));
     } catch (err) {
       setError("File upload failed");
     } finally {
@@ -176,6 +195,7 @@ export default function ManageLessons() {
         fileUrl: lesson.fileUrl,
         description: lesson.description,
         isPreviewFree: lesson.isPreviewFree,
+        duration: lesson.duration || 0,
       });
     } else {
       setEditingLesson(null);
@@ -185,6 +205,7 @@ export default function ManageLessons() {
         fileUrl: "",
         description: "",
         isPreviewFree: false,
+        duration: 0,
       });
     }
 
@@ -209,6 +230,7 @@ export default function ManageLessons() {
         contentType: form.contentType,
         description: form.description,
         isPreviewFree: form.isPreviewFree,
+        duration: form.duration,
         ...(form.contentType !== "text" && { fileUrl: form.fileUrl }),
       };
 
@@ -279,6 +301,81 @@ export default function ManageLessons() {
     } catch (err) {
       setError("Failed to delete lesson");
     }
+  };
+
+  const openLessonsPreview = async (courseId) => {
+    try {
+      setShowLessonPreview(true);
+      setPreviewLoading(true);
+      setPreviewError("");
+
+      // 1) current course find
+      const course = courses.find((c) => c._id === courseId) || null;
+
+      // 2) If lessons already present, use them
+      if (course && Array.isArray(course.lessons) && course.lessons.length > 0) {
+        setPreviewCourse(course);
+        return;
+      }
+
+      // 3) Otherwise fetch lessons from API
+      const res = await api.get(`/instructor/course/${courseId}/lessons`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const lessons = res.data?.lessons || [];
+
+      // 4) Update both preview + main courses state
+      setCourses((prev) =>
+        prev.map((c) =>
+          c._id === courseId
+            ? {
+              ...c,
+              lessons,
+              lessonsCount: res.data.lessonsCount ?? lessons.length,
+            }
+            : c
+        )
+      );
+
+      setPreviewCourse((prevCourse) => {
+        // ensure preview gets updated course object (fresh)
+        const updated = (courses.find((c) => c._id === courseId) || course || {});
+        return { ...updated, lessons };
+      });
+    } catch (err) {
+      console.error(err);
+      setPreviewError(err?.response?.data?.message || "Failed to load lessons");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const closeLessonsPreview = () => {
+    setShowLessonPreview(false);
+    setPreviewCourse(null);
+    setPreviewError("");
+  };
+
+  const formatDuration = (seconds = 0) => {
+    const totalSeconds = Number(seconds || 0);
+
+    if (totalSeconds < 60) {
+      return `${totalSeconds}s`;
+    }
+
+    const totalMinutes = Math.floor(totalSeconds / 60);
+    const remainingSeconds = totalSeconds % 60;
+
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours > 0) {
+      if (minutes === 0) return `${hours}h`;
+      return `${hours}h ${minutes}m`;
+    }
+
+    return `${totalMinutes}m`;
   };
 
   if (loading) {
@@ -414,6 +511,20 @@ export default function ManageLessons() {
               disabled={!isCourseEditable(course.status)}
             >
               <FaPlus size={12} /> Add New Lesson
+            </button>
+
+            <button
+              className="btn-add"
+              type="button"
+              onClick={() => openLessonsPreview(course._id)}
+              style={{
+                background: "rgba(111,66,193,0.12)",
+                color: colors.primary,
+                border: `1px solid rgba(111,66,193,0.25)`,
+                marginTop: 0,
+              }}
+            >
+              View Lessons
             </button>
 
             {course.lessonsLoading ? (
@@ -599,6 +710,162 @@ export default function ManageLessons() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {showLessonPreview && (
+        <div style={modalOverlayStyle}>
+          <div style={{ ...modalContentStyle, maxWidth: "900px", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <h3 style={{ margin: 0, color: colors.primary, fontWeight: 900 }}>
+                Lessons Preview
+              </h3>
+
+              <button
+                onClick={closeLessonsPreview}
+                style={{ border: "none", background: "transparent", fontSize: "28px", cursor: "pointer", color: "#94a3b8" }}
+              >
+                &times;
+              </button>
+            </div>
+
+            {previewLoading ? (
+              <div style={{ textAlign: "center", padding: "30px", color: colors.primary, fontWeight: 700 }}>
+                Loading lessons...
+              </div>
+            ) : previewError ? (
+              <div style={{ background: "#fee2e2", color: "#991b1b", padding: "12px", borderRadius: "10px" }}>
+                {previewError}
+              </div>
+            ) : !previewCourse ? (
+              <div style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>
+                No course found.
+              </div>
+            ) : (previewCourse.lessons || []).length === 0 ? (
+              <div style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>
+                No lessons attached.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {(previewCourse.lessons || []).map((l, idx) => {
+                  const type = String(l.contentType || "").toLowerCase();
+                  const src = buildFileUrl(l.fileUrl);
+
+                  return (
+                    <div
+                      key={l._id || idx}
+                      style={{
+                        background: "#fff",
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: "14px",
+                        padding: "14px",
+                      }}
+                    >
+                      {/* Lesson header */}
+                      <div style={{ fontWeight: 900, color: "#0f172a", display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span>{idx + 1}. {l.title}</span>
+
+                        <span
+                          style={{
+                            fontSize: "0.78rem",
+                            fontWeight: 900,
+                            background: "#f3e8ff",
+                            color: colors.primary,
+                            padding: "2px 10px",
+                            borderRadius: "999px",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          {type || "N/A"}
+                        </span>
+
+                        {l.isPreviewFree ? (
+                          <span
+                            style={{
+                              fontSize: "0.78rem",
+                              fontWeight: 900,
+                              background: "#e6f4ea",
+                              color: "#15803d",
+                              padding: "2px 10px",
+                              borderRadius: "999px",
+                            }}
+                          >
+                            FREE PREVIEW
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {/* Duration if exists */}
+                      {Number(l.duration || 0) > 0 ? (
+                        <div style={{ marginTop: "6px", color: "#64748b", fontSize: "0.85rem" }}>
+                          ⏱ {formatDuration(l.duration)}
+                        </div>
+                      ) : null}
+
+                      {/* TEXT */}
+                      {type === "text" || (!src && l.description) ? (
+                        <div
+                          style={{
+                            marginTop: "10px",
+                            whiteSpace: "pre-wrap",
+                            background: "#f8fafc",
+                            padding: "12px",
+                            borderRadius: "10px",
+                            color: "#334155",
+                          }}
+                        >
+                          {l.description || "No text content provided."}
+                        </div>
+                      ) : null}
+
+                      {/* VIDEO */}
+                      {type === "video" && src ? (
+                        <div style={{ marginTop: "12px" }}>
+                          <video
+                            controls
+                            src={src}
+                            style={{
+                              width: "100%",
+                              borderRadius: "10px",
+                              border: `1px solid ${colors.border}`,
+                              background: "#000",
+                            }}
+                          />
+                        </div>
+                      ) : null}
+
+                      {/* PDF */}
+                      {type === "pdf" && src ? (
+                        <div style={{ marginTop: "12px" }}>
+                          <iframe
+                            title={`pdf-${l._id || idx}`}
+                            src={src}
+                            style={{
+                              width: "100%",
+                              height: "480px",
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: "10px",
+                            }}
+                          />
+                        </div>
+                      ) : null}
+
+                      {/* fallback */}
+                      {!(
+                        (type === "text" || (!src && l.description)) ||
+                        (type === "video" && src) ||
+                        (type === "pdf" && src)
+                      ) ? (
+                        <div style={{ marginTop: "10px", color: "#94a3b8", fontStyle: "italic" }}>
+                          Content not available or format not supported.
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

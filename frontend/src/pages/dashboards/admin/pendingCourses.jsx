@@ -475,10 +475,10 @@ export default function PendingCourses() {
                                   );
                                 })}
                               </ul>
-
+{/* 
                               <div style={{ marginTop: "10px", color: "#15803d", fontWeight: 700, fontSize: "0.9rem", backgroundColor: "#dcfce7", padding: "6px 10px", borderRadius: "6px", display: "inline-block" }}>
                                 Correct Answer: {q.correctAnswer || "—"}
-                              </div>
+                              </div> */}
                             </div>
                           ))}
                         </div>

@@ -18,13 +18,16 @@ const courseSchema = new mongoose.Schema({
     review: {
         reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "user", default: null },
         reviewedAt: { type: Date, default: null },
-        rejectionReason: { type: String, default: null }, 
+        rejectionReason: { type: String, default: null },
         reviewNote: { type: String, default: "" },
     },
     totalDuration: {
         type: Number,
         default: 0
-    }
+    },
+    averageRating: { type: Number, default: 0 },
+    totalRatings: { type: Number, default: 0 },
+    
 }, { timestamps: true });
 
 courseSchema.virtual("formattedDuration").get(function () {

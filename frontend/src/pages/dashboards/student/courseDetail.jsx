@@ -1,38 +1,14 @@
-// CourseDetail.jsx (FULL UPDATED) ✅
-// - Individual enroll (free/paid) + subscription access + auto-enroll for subscription
-// - Unenroll updates UI instantly (no refresh needed)
-// - Renew for PAID course => Razorpay opens (no direct enroll bug)
-// - Receipt auto-open after successful payment (if receiptUrl returned)
-// - Removes duplicate flags & fixes unenroll API call + auth header
-
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../../api/api";
 import { track } from "../../../utils/track";
-import {
-  Eye,
-  Download,
-  PlayCircle,
-  BookOpen,
-  FileText,
-  CheckCircle,
-  Lock,
-  Award,
-  Info,
-  AlertTriangle,
-  ChevronRight,
-  Clock,
-  User,
-  BarChart,
-  MessageCircle,
-  ShieldAlert,
-  Trophy,
-} from "lucide-react";
+import { Eye, Download, PlayCircle, BookOpen, FileText, CheckCircle, Lock, Award, Info, AlertTriangle, ChevronRight, Clock, User, BarChart, MessageCircle, ShieldAlert, Trophy,} from "lucide-react";
+import RatingBox from "../../../components/RatingBox";
 
 const PLANS_ROUTE = "/subscription-plans";
 
 function CourseDetail() {
-  const { id } = useParams(); // courseId
+  const { id } = useParams(); 
   const navigate = useNavigate();
 
   const [course, setCourse] = useState(null);
@@ -561,7 +537,7 @@ function CourseDetail() {
       try {
         await api.post(
           `/courses/${course?._id}/lessons/${selectedLesson._id}/markWatched`,
-          {}, 
+          {},
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
@@ -753,6 +729,11 @@ function CourseDetail() {
               </nav>
 
               <h1 className="fw-bolder display-5 mb-3 text-dark tracking-tight">{course?.title}</h1>
+
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <span className="fw-bold text-dark">⭐ {Number(course?.averageRating || 0).toFixed(1)}</span>
+                <span className="text-muted small">({course?.totalRatings || 0} ratings)</span>
+              </div>
               <p className="lead text-secondary mb-4 opacity-75" style={{ maxWidth: "750px" }}>
                 {course?.description}
               </p>
@@ -1150,6 +1131,20 @@ function CourseDetail() {
                       <button className="btn btn-link btn-sm text-danger text-decoration-none mt-2 opacity-50 hover-opacity-100" onClick={handleUnenroll}>
                         Cancel Enrollment
                       </button>
+                    )}
+
+                    {hasAccess && isEnrolled && (
+                      <RatingBox
+                        courseId={id}
+                        token={token}
+                        onSuccess={async () => {
+                          const { data } = await api.get(`/courses/${id}`, {
+                            headers: { Authorization: `Bearer ${token}` },
+                          });
+                          const courseData = data?.course || data || {};
+                          setCourse(courseData);
+                        }}
+                      />
                     )}
                   </div>
                 )}

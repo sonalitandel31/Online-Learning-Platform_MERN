@@ -5,7 +5,7 @@ function PendingApprovals() {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [successMsg, setSuccessMsg] = useState(""); // Added for inline feedback
+  const [successMsg, setSuccessMsg] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState(null);
   const [form, setForm] = useState({
@@ -19,6 +19,11 @@ function PendingApprovals() {
   const [categories, setCategories] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  const [showContent, setShowContent] = useState(false);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentError, setContentError] = useState("");
+  const [contentCourse, setContentCourse] = useState(null);
 
   const BASE_URL = import.meta.env.VITE_BASE_URL;
 
@@ -133,6 +138,33 @@ function PendingApprovals() {
     }
   };
 
+  const openContentModal = async (courseId) => {
+    try {
+      setShowContent(true);
+      setContentLoading(true);
+      setContentError("");
+      setContentCourse(null);
+
+      const token = localStorage.getItem("token");
+      const res = await api.get(`/instructor/course/${courseId}/details`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setContentCourse(res.data?.course || null);
+    } catch (err) {
+      console.error(err);
+      setContentError(err?.response?.data?.message || "Failed to load course content");
+    } finally {
+      setContentLoading(false);
+    }
+  };
+
+  const closeContentModal = () => {
+    setShowContent(false);
+    setContentCourse(null);
+    setContentError("");
+  };
+
   if (loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "70vh", color: colors.primary }}>
@@ -183,10 +215,25 @@ function PendingApprovals() {
                   <div><strong>Price:</strong> {course.price > 0 ? `₹${course.price}` : <span style={{ color: "#10b981", fontWeight: "600" }}>Free</span>}</div>
                 </div>
               </div>
+              <button
+                onClick={() => openContentModal(course._id)}
+                style={{
+                  width: "100%",
+                  borderRadius: "10px",
+                  fontWeight: 700,
+                  background: "rgba(109,40,217,0.1)",
+                  color: colors.primary,
+                  border: "1px solid rgba(109,40,217,0.2)",
+                  padding: "10px",
+                  cursor: "pointer",
+                }}
+              >
+                View Full Content
+              </button>
 
               <div style={{ padding: "15px 20px", background: "#f8fafc", borderTop: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: "0.8rem", color: "#94a3b8" }}>
-                  {course.lessons?.length || 0} Lessons
+                  {course.lessons?.length || 0} Lessons |  {course.exams?.length || 0} Exams
                 </span>
                 <button
                   onClick={() => openEditModal(course)}
@@ -236,10 +283,10 @@ function PendingApprovals() {
 
             <label style={{ display: "block", marginBottom: "5px", fontWeight: "600", fontSize: "0.85rem" }}>Thumbnail</label>
             <input type="file" onChange={handleThumbnailUpload} style={{ width: "100%", marginBottom: "10px", fontSize: "0.8rem" }} />
-            
+
             {(form.thumbnail || uploading) && (
               <div style={{ marginBottom: "20px", textAlign: "center", background: "#f8fafc", padding: "10px", borderRadius: "10px", border: `1px dashed ${colors.border}` }}>
-                {uploading ? <p style={{ fontSize: "0.8rem", color: colors.primary }}>Uploading...</p> : 
+                {uploading ? <p style={{ fontSize: "0.8rem", color: colors.primary }}>Uploading...</p> :
                   <img src={`${BASE_URL}${form.thumbnail}`} alt="preview" style={{ width: "100%", maxHeight: "150px", objectFit: "cover", borderRadius: "8px" }} />
                 }
               </div>
@@ -254,6 +301,166 @@ function PendingApprovals() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {showContent && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+          background: "rgba(15,23,42,0.7)", display: "flex",
+          justifyContent: "center", alignItems: "center", zIndex: 2000,
+          padding: "20px"
+        }}>
+          <div style={{
+            width: "100%", maxWidth: "950px", maxHeight: "90vh", overflowY: "auto",
+            background: "#fff", borderRadius: "18px", padding: "22px",
+            boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+              <h3 style={{ margin: 0, fontWeight: 900, color: colors.primary }}>Course Content Review</h3>
+              <button
+                onClick={closeContentModal}
+                style={{ border: "none", background: "transparent", fontSize: "28px", cursor: "pointer", color: "#94a3b8" }}
+              >
+                &times;
+              </button>
+            </div>
+
+            {contentLoading ? (
+              <div style={{ textAlign: "center", padding: "40px", color: colors.primary }}>Loading course content...</div>
+            ) : contentError ? (
+              <div style={{ textAlign: "center", padding: "20px", color: "#b91c1c" }}>{contentError}</div>
+            ) : !contentCourse ? (
+              <div style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>No content found.</div>
+            ) : (
+              <>
+                <div style={{ fontWeight: 900, fontSize: "1.35rem", color: colors.primary }}>
+                  {contentCourse.title}
+                </div>
+                <div style={{ color: "#64748b", margin: "6px 0 18px 0", fontSize: "0.95rem" }}>
+                  <strong>Category:</strong> {contentCourse.category?.name || "N/A"} &nbsp;|&nbsp;
+                  <strong>Level:</strong> {contentCourse.level || "—"} &nbsp;|&nbsp;
+                  <strong>Price:</strong> {Number(contentCourse.price || 0) > 0 ? `₹${contentCourse.price}` : "Free"}
+                </div>
+
+                {/* Lessons */}
+                <div style={{ fontWeight: 900, fontSize: "1.05rem", marginBottom: "10px", color: "#0f172a" }}>
+                  Lessons ({contentCourse.lessons?.length || 0})
+                </div>
+
+                {(contentCourse.lessons || []).length === 0 ? (
+                  <div style={{ color: "#94a3b8", fontStyle: "italic", marginBottom: "18px" }}>No lessons attached.</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "22px" }}>
+                    {contentCourse.lessons.map((l, idx) => {
+                      const type = (l.contentType || "").toLowerCase();
+                      const base = import.meta.env.VITE_BASE_URL?.replace(/\/$/, "") || "";
+                      const src = l.fileUrl
+                        ? (l.fileUrl.startsWith("http") ? l.fileUrl : `${base}/${String(l.fileUrl).replace(/^\//, "")}`)
+                        : "";
+
+                      return (
+                        <div key={l._id || idx} style={{
+                          background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px",
+                          padding: "14px"
+                        }}>
+                          <div style={{ fontWeight: 800, color: "#0f172a" }}>
+                            {idx + 1}. {l.title}
+                            <span style={{
+                              marginLeft: "10px", fontSize: "0.78rem", fontWeight: 800,
+                              background: "#f3e8ff", color: colors.primary, padding: "2px 10px", borderRadius: "999px"
+                            }}>
+                              {l.contentType}
+                            </span>
+                          </div>
+
+                          {type === "text" || (!src && l.description) ? (
+                            <div style={{ marginTop: "10px", whiteSpace: "pre-wrap", background: "#f8fafc", padding: "12px", borderRadius: "10px", color: "#334155" }}>
+                              {l.description || "No text content provided."}
+                            </div>
+                          ) : null}
+
+                          {type === "video" && src ? (
+                            <div style={{ marginTop: "12px" }}>
+                              <video controls src={src} style={{ width: "100%", borderRadius: "10px", border: "1px solid #e2e8f0", background: "#000" }} />
+                            </div>
+                          ) : null}
+
+                          {type === "pdf" && src ? (
+                            <div style={{ marginTop: "12px" }}>
+                              <iframe title={`pdf-${l._id || idx}`} src={src} style={{ width: "100%", height: "480px", border: "1px solid #e2e8f0", borderRadius: "10px" }} />
+                            </div>
+                          ) : null}
+
+                          {!((type === "text" || (!src && l.description)) || (type === "video" && src) || (type === "pdf" && src)) ? (
+                            <div style={{ marginTop: "10px", color: "#94a3b8", fontStyle: "italic" }}>Content not available or format not supported.</div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Exams */}
+                <div style={{ fontWeight: 900, fontSize: "1.05rem", marginBottom: "10px", color: "#0f172a" }}>
+                  Exams ({contentCourse.exams?.length || 0})
+                </div>
+
+                {(contentCourse.exams || []).length === 0 ? (
+                  <div style={{ color: "#94a3b8", fontStyle: "italic" }}>No exams attached.</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    {contentCourse.exams.map((ex, exIdx) => (
+                      <div key={ex._id || exIdx} style={{
+                        background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px", padding: "14px"
+                      }}>
+                        <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: "10px" }}>
+                          {exIdx + 1}. {ex.title}
+                          <span style={{
+                            marginLeft: "10px", fontSize: "0.78rem", fontWeight: 800,
+                            background: "#e6f4ea", color: "#15803d", padding: "2px 10px", borderRadius: "999px"
+                          }}>
+                            {ex.duration} min
+                          </span>
+                        </div>
+
+                        {(ex.questions || []).length === 0 ? (
+                          <div style={{ color: "#94a3b8", fontStyle: "italic" }}>No questions provided.</div>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                            {ex.questions.map((q, qIdx) => (
+                              <div key={q._id || qIdx} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px" }}>
+                                <div style={{ fontWeight: 700, marginBottom: "6px", color: "#0f172a" }}>
+                                  Q{qIdx + 1}. {q.questionText}
+                                </div>
+                                <ul style={{ margin: 0, paddingLeft: "24px", color: "#4a5568" }}>
+                                {(q.options || []).map((opt, oIdx) => {
+                                  const isCorrect = opt === q.correctAnswer;
+                                  return (
+                                    <li
+                                      key={`${qIdx}-opt-${oIdx}`}
+                                      style={{
+                                        marginBottom: "6px",
+                                        fontWeight: isCorrect ? 700 : 400,
+                                        color: isCorrect ? "#15803d" : "inherit",
+                                      }}
+                                    >
+                                      {opt} {isCorrect ? "✅" : ""}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
