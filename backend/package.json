@@ -30,7 +30,7 @@
     "multer": "^2.0.2",
     "ngx-pagination": "^6.0.3",
     "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.12",
+    "nodemailer": "^7.0.13",
     "pdfkit": "^0.17.2",
     "razorpay": "^2.9.6",
     "react-bootstrap": "^2.10.10",

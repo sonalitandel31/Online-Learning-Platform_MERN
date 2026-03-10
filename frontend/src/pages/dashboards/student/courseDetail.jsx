@@ -2,13 +2,13 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../../api/api";
 import { track } from "../../../utils/track";
-import { Eye, Download, PlayCircle, BookOpen, FileText, CheckCircle, Lock, Award, Info, AlertTriangle, ChevronRight, Clock, User, BarChart, MessageCircle, ShieldAlert, Trophy,} from "lucide-react";
+import { Eye, Download, PlayCircle, BookOpen, FileText, CheckCircle, Lock, Award, Info, AlertTriangle, ChevronRight, Clock, User, BarChart, MessageCircle, ShieldAlert, Trophy, } from "lucide-react";
 import RatingBox from "../../../components/RatingBox";
 
 const PLANS_ROUTE = "/subscription-plans";
 
 function CourseDetail() {
-  const { id } = useParams(); 
+  const { id } = useParams();
   const navigate = useNavigate();
 
   const [course, setCourse] = useState(null);
@@ -48,6 +48,12 @@ function CourseDetail() {
   const [hasAccess, setHasAccess] = useState(false);
   const [accessReason, setAccessReason] = useState("");
 
+  const [liveClasses, setLiveClasses] = useState([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState("");
+  const [joiningLiveId, setJoiningLiveId] = useState("");
+  const joinedLiveIdRef = useRef(null);
+
   const loggedInUser = JSON.parse(localStorage.getItem("user"));
   const studentId = loggedInUser?._id;
 
@@ -71,6 +77,53 @@ function CourseDetail() {
   const safeUrl = (u) => {
     if (!u) return "";
     return u.startsWith("http") ? u : `${BASE_URL}/${String(u).replace(/^\//, "")}`;
+  };
+
+  const pickArray = (res) => {
+    const d = res?.data;
+    if (Array.isArray(d)) return d;
+    if (Array.isArray(d?.data)) return d.data;
+    if (Array.isArray(d?.classes)) return d.classes;
+    if (Array.isArray(d?.result)) return d.result;
+    if (Array.isArray(d?.payload)) return d.payload;
+    if (Array.isArray(d?.data?.classes)) return d.data.classes;
+    return [];
+  };
+
+  const canAccessLiveClasses = hasAccess;
+
+  const canJoinLiveClass = (lc) => {
+    if (!lc) return false;
+    if (!canAccessLiveClasses) return false;
+    if (lc.status === "cancelled" || lc.status === "ended") return false;
+    if (lc.status === "live") return true;
+
+    if (lc.status === "scheduled" && lc.startAt) {
+      const diffMs = new Date(lc.startAt).getTime() - Date.now();
+      return diffMs <= 10 * 60 * 1000;
+    }
+
+    return false;
+  };
+
+  const getLiveJoinMessage = (lc) => {
+    if (!canAccessLiveClasses) return "Enroll or subscribe to join live classes.";
+    if (!lc) return "";
+    if (lc.status === "cancelled") return "This class has been cancelled.";
+    if (lc.status === "ended") return "This class has already ended.";
+    if (lc.status === "live") return "Class is live now. You can join.";
+
+    if (lc.status === "scheduled" && lc.startAt) {
+      const diffMs = new Date(lc.startAt).getTime() - Date.now();
+
+      if (diffMs > 10 * 60 * 1000) {
+        return "Join unlocks 10 minutes before start time.";
+      }
+
+      return "Class is starting soon. You can join now.";
+    }
+
+    return "";
   };
 
   // ---------- subscription auto-enroll ----------
@@ -625,6 +678,102 @@ function CourseDetail() {
   const isProbablyHtml = (str = "") =>
     /<\/?[a-z][\s\S]*>/i.test(str);
 
+  useEffect(() => {
+    // This fetches live classes only when user opens the Live tab
+    const fetchLive = async () => {
+      if (selectedTab !== "live") return;
+      if (!id) return;
+
+      try {
+        setLiveError("");
+        setLiveLoading(true);
+
+        const res = await api.get(`/live-classes/course/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        setLiveClasses(pickArray(res));
+      } catch (e) {
+        setLiveError(e?.response?.data?.message || "Failed to load live classes");
+        setLiveClasses([]);
+      } finally {
+        setLiveLoading(false);
+      }
+    };
+
+    fetchLive();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTab, id]);
+
+  const handleJoinLive = async (lc) => {
+    try {
+      setLiveError("");
+
+      if (!canAccessLiveClasses) {
+        setLiveError("Enroll or subscribe to join live classes.");
+        return;
+      }
+
+      if (!canJoinLiveClass(lc)) {
+        setLiveError(getLiveJoinMessage(lc) || "You cannot join this class right now.");
+        return;
+      }
+
+      setJoiningLiveId(String(lc._id));
+
+      const res = await api.post(
+        `/live-classes/${lc._id}/join`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      const meetingLink = res?.data?.data?.meetingLink || res?.data?.meetingLink;
+
+      if (!meetingLink) {
+        setLiveError("Meeting link not found for this class.");
+        return;
+      }
+
+      joinedLiveIdRef.current = String(lc._id);
+      window.open(meetingLink, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setLiveError(e?.response?.data?.message || "Failed to join live class");
+    } finally {
+      setJoiningLiveId("");
+    }
+  };
+
+  const handleLeaveLive = async () => {
+    const liveClassId = joinedLiveIdRef.current;
+    if (!liveClassId) return;
+
+    try {
+      await api.post(`/live-classes/${liveClassId}/leave`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      // ignore
+    } finally {
+      joinedLiveIdRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      const liveClassId = joinedLiveIdRef.current;
+      if (!liveClassId) return;
+
+      api.post(`/live-classes/${liveClassId}/leave`, {}, { headers: { Authorization: `Bearer ${token}` } }).catch(() => { });
+      joinedLiveIdRef.current = null;
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ---------- loading / error ----------
   if (loading)
     return (
@@ -991,7 +1140,117 @@ function CourseDetail() {
                       </div>
                     )}
                   </div>
-                ) : (
+                ) : selectedTab === "live" ? (
+                  <div className="p-4">
+                    {liveError && (
+                      <div className="alert alert-danger">{liveError}</div>
+                    )}
+
+                    {!canAccessLiveClasses && (
+                      <div className="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                          Live classes are available only for enrolled or subscribed students.
+                        </div>
+                        <button
+                          className="btn btn-sm btn-outline-dark"
+                          onClick={() => navigate(PLANS_ROUTE)}
+                        >
+                          View Plans
+                        </button>
+                      </div>
+                    )}
+
+                    {liveLoading ? (
+                      <div className="d-flex align-items-center gap-2">
+                        <div className="spinner-border spinner-border-sm"></div>
+                        <span className="text-muted">Loading live classes...</span>
+                      </div>
+                    ) : liveClasses.length === 0 ? (
+                      <div className="text-muted text-center py-5">
+                        No live classes scheduled for this course.
+                      </div>
+                    ) : (
+                      <div className="list-group">
+                        {liveClasses.map((lc) => {
+                          const canJoin = canJoinLiveClass(lc);
+                          const isJoined = joinedLiveIdRef.current === String(lc._id);
+                          const joinMessage = getLiveJoinMessage(lc);
+
+                          return (
+                            <div key={lc._id} className="list-group-item">
+                              <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                <div>
+                                  <div className="fw-bold">{lc.title}</div>
+
+                                  <div className="small text-muted">
+                                    Start: {lc.startAt ? new Date(lc.startAt).toLocaleString() : "-"}
+                                  </div>
+
+                                  <div className="small text-muted">
+                                    Duration: {lc.durationMin ? `${lc.durationMin} minutes` : "-"}
+                                  </div>
+
+                                  {!!joinMessage && (
+                                    <div className="small text-muted mt-1">
+                                      {joinMessage}
+                                    </div>
+                                  )}
+
+                                  {lc.recordingLink && lc.status === "ended" && (
+                                    <a
+                                      href={lc.recordingLink}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="btn btn-sm btn-outline-secondary mt-2"
+                                    >
+                                      Watch Recording
+                                    </a>
+                                  )}
+                                </div>
+
+                                <div className="text-end">
+                                  <span
+                                    className={
+                                      "badge mb-2 " +
+                                      (lc.status === "scheduled"
+                                        ? "bg-primary"
+                                        : lc.status === "live"
+                                          ? "bg-success"
+                                          : lc.status === "ended"
+                                            ? "bg-secondary"
+                                            : "bg-danger")
+                                    }
+                                  >
+                                    {lc.status}
+                                  </span>
+
+                                  <div className="d-flex gap-2 justify-content-end">
+                                    <button
+                                      className="btn btn-sm btn-success"
+                                      disabled={!canJoin || joiningLiveId === String(lc._id)}
+                                      onClick={() => handleJoinLive(lc)}
+                                      title={!canJoin ? joinMessage : "Join live class"}
+                                    >
+                                      {joiningLiveId === String(lc._id) ? "Joining..." : "Join"}
+                                    </button>
+
+                                    {isJoined && (
+                                      <button
+                                        className="btn btn-sm btn-outline-danger"
+                                        onClick={handleLeaveLive}
+                                      >
+                                        Leave
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>) : (
                   <div className="p-5 text-center text-muted">Select an item to view content.</div>
                 )}
               </div>
@@ -1177,13 +1436,16 @@ function CourseDetail() {
                   {hasAccess ? <MessageCircle size={16} className="me-1" /> : <Lock size={16} className="me-1 opacity-50" />}
                   <span className="small">Discuss</span>
                   {hasAccess && discussionCount > 0 && (
-                    <span
-                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow-sm border border-white"
-                      style={{ fontSize: "10px" }}
-                    >
+                    <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow-sm border border-white" style={{ fontSize: "10px" }}>
                       {discussionCount}
                     </span>
                   )}
+                </button>
+                <button
+                  className={`nav-link border-0 fw-bold transition-all ${selectedTab === "live" ? "active bg-info shadow-sm" : "text-muted"}`}
+                  onClick={() => setTab("live")}
+                >
+                  <PlayCircle size={16} className="me-1" /> <span className="small">Live</span>
                 </button>
               </div>
 

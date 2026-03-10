@@ -1,4 +1,4 @@
-// require("dotenv").config();
+require("dotenv").config();
 
 const express = require("express");
 const conn = require("./config/db");
@@ -6,6 +6,8 @@ const cors = require("cors");
 const path = require("path");
 
 require("./utils/autoUnenroll");
+require("./cron/liveClassReminderCron");
+require("./cron/liveClassLifecycleCron");
 const startAutoExpireSubscriptions = require("./utils/autoExpireSubscriptions");
 
 const user = require("./routes/userRoute");
@@ -29,12 +31,13 @@ const subscriptionRoute = require("./routes/subscriptionRoute");
 const razorpaySubRoute = require("./routes/razorpaySubscriptionRoute");
 const revenueRoute = require("./routes/revenueRoute");
 const sysSetting = require("./routes/systemSettingsRoutes");
+const liveClassRoutes = require("./routes/liveClassRoutes");
 
 const { razorpayWebhookHandler } = require("./controller/razorpayWebhookController");
 
 const app = express();
 
-// ✅ 1) WEBHOOK FIRST (RAW BODY)
+// 1) WEBHOOK FIRST (RAW BODY)
 // Must be before express.json() otherwise signature verify fails.
 app.post("/webhooks/razorpay", express.raw({ type: "application/json" }), razorpayWebhookHandler);
 
@@ -83,6 +86,8 @@ app.use("/razorpay", razorpaySubRoute);
 app.use("/admin/revenue", revenueRoute);
 
 app.use("/system-settings", sysSetting );
+
+app.use("/live-classes", liveClassRoutes);
 
 // 6) Start server
 app.listen(process.env.PORT || 3000, () => {

@@ -72,6 +72,13 @@ import MySubscription from "./pages/dashboards/student/MySubscription";
 import AdminSubscriptionPlans from "./pages/dashboards/admin/AdminSubscriptionPlans";
 import SystemSettingsPage from "./pages/dashboards/admin/SystemSettingsPage";
 import PlatformRules from "./pages/dashboards/instructor/platformRules";
+import StudentLiveClasses from "./pages/dashboards/student/liveClasses";
+import AdminLiveClasses from "./pages/dashboards/admin/liveClasses";
+import InstructorLiveClasses from "./pages/dashboards/instructor/liveClasses/liveClasses";
+import CreateLiveClass from "./pages/dashboards/instructor/liveClasses/createLiveClass";
+import InstructorLiveClassAttendance from "./pages/dashboards/instructor/liveClasses/liveClassAttendance";
+import RescheduleLiveClass from "./pages/dashboards/instructor/liveClasses/RescheduleLiveClass";
+import AddRecording from "./pages/dashboards/instructor/liveClasses/addRecording";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -111,6 +118,7 @@ function App() {
         <Route path="/support" element={<Support />} />
         <Route path="/subscription-plans" element={<SubscriptionPlans />} />
         <Route path="/me/subscription" element={<MySubscription />} />
+        <Route path="/live-classes" element={<StudentLiveClasses />} />
 
         <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
           <Route path="/admin-dashboard" element={<AdminDashboard />}>
@@ -129,14 +137,16 @@ function App() {
             <Route path="transactions" element={<Transactions />} />
             <Route path="analytics" element={<AnalyticsDashboard />} />
             <Route path="instructor-ranking" element={<AdminInstructorRanking />} />
-            <Route path="heatmap" element={<AdminHeatmap />}/>
-            <Route path="/admin-dashboard/platform-risk" element={<AdminPlatformRisk />}/>
+            <Route path="heatmap" element={<AdminHeatmap />} />
+            <Route path="platform-risk" element={<AdminPlatformRisk />} />
             <Route path="reports/enrollments" element={<EnrollmentStats />} />
             <Route path="reports/courses" element={<CoursePerformance />} />
             <Route path="contact-messages" element={<AdminContactMessages />} />
             <Route path="discussions" element={<ForumDiscussions />} />
             <Route path="subscription-plans" element={<AdminSubscriptionPlans />} />
             <Route path="system-settings" element={<SystemSettingsPage />} />
+            <Route path="live-classes" element={<AdminLiveClasses />} />
+            <Route path="live-classes/:liveClassId/attendance" element={<InstructorLiveClassAttendance />} />
           </Route>
         </Route>
 
@@ -162,6 +172,11 @@ function App() {
             <Route path="course_analytics" element={<CourseAnalytics />} />
             <Route path="student_progress" element={<StudentProgress />} />
             <Route path="course-discussions" element={<CourseDiscussions />} />
+            <Route path="live-classes" element={<InstructorLiveClasses />} />
+            <Route path="live-classes/create" element={<CreateLiveClass />} />
+            <Route path="live-classes/:liveClassId/attendance" element={<InstructorLiveClassAttendance />} />
+            <Route path="live-classes/:liveClassId/reschedule" element={<RescheduleLiveClass />} />
+            <Route path="live-classes/:liveClassId/recording" element={<AddRecording />} />
             <Route path="profile" element={<Profile user={user} setUser={setUser} />} />
           </Route>
         </Route>

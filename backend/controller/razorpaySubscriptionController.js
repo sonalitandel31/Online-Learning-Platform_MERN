@@ -240,11 +240,11 @@ exports.createRazorpaySubscription = async (req, res) => {
       autoRenew: true,
 
       provider: "razorpay",
-      providerSubscriptionId: rpSub.id, // ✅ important
+      providerSubscriptionId: rpSub.id, 
       providerPaymentId: null,
       providerOrderId: null,
 
-      razorpaySubscriptionId: rpSub.id, // keep if you want
+      razorpaySubscriptionId: rpSub.id, 
       lastEvent: "subscription.created",
 
       amount: Number(plan.price || 0),

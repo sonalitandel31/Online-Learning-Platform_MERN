@@ -11,7 +11,8 @@ import {
   FaUsers,
   FaRupeeSign,
   FaBars,
-  FaTimes
+  FaTimes,
+  FaVideo
 } from "react-icons/fa";
 
 const findActiveSectionLabel = (links, pathname) => {
@@ -365,6 +366,14 @@ export const instructorSidebarLinks = [
     ],
   },
   {
+    label: "Live Classes",
+    icon: <FaVideo />, // or any icon you like (FaVideo is better if you import it)
+    children: [
+      { label: "Manage Live Classes", path: "/instructor-dashboard/live-classes" },
+      { label: "Create Live Class", path: "/instructor-dashboard/live-classes/create" },
+    ],
+  },
+  {
     label: "Earnings & Payouts",
     icon: <FaRupeeSign />,
     children: [
@@ -412,6 +421,13 @@ export const adminSidebarLinks = [
     children: [
       { label: "Manage Categories", path: "/admin-dashboard/categories" },
       { label: "Suggestions", path: "/admin-dashboard/category-suggestions" },
+    ],
+  },
+  {
+    label: "Live Classes",
+    icon: <FaVideo />,
+    children: [
+      { label: "All Live Classes", path: "/admin-dashboard/live-classes" },
     ],
   },
   {

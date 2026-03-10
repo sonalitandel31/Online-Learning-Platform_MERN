@@ -49,6 +49,11 @@ const registerUser = async (req, res) => {
             { expiresIn: "1d" }
         );
 
+        await userModel.updateOne(
+            { _id: user._id },
+            { $set: { lastActiveAt: new Date(), lastLoginAt: new Date() } }
+        );
+
         const userObj = user.toObject();
         delete userObj.password;
 
@@ -75,6 +80,14 @@ const loginUser = async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(401).json({ error: "Invalid credentials." });
 
+        if (user.isBlocked) {
+            return res.status(403).json({ message: "Your account is blocked. Contact support." });
+        }
+
+        user.lastLoginAt = new Date();
+        user.lastActiveAt = new Date();
+        await user.save();
+
         const token = jwt.sign({ id: user._id, email: user.email, role: user.role },
             process.env.JWT_SECRET || "secretkey", { expiresIn: "1d" });
 
@@ -90,7 +103,7 @@ const loginUser = async (req, res) => {
 
 const addAdmin = async (req, res) => {
     try {
-        const { name, email, password} = req.body;
+        const { name, email, password } = req.body;
 
         const existingUser = await userModel.findOne({ email });
         if (existingUser) {

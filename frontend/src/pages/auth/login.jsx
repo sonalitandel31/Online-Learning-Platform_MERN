@@ -48,7 +48,11 @@ function Login({ setUser }) {
         else navigate("/");
       }, 1000);
     } catch (err) {
-      const errorText = err.response?.data?.error || err.message || "Login failed!";
+      const errorText =
+        err.response?.data?.message ||   
+        err.response?.data?.error ||    
+        err.message ||
+        "Login failed!";
       setStatusMsg({ type: "error", text: errorText });
     } finally {
       setLoading(false);

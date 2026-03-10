@@ -19,11 +19,35 @@ const userSchema = new mongoose.Schema({
         enum: ["admin", "instructor", "student"],
         required: true
     },
-    profilePic:{
+    profilePic: {
         type: String,
         default: "/uploads/default.png"
-    }
-}, {timestamps: true});
+    },
+    isBlocked: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+    blockedAt: {
+        type: Date,
+        default: null
+    },
+    blockReason: {
+        type: String,
+        default: ""
+    },
+    lastLoginAt: { 
+        type: Date, 
+        default: null, 
+        index: true 
+    },
+    lastActiveAt: 
+    { 
+        type: Date, 
+        default: null, 
+        index: true 
+    },
+}, { timestamps: true });
 
 const userModel = mongoose.model("user", userSchema);
 

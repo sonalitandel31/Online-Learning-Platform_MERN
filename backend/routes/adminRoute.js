@@ -7,7 +7,7 @@ const roleMiddleware = require("../middleware/roleMiddleware");
 router.post("/add-admin", admin.addAdmin);
 router.get("/dashboard",authMiddleware, admin.dashboard);
 
-router.get("/users", admin.getAllUsers);
+router.get("/users", authMiddleware, roleMiddleware(["admin"]), admin.getAllUsers);
 router.get("/instructors", admin.getInstructors);
 router.get("/instructors/:id", admin.getInstructorById);
 router.get("/students", admin.getStudents);

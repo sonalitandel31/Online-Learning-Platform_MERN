@@ -24,6 +24,40 @@ const SPAM_BLOCK_AT = Number(process.env.SPAM_BLOCK_AT || 10);
 const normalizeReason = (r = "") => (r || "").toString().trim().toLowerCase();
 const isSpamReason = (r) => normalizeReason(r) === "spam";
 
+const TOTAL_BLOCK_AT = 10; // overall rule: 10+ confirmed reports => block login too
+
+async function getTotalConfirmedReportsForUser(userId) {
+  if (!userId) return 0;
+  return ForumReport.countDocuments({
+    targetUserId: userId,
+    status: "resolved",
+  });
+}
+
+async function blockUserIfNeeded(userId) {
+  const total = await getTotalConfirmedReportsForUser(userId);
+  if (total >= TOTAL_BLOCK_AT) {
+    await userModel.updateOne(
+      { _id: userId, isBlocked: { $ne: true } },
+      {
+        $set: {
+          isBlocked: true,
+          blockedAt: new Date(),
+          blockReason: `Auto-block: ${total} confirmed forum reports`,
+        },
+      }
+    );
+
+    // optional: email
+    const u = await userModel.findById(userId).select("email name");
+    await sendEmail(
+      u?.email,
+      "Account blocked due to reports",
+      `Hello ${u?.name || ""},\n\nYour account has been blocked because your content received ${total} confirmed reports.\n\nIf you believe this is a mistake, contact support.`
+    );
+  }
+}
+
 function buildTransporter() {
   if (!process.env.SMTP_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) return null;
 
@@ -246,6 +280,41 @@ async function assertInstructorOwnsCourseByQuestion(questionId, instructorId) {
   }
 
   return { ok: true, question, course };
+}
+
+async function assertNotReportBlocked(req, res) {
+  try {
+    // authMiddleware already sets req.user
+    const userId = req.user?._id;
+    if (!userId) {
+      res.status(401).json({ message: "Not authorized" });
+      return { ok: false };
+    }
+
+    // if user already blocked (login-level)
+    if (req.user.isBlocked) {
+      res.status(403).json({ message: "Your account is blocked. Contact support." });
+      return { ok: false };
+    }
+
+    // optional: forum write block (based on reports)
+    const total = await getTotalConfirmedReportsForUser(userId);
+
+    // if you want "posting blocked" BEFORE total account block:
+    // Example: 10 resolved reports => posting blocked (same as TOTAL_BLOCK_AT)
+    if (total >= TOTAL_BLOCK_AT) {
+      res.status(403).json({
+        message: `Forum posting blocked due to ${total} confirmed reports.`,
+      });
+      return { ok: false };
+    }
+
+    return { ok: true, total };
+  } catch (e) {
+    console.error("assertNotReportBlocked error:", e);
+    res.status(500).json({ message: "Server error" });
+    return { ok: false };
+  }
 }
 
 exports.getForumCount = async (req, res) => {
@@ -952,6 +1021,9 @@ exports.reportContent = async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Failed to report content" });
+    if (err.code === 11000) {
+      return res.status(200).json({ message: "Already reported" });
+    }
   }
 };
 
@@ -1015,14 +1087,16 @@ exports.resolveReport = async (req, res) => {
       const u = await userModel.findById(report.targetUserId).select("email name");
 
       const isBlock = cnt === policy.blockAt;
-      const subject = isBlock ? "Forum posting blocked" : "Forum warning (reports)";
+
+      const subject = isBlock ? "Account blocked due to reports" : "Forum warning (reports)";
 
       const text = isBlock
-        ? `Hello ${u?.name || ""},\n\nYour forum posting has been blocked because your content received ${cnt} confirmed "${reasonKey}" reports.\n\nIf you believe this is a mistake, contact support.`
-        : `Hello ${u?.name || ""},\n\nWarning: Your content has received ${cnt} confirmed "${reasonKey}" reports.\n\nIf this continues, your forum posting may be blocked.\n\nPlease follow community guidelines.`;
+        ? `Hello ${u?.name || ""},\n\nYour account has been blocked because your content received ${cnt} confirmed "${reasonKey}" reports.\n\nIf you believe this is a mistake, contact support.`
+        : `Hello ${u?.name || ""},\n\nWarning: Your content has received ${cnt} confirmed "${reasonKey}" reports.\n\nIf this continues, your account may be blocked.\n\nPlease follow community guidelines.`;
 
       await sendEmail(u?.email, subject, text);
     }
+    await blockUserIfNeeded(report.targetUserId);
   }
 
   return res.json({ message: "Report updated" });
@@ -1031,7 +1105,7 @@ exports.resolveReport = async (req, res) => {
 exports.postReply = async (req, res) => {
   const { questionId, answerId, replyText } = req.body;
 
-  // ✅ spam block check
+  // spam block check
   const gate = await assertNotReportBlocked(req, res);
   if (!gate.ok) return;
 

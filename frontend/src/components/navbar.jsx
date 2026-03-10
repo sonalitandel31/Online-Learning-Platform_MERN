@@ -2,12 +2,15 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { FaUserCircle, FaSearch, FaBars, FaTimes } from "react-icons/fa";
 import "../styles/home.css";
+import api from "../api/api";
 
 const Navbar = ({ user, setUser }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [hasEnrollment, setHasEnrollment] = useState(false);
+
   const BASE_URL = import.meta.env.VITE_BASE_URL || "";
 
   // role from localStorage (e.g. "admin" | "instructor" | "student")
@@ -20,9 +23,10 @@ const Navbar = ({ user, setUser }) => {
     return null;
   }, [role]);
 
-  // ✅ Student dropdown routes (keep consistent everywhere)
+  // Student dropdown routes (keep consistent everywhere)
   const subscriptionPlansPath = "/subscription-plans"; // change if your route is different
   const mySubscriptionPath = "/me/subscription"; // change if your route is different
+  const liveClassesPath = "/live-classes";
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -50,6 +54,59 @@ const Navbar = ({ user, setUser }) => {
   const handleProfileClick = () => {
     if (isOpen) setIsOpen(false);
   };
+
+  const pickArray = (res) => {
+    const d = res?.data;
+    if (Array.isArray(d)) return d;
+    if (Array.isArray(d?.data)) return d.data;
+    if (Array.isArray(d?.courses)) return d.courses;
+    if (Array.isArray(d?.enrollments)) return d.enrollments;
+    if (Array.isArray(d?.result)) return d.result;
+    return [];
+  };
+
+  useEffect(() => {
+    const checkEnrollment = async () => {
+      try {
+        if (role !== "student") {
+          setHasEnrollment(false);
+          return;
+        }
+
+        const token = localStorage.getItem("token") || "";
+        if (!token) {
+          setHasEnrollment(false);
+          return;
+        }
+
+        // ✅ ONLY /enrollments
+        const res = await api.get("/enrollments", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const enrollments = pickArray(res);
+
+        const now = new Date();
+
+        // ✅ show only if any enrollment is active/completed & not expired
+        const ok = enrollments.some((e) => {
+          const statusOk = e?.status === "active" || e?.status === "completed";
+
+          const expiry = e?.expiryDate ? new Date(e.expiryDate) : null;
+          const notExpired = !expiry || expiry >= now;
+
+          return statusOk && notExpired;
+        });
+
+        setHasEnrollment(ok);
+      } catch (err) {
+        console.error("Enrollment check failed:", err);
+        setHasEnrollment(false);
+      }
+    };
+
+    checkEnrollment();
+  }, [role]);
 
   return (
     <>
@@ -313,6 +370,13 @@ const Navbar = ({ user, setUser }) => {
                           <hr className="dropdown-divider" />
                         </li>
 
+                        {role === "student" && hasEnrollment && (
+                          <li>
+                            <Link className="dropdown-item rounded-2 py-2" to="/live-classes" onClick={closeMenu}>
+                              Live Classes
+                            </Link>
+                          </li>
+                        )}
                         <li>
                           <Link
                             className="dropdown-item rounded-2 py-2"

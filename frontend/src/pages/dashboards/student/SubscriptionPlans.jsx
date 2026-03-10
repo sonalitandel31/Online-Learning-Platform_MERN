@@ -69,27 +69,34 @@ export default function SubscriptionPlans() {
       name: "LearnX",
       description: planName ? `Subscription - ${planName}` : "Subscription",
 
-      // Razorpay sends a response object here
-      handler: async function () {
-        // Don't claim success immediately; webhook may take a moment
-        notify("success", "Payment captured. Confirming subscription...");
+      // take response param
+      handler: async function (response) {
+        // response: { razorpay_payment_id, razorpay_subscription_id, razorpay_signature }
+        notify("success", "Payment captured. Verifying...");
 
         try {
-          // Poll once or twice (simple + reliable)
+          // verify signature on server & update DB immediately
+          await api.post("/razorpay/verify-subscription", {
+            razorpay_payment_id: response?.razorpay_payment_id,
+            razorpay_subscription_id: response?.razorpay_subscription_id,
+            razorpay_signature: response?.razorpay_signature,
+          });
+
+          // after verification, fetch fresh status
           const { data } = await api.get("/subscriptions/me");
           const st = data?.subscription?.status;
 
-          // If webhook already marked active/trial -> go to subscription page
           if (["active", "trial"].includes(st)) {
-            setTimeout(() => navigate("/student/my-subscription"), 400);
+            navigate("/student/my-subscription");
             return;
           }
 
-          // If not active yet, still navigate to subscription page (it can show pending/processing)
-          setTimeout(() => navigate("/student/my-subscription"), 600);
+          // pending/processing - still go and show UI there
+          navigate("/student/my-subscription");
         } catch (e) {
-          // fallback navigation
-          setTimeout(() => navigate("/student/my-subscription"), 600);
+          console.error(e);
+          notify("danger", e?.response?.data?.message || "Verification failed. Please refresh.");
+          setTimeout(() => navigate("/student/my-subscription"), 700);
         }
       },
 
@@ -119,7 +126,7 @@ export default function SubscriptionPlans() {
       // Trial branch (your backend returns enabled:true if trialEndDate exists)
       if (data?.trial?.enabled) {
         notify("success", `Trial Activated! You have ${data?.trial?.trialDays || plan?.trialDays} days of free access.`);
-        setTimeout(() => navigate("/student/my-subscription"), 900); // ✅ unify route
+        setTimeout(() => navigate("/student/my-subscription"), 900); // unify route
         return;
       }
 

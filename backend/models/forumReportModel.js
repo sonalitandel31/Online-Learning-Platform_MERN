@@ -49,5 +49,6 @@ const forumReportSchema = mongoose.Schema(
 forumReportSchema.index({ targetUserId: 1, reason: 1, status: 1 });
 forumReportSchema.index({ courseId: 1, status: 1, createdAt: -1 });
 forumReportSchema.index({ targetType: 1, targetId: 1, reporterId: 1, status: 1 });
+forumReportSchema.index({ targetType: 1, targetId: 1, reporterId: 1 },{ unique: true });
 
 module.exports = mongoose.model("ForumReport", forumReportSchema);
