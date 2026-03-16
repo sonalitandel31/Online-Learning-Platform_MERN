@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../../api/api";
 
-// This safely extracts an array from many possible API response shapes
 const pickArray = (res) => {
   const d = res?.data;
   if (Array.isArray(d)) return d;
@@ -14,7 +13,6 @@ const pickArray = (res) => {
   return [];
 };
 
-// This safely extracts courses from many possible API response shapes
 const pickCourses = (res) => {
   const d = res?.data;
   if (Array.isArray(d)) return d;
@@ -40,6 +38,14 @@ function AdminLiveClassesLoader() {
   );
 }
 
+const badgeClass = (status) => {
+  if (status === "scheduled") return "text-bg-primary";
+  if (status === "live") return "text-bg-success";
+  if (status === "ended") return "text-bg-secondary";
+  if (status === "cancelled") return "text-bg-danger";
+  return "text-bg-dark";
+};
+
 export default function AdminLiveClasses() {
   const [courses, setCourses] = useState([]);
   const [liveClasses, setLiveClasses] = useState([]);
@@ -64,14 +70,12 @@ export default function AdminLiveClasses() {
 
         const res = await api.get("/admin/courses");
         const list = pickCourses(res);
-
-        // This keeps only approved courses in admin filter dropdown
         const approvedCourses = (Array.isArray(list) ? list : []).filter(
           (c) => c?.status === "approved"
         );
 
         setCourses(approvedCourses);
-      } catch (e) {
+      } catch {
         setCourses([]);
       } finally {
         setLoadingCourses(false);
@@ -88,7 +92,6 @@ export default function AdminLiveClasses() {
 
       const res = await api.get("/live-classes/admin/all");
       const list = pickArray(res);
-
       setLiveClasses(Array.isArray(list) ? list : []);
     } catch (e) {
       setError(e?.response?.data?.message || "Failed to load admin live classes");
@@ -103,21 +106,9 @@ export default function AdminLiveClasses() {
   }, []);
 
   useEffect(() => {
-    // This auto-refreshes class statuses
-    const interval = setInterval(() => {
-      fetchAllLiveClasses();
-    }, 30000);
-
+    const interval = setInterval(fetchAllLiveClasses, 30000);
     return () => clearInterval(interval);
   }, []);
-
-  const getStatusBadgeClass = (status) => {
-    if (status === "scheduled") return "text-bg-primary";
-    if (status === "live") return "text-bg-success";
-    if (status === "ended") return "text-bg-secondary";
-    if (status === "cancelled") return "text-bg-danger";
-    return "text-bg-dark";
-  };
 
   const handleFilterChange = (e) => {
     setFilters((prev) => ({
@@ -133,14 +124,8 @@ export default function AdminLiveClasses() {
     try {
       setError("");
       setCancelingId(String(liveClassId));
-
       await api.patch(`/live-classes/${liveClassId}/cancel`);
-
-      setLiveClasses((prev) =>
-        (Array.isArray(prev) ? prev : []).map((x) =>
-          String(x._id) === String(liveClassId) ? { ...x, status: "cancelled" } : x
-        )
-      );
+      fetchAllLiveClasses();
     } catch (e) {
       setError(e?.response?.data?.message || "Failed to cancel live class");
     } finally {
@@ -170,7 +155,6 @@ export default function AdminLiveClasses() {
 
   const stats = useMemo(() => {
     const list = Array.isArray(liveClasses) ? liveClasses : [];
-
     return {
       total: list.length,
       scheduled: list.filter((x) => x.status === "scheduled").length,
@@ -191,9 +175,7 @@ export default function AdminLiveClasses() {
         </div>
       </div>
 
-      {error ? (
-        <div className="alert alert-danger rounded-4 shadow-sm">{error}</div>
-      ) : null}
+      {error ? <div className="alert alert-danger rounded-4 shadow-sm">{error}</div> : null}
 
       <div className="row g-3 mb-4">
         <div className="col-md-6 col-lg-3">
@@ -273,9 +255,6 @@ export default function AdminLiveClasses() {
                   </option>
                 ))}
               </select>
-              <div className="form-text">
-                Only approved courses are shown in this filter.
-              </div>
             </div>
 
             <div className="col-lg-4">
@@ -314,9 +293,7 @@ export default function AdminLiveClasses() {
             {filteredClasses.length === 0 ? (
               <div className="text-center py-5">
                 <div className="fw-semibold fs-5 mb-2">No live classes found</div>
-                <div className="text-muted">
-                  Try changing the search or filter options.
-                </div>
+                <div className="text-muted">Try changing the search or filter options.</div>
               </div>
             ) : (
               <div className="table-responsive">
@@ -326,8 +303,9 @@ export default function AdminLiveClasses() {
                       <th className="fw-semibold">Title</th>
                       <th className="fw-semibold">Course</th>
                       <th className="fw-semibold">Instructor</th>
-                      <th className="fw-semibold">Start Time</th>
-                      <th className="fw-semibold">Duration</th>
+                      <th className="fw-semibold">Start</th>
+                      <th className="fw-semibold">Attendance</th>
+                      <th className="fw-semibold">Recording</th>
                       <th className="fw-semibold">Status</th>
                       <th className="fw-semibold text-end">Actions</th>
                     </tr>
@@ -337,6 +315,7 @@ export default function AdminLiveClasses() {
                     {filteredClasses.map((lc) => {
                       const canOpenMeeting =
                         !!lc.meetingLink && lc.status !== "ended" && lc.status !== "cancelled";
+                      const attendanceSummary = lc.attendanceSummary || {};
 
                       return (
                         <tr key={lc._id}>
@@ -359,27 +338,43 @@ export default function AdminLiveClasses() {
                             {lc.startAt ? new Date(lc.startAt).toLocaleString() : "-"}
                           </td>
 
-                          <td>{lc.durationMin ? `${lc.durationMin} min` : "-"}</td>
+                          <td style={{ minWidth: "170px" }}>
+                            <div className="small text-muted">
+                              Total: <span className="fw-semibold text-dark">{attendanceSummary.totalAttendees || 0}</span>
+                            </div>
+                            <div className="small text-muted">
+                              Present: <span className="fw-semibold text-success">{attendanceSummary.presentCount || 0}</span>
+                            </div>
+                            <div className="small text-muted">
+                              Partial: <span className="fw-semibold text-warning">{attendanceSummary.partialCount || 0}</span>
+                            </div>
+                          </td>
+
+                          <td style={{ minWidth: "160px" }}>
+                            {lc.recordingLink ? (
+                              <a
+                                href={lc.recordingLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn btn-outline-secondary btn-sm rounded-pill px-3"
+                              >
+                                Recording
+                              </a>
+                            ) : (
+                              <span className="badge text-bg-light border text-dark rounded-pill px-3 py-2">
+                                {lc.recordingStatus || "not_available"}
+                              </span>
+                            )}
+                          </td>
 
                           <td>
-                            <span className={`badge rounded-pill px-3 py-2 ${getStatusBadgeClass(lc.status)}`}>
+                            <span className={`badge rounded-pill px-3 py-2 ${badgeClass(lc.status)}`}>
                               {lc.status}
                             </span>
                           </td>
 
                           <td className="text-end">
                             <div className="d-flex justify-content-end flex-wrap gap-2">
-                              {lc.recordingLink ? (
-                                <a
-                                  href={lc.recordingLink}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="btn btn-outline-secondary btn-sm rounded-pill px-3"
-                                >
-                                  Recording
-                                </a>
-                              ) : null}
-
                               {canOpenMeeting ? (
                                 <a
                                   href={lc.meetingLink}
@@ -391,7 +386,6 @@ export default function AdminLiveClasses() {
                                 </a>
                               ) : null}
 
-                              {/* CONDITIONAL RENDER: Hide Attendance if status is 'scheduled' */}
                               {lc.status !== "scheduled" ? (
                                 <Link
                                   to={`/admin-dashboard/live-classes/${lc._id}/attendance`}
@@ -423,11 +417,11 @@ export default function AdminLiveClasses() {
             )}
 
             <div className="text-muted small mt-4 pt-3 border-top">
-              Tip: Admin can open attendance for any session to verify student participation and watch time.
+              Tip: Admin can review attendance, verify class completion, and check recording availability.
             </div>
           </div>
         </div>
       )}
     </div>
   );
-} 
+}

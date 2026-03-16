@@ -79,6 +79,8 @@ import CreateLiveClass from "./pages/dashboards/instructor/liveClasses/createLiv
 import InstructorLiveClassAttendance from "./pages/dashboards/instructor/liveClasses/liveClassAttendance";
 import RescheduleLiveClass from "./pages/dashboards/instructor/liveClasses/RescheduleLiveClass";
 import AddRecording from "./pages/dashboards/instructor/liveClasses/addRecording";
+import InstructorLiveClassRoom from "./pages/dashboards/instructor/liveClasses/liveClassRoom";
+import StudentLiveClassRoom from "./pages/dashboards/student/liveClassRoom";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -104,6 +106,7 @@ function App() {
         <Route path="/profile" element={<Profile user={user} setUser={setUser} />} />
         <Route element={<ProtectedRoute allowedRoles={["student"]} />}>
           <Route path="/learning" element={<MyLearnings />} />
+          <Route path="/live-classes/:liveClassId/classroom" element={<StudentLiveClassRoom />} />
         </Route>
         <Route path="/courses" element={<Courses />} />
         <Route path="/courses/:id" element={<CourseDetail />} />
@@ -177,6 +180,7 @@ function App() {
             <Route path="live-classes/:liveClassId/attendance" element={<InstructorLiveClassAttendance />} />
             <Route path="live-classes/:liveClassId/reschedule" element={<RescheduleLiveClass />} />
             <Route path="live-classes/:liveClassId/recording" element={<AddRecording />} />
+            <Route path="live-classes/:liveClassId/classroom" element={<InstructorLiveClassRoom />} />
             <Route path="profile" element={<Profile user={user} setUser={setUser} />} />
           </Route>
         </Route>

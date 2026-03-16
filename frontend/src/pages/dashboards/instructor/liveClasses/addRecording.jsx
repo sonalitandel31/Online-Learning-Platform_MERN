@@ -35,9 +35,13 @@ export default function AddRecording() {
   const [saving, setSaving] = useState(false);
 
   const [error, setError] = useState("");
-  const [fieldError, setFieldError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
-  const [recordingLink, setRecordingLink] = useState("");
+  const [form, setForm] = useState({
+    recordingLink: "",
+    recordingStatus: "ready",
+    recordingDurationMin: "",
+  });
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const role = String(user?.role || "").toLowerCase();
@@ -53,7 +57,6 @@ export default function AddRecording() {
         setLoading(true);
         setError("");
 
-        // We use all classes endpoint because this page opens from list page
         const res =
           role === "admin"
             ? await api.get("/live-classes/admin/all")
@@ -74,7 +77,14 @@ export default function AddRecording() {
         }
 
         setLiveClass(found);
-        setRecordingLink(found.recordingLink || "");
+        setForm({
+          recordingLink: found.recordingLink || "",
+          recordingStatus: found.recordingStatus || "ready",
+          recordingDurationMin:
+            found.recordingDurationMin !== undefined && found.recordingDurationMin !== null
+              ? String(found.recordingDurationMin)
+              : "",
+        });
       } catch (e) {
         setError(e?.response?.data?.message || "Failed to load live class");
         setLiveClass(null);
@@ -87,18 +97,23 @@ export default function AddRecording() {
   }, [liveClassId, role]);
 
   const validate = () => {
-    if (!recordingLink.trim()) {
-      setFieldError("Please enter recording link.");
-      return false;
+    const nextErrors = {};
+
+    if (!form.recordingLink.trim()) {
+      nextErrors.recordingLink = "Please enter recording link.";
+    } else if (!isValidHttpUrl(form.recordingLink.trim())) {
+      nextErrors.recordingLink = "Please enter a valid http/https recording link.";
     }
 
-    if (!isValidHttpUrl(recordingLink.trim())) {
-      setFieldError("Please enter a valid http/https recording link.");
-      return false;
+    if (
+      form.recordingDurationMin &&
+      (Number.isNaN(Number(form.recordingDurationMin)) || Number(form.recordingDurationMin) < 0)
+    ) {
+      nextErrors.recordingDurationMin = "Recording duration must be a valid positive number.";
     }
 
-    setFieldError("");
-    return true;
+    setFieldErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
@@ -112,7 +127,11 @@ export default function AddRecording() {
       setSaving(true);
 
       await api.patch(`/live-classes/${liveClassId}/recording`, {
-        recordingLink: recordingLink.trim(),
+        recordingLink: form.recordingLink.trim(),
+        recordingStatus: form.recordingStatus,
+        recordingDurationMin: form.recordingDurationMin
+          ? Number(form.recordingDurationMin)
+          : undefined,
       });
 
       navigate(backPath);
@@ -164,21 +183,12 @@ export default function AddRecording() {
                   <form onSubmit={handleSubmit} noValidate>
                     <div className="mb-4">
                       <label className="form-label fw-semibold">Live Class Title</label>
-                      <input
-                        className="form-control rounded-3"
-                        value={liveClass?.title || ""}
-                        disabled
-                      />
-                      <div className="form-text">This field is read-only for reference.</div>
+                      <input className="form-control rounded-3" value={liveClass?.title || ""} disabled />
                     </div>
 
                     <div className="mb-4">
                       <label className="form-label fw-semibold">Course</label>
-                      <input
-                        className="form-control rounded-3"
-                        value={liveClass?.course?.title || ""}
-                        disabled
-                      />
+                      <input className="form-control rounded-3" value={liveClass?.course?.title || ""} disabled />
                     </div>
 
                     <div className="row g-3 mb-4">
@@ -186,9 +196,7 @@ export default function AddRecording() {
                         <label className="form-label fw-semibold">Class Time</label>
                         <input
                           className="form-control rounded-3"
-                          value={
-                            liveClass?.startAt ? new Date(liveClass.startAt).toLocaleString() : "-"
-                          }
+                          value={liveClass?.startAt ? new Date(liveClass.startAt).toLocaleString() : "-"}
                           disabled
                         />
                       </div>
@@ -207,23 +215,69 @@ export default function AddRecording() {
                       <label className="form-label fw-semibold">Recording Link</label>
                       <input
                         type="url"
-                        className={`form-control rounded-3 ${fieldError ? "is-invalid" : ""}`}
+                        className={`form-control rounded-3 ${fieldErrors.recordingLink ? "is-invalid" : ""}`}
                         placeholder="Paste Zoom / Google Drive / YouTube recording link"
-                        value={recordingLink}
+                        value={form.recordingLink}
                         onChange={(e) => {
-                          setRecordingLink(e.target.value);
-                          if (fieldError) setFieldError("");
+                          setForm((prev) => ({ ...prev, recordingLink: e.target.value }));
+                          if (fieldErrors.recordingLink) {
+                            setFieldErrors((prev) => ({ ...prev, recordingLink: "" }));
+                          }
                           if (error) setError("");
                         }}
                         disabled={saving}
                       />
-                      {fieldError ? (
-                        <div className="invalid-feedback">{fieldError}</div>
+                      {fieldErrors.recordingLink ? (
+                        <div className="invalid-feedback">{fieldErrors.recordingLink}</div>
                       ) : (
                         <div className="form-text">
                           Add a direct recording URL that students can open later.
                         </div>
                       )}
+                    </div>
+
+                    <div className="row g-3 mb-4">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Recording Status</label>
+                        <select
+                          className="form-select rounded-3"
+                          value={form.recordingStatus}
+                          onChange={(e) =>
+                            setForm((prev) => ({ ...prev, recordingStatus: e.target.value }))
+                          }
+                          disabled={saving}
+                        >
+                          <option value="processing">Processing</option>
+                          <option value="ready">Ready</option>
+                        </select>
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Recording Duration (minutes)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          className={`form-control rounded-3 ${fieldErrors.recordingDurationMin ? "is-invalid" : ""}`}
+                          value={form.recordingDurationMin}
+                          onChange={(e) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              recordingDurationMin: e.target.value,
+                            }));
+                            if (fieldErrors.recordingDurationMin) {
+                              setFieldErrors((prev) => ({
+                                ...prev,
+                                recordingDurationMin: "",
+                              }));
+                            }
+                          }}
+                          disabled={saving}
+                          placeholder="Optional"
+                        />
+                        {fieldErrors.recordingDurationMin ? (
+                          <div className="invalid-feedback">{fieldErrors.recordingDurationMin}</div>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="d-flex flex-wrap gap-2 pt-2">
@@ -270,9 +324,14 @@ export default function AddRecording() {
                   <div className="fw-semibold text-capitalize">{liveClass?.status || "-"}</div>
                 </div>
 
+                <div className="mb-3">
+                  <div className="text-muted small mb-1">Recording Status</div>
+                  <div className="fw-semibold text-capitalize">{form.recordingStatus}</div>
+                </div>
+
                 <div className="mb-0">
                   <div className="text-muted small mb-1">Recording Link Preview</div>
-                  <div className="small text-break">{recordingLink || "-"}</div>
+                  <div className="small text-break">{form.recordingLink || "-"}</div>
                 </div>
               </div>
             </div>
@@ -280,15 +339,14 @@ export default function AddRecording() {
             <div className="card border-0 shadow-sm rounded-4">
               <div className="card-body p-4">
                 <h6 className="fw-bold mb-3">Helpful Notes</h6>
-
                 <div className="small text-muted mb-2">
                   • Paste a direct URL from Zoom, Google Drive, YouTube, or any allowed storage.
                 </div>
                 <div className="small text-muted mb-2">
-                  • After saving, students will be able to access the recording from the live class page.
+                  • Saving recording also ensures ended class flow remains complete.
                 </div>
                 <div className="small text-muted mb-0">
-                  • If you update the recording later, saving again will overwrite the previous link.
+                  • You can update the same recording later by saving again.
                 </div>
               </div>
             </div>

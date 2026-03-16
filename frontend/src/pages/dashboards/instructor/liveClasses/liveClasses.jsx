@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../../../api/api";
 
-// This safely extracts an array from many possible API response shapes
 const pickArray = (res) => {
   const d = res?.data;
   if (Array.isArray(d)) return d;
@@ -16,7 +15,6 @@ const pickArray = (res) => {
   return [];
 };
 
-// This page-specific loader shows while classes are fetching
 function LiveClassesLoader() {
   return (
     <div className="p-4 border rounded-4 bg-light">
@@ -30,6 +28,29 @@ function LiveClassesLoader() {
     </div>
   );
 }
+
+const formatDateTime = (value) => {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleString();
+};
+
+const badgeClass = (status) => {
+  if (status === "scheduled") return "text-bg-primary";
+  if (status === "live") return "text-bg-success";
+  if (status === "ended") return "text-bg-secondary";
+  if (status === "cancelled") return "text-bg-danger";
+  return "text-bg-dark";
+};
+
+const getRecordingLabel = (lc) => {
+  if (!lc) return "not_available";
+  if (lc.recordingLink) return lc.recordingStatus || "ready";
+  if (lc.status === "cancelled") return "not_available";
+  if (lc.status === "ended") return "pending";
+  return lc.recordingStatus || "not_available";
+};
 
 export default function InstructorLiveClasses() {
   const [courses, setCourses] = useState([]);
@@ -80,13 +101,9 @@ export default function InstructorLiveClasses() {
       setError("");
       setLoadingClasses(true);
 
-      let res;
-
-      if (!selectedCourseId) {
-        res = await api.get("/live-classes/me/all");
-      } else {
-        res = await api.get(`/live-classes/course/${selectedCourseId}`);
-      }
+      const res = selectedCourseId
+        ? await api.get(`/live-classes/course/${selectedCourseId}`)
+        : await api.get("/live-classes/me/all");
 
       const list = pickArray(res);
       setLiveClasses(Array.isArray(list) ? list : []);
@@ -103,20 +120,9 @@ export default function InstructorLiveClasses() {
   }, [fetchLiveClasses]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetchLiveClasses();
-    }, 30000);
-
+    const interval = setInterval(fetchLiveClasses, 30000);
     return () => clearInterval(interval);
   }, [fetchLiveClasses]);
-
-  const getStatusBadgeClass = (status) => {
-    if (status === "scheduled") return "text-bg-primary";
-    if (status === "live") return "text-bg-success";
-    if (status === "ended") return "text-bg-secondary";
-    if (status === "cancelled") return "text-bg-danger";
-    return "text-bg-dark";
-  };
 
   const handleCancel = async (liveClassId) => {
     const ok = window.confirm("Are you sure you want to cancel this live class?");
@@ -125,14 +131,8 @@ export default function InstructorLiveClasses() {
     try {
       setError("");
       setCancelingId(String(liveClassId));
-
       await api.patch(`/live-classes/${liveClassId}/cancel`);
-
-      setLiveClasses((prev) =>
-        (Array.isArray(prev) ? prev : []).map((x) =>
-          String(x._id) === String(liveClassId) ? { ...x, status: "cancelled" } : x
-        )
-      );
+      await fetchLiveClasses();
     } catch (e) {
       setError(e?.response?.data?.message || "Failed to cancel live class");
     } finally {
@@ -153,7 +153,8 @@ export default function InstructorLiveClasses() {
         !q ||
         String(lc?.title || "").toLowerCase().includes(q) ||
         String(lc?.course?.title || "").toLowerCase().includes(q) ||
-        String(lc?.provider || "").toLowerCase().includes(q);
+        String(lc?.provider || "").toLowerCase().includes(q) ||
+        String(lc?.meetingId || "").toLowerCase().includes(q);
 
       return matchesStatus && matchesSearch;
     });
@@ -191,13 +192,11 @@ export default function InstructorLiveClasses() {
                 disabled={loadingCourses}
               >
                 <option value="">All Courses</option>
-
-                {!loadingCourses &&
-                  (Array.isArray(courses) ? courses : []).map((c) => (
-                    <option key={c._id} value={c._id}>
-                      {c.title}
-                    </option>
-                  ))}
+                {(Array.isArray(courses) ? courses : []).map((c) => (
+                  <option key={c._id} value={c._id}>
+                    {c.title}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -221,7 +220,7 @@ export default function InstructorLiveClasses() {
               <input
                 type="text"
                 className="form-control rounded-3"
-                placeholder="Search by title, course, provider..."
+                placeholder="Search by title, course, provider, meeting ID..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -253,7 +252,7 @@ export default function InstructorLiveClasses() {
               </div>
             </div>
 
-            {!Array.isArray(filteredLiveClasses) || filteredLiveClasses.length === 0 ? (
+            {!filteredLiveClasses.length ? (
               <div className="text-center py-5">
                 <div className="mb-2 fs-5 fw-semibold text-dark">No live classes found</div>
                 <div className="text-muted mb-3">
@@ -276,7 +275,8 @@ export default function InstructorLiveClasses() {
                       <th className="fw-semibold">Title</th>
                       <th className="fw-semibold">Course</th>
                       <th className="fw-semibold">Start Time</th>
-                      <th className="fw-semibold">Duration</th>
+                      <th className="fw-semibold">Attendance</th>
+                      <th className="fw-semibold">Recording</th>
                       <th className="fw-semibold">Status</th>
                       <th className="fw-semibold text-end">Actions</th>
                     </tr>
@@ -289,21 +289,32 @@ export default function InstructorLiveClasses() {
                       const isEnded = lc.status === "ended";
                       const isCancelled = lc.status === "cancelled";
 
-                      const showRecordingLink = !!lc.recordingLink;
-                      const showAddRecording = !lc.recordingLink && isEnded;
+                      const attendanceSummary = lc.attendanceSummary || {};
 
+                      const canEnterClassroom = !isCancelled;
                       const canOpenMeeting = !!lc.meetingLink && !isEnded && !isCancelled;
                       const canReschedule = isScheduled;
                       const canCancel = !isEnded && !isCancelled;
                       const canViewAttendance = isLive || isEnded || isCancelled;
+                      const canManageRecording = !isCancelled && isEnded;
+                      const showRecordingLink = !!lc.recordingLink;
 
                       return (
                         <tr key={lc._id}>
-                          <td style={{ minWidth: "240px" }}>
+                          <td style={{ minWidth: "250px" }}>
                             <div className="fw-semibold text-dark">{lc.title}</div>
+
                             <div className="text-muted small mt-1">
                               Provider: {lc.provider?.toUpperCase() || "ZOOM"}
                             </div>
+
+                            <div className="text-muted small">
+                              Duration: {lc.durationMin ? `${lc.durationMin} min` : "-"}
+                            </div>
+
+                            {lc.meetingId ? (
+                              <div className="text-muted small">Meeting ID: {lc.meetingId}</div>
+                            ) : null}
                           </td>
 
                           <td style={{ minWidth: "220px" }}>
@@ -312,45 +323,71 @@ export default function InstructorLiveClasses() {
                             </div>
                           </td>
 
-                          <td style={{ minWidth: "190px" }}>
-                            <div className="text-dark">
-                              {lc.startAt ? new Date(lc.startAt).toLocaleString() : "-"}
+                          <td style={{ minWidth: "200px" }}>
+                            <div className="text-dark">{formatDateTime(lc.startAt)}</div>
+                          </td>
+
+                          <td style={{ minWidth: "180px" }}>
+                            <div className="small text-muted">
+                              Total:{" "}
+                              <span className="fw-semibold text-dark">
+                                {attendanceSummary.totalAttendees || 0}
+                              </span>
+                            </div>
+                            <div className="small text-muted">
+                              Present:{" "}
+                              <span className="fw-semibold text-success">
+                                {attendanceSummary.presentCount || 0}
+                              </span>
+                            </div>
+                            <div className="small text-muted">
+                              Partial:{" "}
+                              <span className="fw-semibold text-warning">
+                                {attendanceSummary.partialCount || 0}
+                              </span>
                             </div>
                           </td>
 
-                          <td>
-                            <span className="text-muted">
-                              {lc.durationMin ? `${lc.durationMin} min` : "-"}
-                            </span>
+                          <td style={{ minWidth: "180px" }}>
+                            {showRecordingLink ? (
+                              <div>
+                                <span className="badge text-bg-success rounded-pill px-3 py-2 mb-2">
+                                  {getRecordingLabel(lc)}
+                                </span>
+                                <div>
+                                  <a
+                                    href={lc.recordingLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="btn btn-outline-secondary btn-sm rounded-pill px-3"
+                                  >
+                                    View Recording
+                                  </a>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="badge text-bg-light border text-dark rounded-pill px-3 py-2">
+                                {getRecordingLabel(lc)}
+                              </span>
+                            )}
                           </td>
 
                           <td>
                             <span
-                              className={`badge rounded-pill px-3 py-2 ${getStatusBadgeClass(lc.status)}`}
+                              className={`badge rounded-pill px-3 py-2 ${badgeClass(lc.status)}`}
                             >
                               {lc.status}
                             </span>
                           </td>
 
-                          <td className="text-end" style={{ minWidth: "470px" }}>
+                          <td className="text-end" style={{ minWidth: "650px" }}>
                             <div className="d-flex justify-content-end flex-wrap gap-2">
-                              {showRecordingLink ? (
-                                <a
-                                  href={lc.recordingLink}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="btn btn-outline-secondary btn-sm rounded-pill px-3"
-                                >
-                                  Recording
-                                </a>
-                              ) : null}
-
-                              {showAddRecording ? (
+                              {canEnterClassroom ? (
                                 <Link
-                                  to={`/instructor-dashboard/live-classes/${lc._id}/recording`}
-                                  className="btn btn-outline-success btn-sm rounded-pill px-3"
+                                  to={`/instructor-dashboard/live-classes/${lc._id}/classroom`}
+                                  className="btn btn-outline-dark btn-sm rounded-pill px-3"
                                 >
-                                  Add Recording
+                                  Classroom
                                 </Link>
                               ) : null}
 
@@ -368,9 +405,18 @@ export default function InstructorLiveClasses() {
                               {canViewAttendance ? (
                                 <Link
                                   to={`/instructor-dashboard/live-classes/${lc._id}/attendance`}
-                                  className="btn btn-outline-dark btn-sm rounded-pill px-3"
+                                  className="btn btn-outline-secondary btn-sm rounded-pill px-3"
                                 >
                                   Attendance
+                                </Link>
+                              ) : null}
+
+                              {canManageRecording ? (
+                                <Link
+                                  to={`/instructor-dashboard/live-classes/${lc._id}/recording`}
+                                  className="btn btn-outline-success btn-sm rounded-pill px-3"
+                                >
+                                  {showRecordingLink ? "Update Recording" : "Add Recording"}
                                 </Link>
                               ) : null}
 
@@ -383,27 +429,28 @@ export default function InstructorLiveClasses() {
                                 </Link>
                               ) : null}
 
-                              <button
-                                className="btn btn-outline-danger btn-sm rounded-pill px-3"
-                                onClick={() => handleCancel(lc._id)}
-                                disabled={!canCancel || cancelingId === String(lc._id)}
-                                title="Cancel this class"
-                              >
-                                {cancelingId === String(lc._id) ? "Cancelling..." : "Cancel"}
-                              </button>
+                              {canCancel ? (
+                                <button
+                                  className="btn btn-outline-danger btn-sm rounded-pill px-3"
+                                  onClick={() => handleCancel(lc._id)}
+                                  disabled={cancelingId === String(lc._id)}
+                                >
+                                  {cancelingId === String(lc._id) ? "Cancelling..." : "Cancel"}
+                                </button>
+                              ) : null}
                             </div>
                           </td>
                         </tr>
                       );
                     })}
-                  </tbody>
+                    </tbody>
                 </table>
               </div>
             )}
 
             <div className="text-muted small mt-4 pt-3 border-top">
-              Tip: Use <span className="fw-semibold">All Courses</span> to see every session together,
-              or select one course to manage it separately.
+              Tip: Use <span className="fw-semibold">Classroom</span> for live chat and Q&amp;A,
+              and use <span className="fw-semibold">Open Meeting</span> for the actual video session.
             </div>
           </div>
         </div>

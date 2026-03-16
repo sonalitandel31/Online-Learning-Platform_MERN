@@ -1,4 +1,3 @@
-// require("dotenv").config();
 const { jsPDF } = require("jspdf");
 const fs = require("fs");
 const path = require("path");

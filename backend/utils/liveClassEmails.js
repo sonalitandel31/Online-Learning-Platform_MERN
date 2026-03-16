@@ -10,17 +10,23 @@ exports.emailLiveCreated = ({ courseTitle, topic, timeText, joinLink }) => ({
 });
 
 exports.emailLiveReminder10Min = ({ courseTitle, topic, timeText, joinLink }) => ({
-  subject: "Live class starting in 10 minutes",
+  subject: "Live Class Starting in 10 Minutes",
   html: `
-    <h3>Live class starting in 10 minutes</h3>
+    <h3>Live Class Starting in 10 Minutes</h3>
     <p><b>Course:</b> ${courseTitle}</p>
     <p><b>Topic:</b> ${topic}</p>
     <p><b>Start Time:</b> ${timeText}</p>
-    <p><b>Join now:</b> <a href="${joinLink}">${joinLink}</a></p>
+    <p><b>Join Now:</b> <a href="${joinLink}">${joinLink}</a></p>
   `,
 });
 
-exports.emailLiveRescheduled = ({ courseTitle, topic, oldTimeText, newTimeText, joinLink,}) => ({
+exports.emailLiveRescheduled = ({
+  courseTitle,
+  topic,
+  oldTimeText,
+  newTimeText,
+  joinLink,
+}) => ({
   subject: "Live Class Rescheduled",
   html: `
     <h3>Live Class Rescheduled</h3>
@@ -33,16 +39,25 @@ exports.emailLiveRescheduled = ({ courseTitle, topic, oldTimeText, newTimeText, 
   `,
 });
 
-exports.emailLiveCancelled = ({ courseTitle, topic, timeText,}) => ({
+exports.emailLiveCancelled = ({ courseTitle, topic, timeText }) => ({
   subject: "Live Class Cancelled",
   html: `
     <h3>Live Class Cancelled</h3>
     <p>The following live class has been cancelled.</p>
-
     <p><b>Course:</b> ${courseTitle}</p>
     <p><b>Topic:</b> ${topic}</p>
     <p><b>Scheduled Time:</b> ${timeText}</p>
-
     <p>Please check the LMS dashboard for future sessions.</p>
+  `,
+});
+
+exports.emailLiveRecordingReady = ({ courseTitle, topic, recordingLink }) => ({
+  subject: "Live Class Recording Available",
+  html: `
+    <h3>Live Class Recording Available</h3>
+    <p>The recording for your live class is now available.</p>
+    <p><b>Course:</b> ${courseTitle}</p>
+    <p><b>Topic:</b> ${topic}</p>
+    <p><b>Recording Link:</b> <a href="${recordingLink}">${recordingLink}</a></p>
   `,
 });

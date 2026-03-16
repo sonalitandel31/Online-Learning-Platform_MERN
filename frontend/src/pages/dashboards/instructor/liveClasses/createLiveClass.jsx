@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../../api/api";
 
-// This safely extracts an array from many possible API response shapes
 const pickArray = (res) => {
   const d = res?.data;
   if (Array.isArray(d)) return d;
@@ -14,7 +13,6 @@ const pickArray = (res) => {
   return [];
 };
 
-// This page-specific loader shows while saving the class
 function CreateLiveClassLoader({ text = "Creating live class…" }) {
   return (
     <div className="p-3 border rounded-4 bg-light mb-3">
@@ -22,7 +20,7 @@ function CreateLiveClassLoader({ text = "Creating live class…" }) {
         <div className="spinner-grow text-primary" role="status" aria-label="Loading" />
         <div>
           <div className="fw-semibold">{text}</div>
-          <div className="text-muted small">Saving schedule and meeting link.</div>
+          <div className="text-muted small">Saving schedule and notifying students.</div>
         </div>
       </div>
     </div>
@@ -46,11 +44,15 @@ export default function CreateLiveClass() {
     provider: "zoom",
     startAtLocal: "",
     durationMin: 60,
+    autoCreateMeeting: false,
     meetingLink: "",
+    meetingId: "",
+    meetingPassword: "",
+    roomName: "",
+    recordingMode: "manual",
   });
 
   useEffect(() => {
-    // This loads instructor courses and keeps only approved courses
     const fetchCourses = async () => {
       try {
         setError("");
@@ -65,7 +67,6 @@ export default function CreateLiveClass() {
 
         setCourses(approvedCourses);
 
-        // This auto-selects the first approved course
         if (approvedCourses.length > 0) {
           setForm((p) => ({ ...p, courseId: String(approvedCourses[0]._id) }));
         } else {
@@ -91,21 +92,46 @@ export default function CreateLiveClass() {
 
   const hasApprovedCourses = Array.isArray(courses) && courses.length > 0;
 
+  const isZoomProvider = form.provider === "zoom";
+  const shouldAutoCreateZoom = isZoomProvider && form.autoCreateMeeting;
+
   const handleChange = (e) => {
     const { name, value } = e.target;
 
-    // This updates a single form field
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
 
-    // This clears field error while user edits
+      // If provider changes away from zoom, auto-create should turn off
+      if (name === "provider" && value !== "zoom") {
+        next.autoCreateMeeting = false;
+      }
+
+      return next;
+    });
+
     setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+    if (error) setError("");
+  };
 
-    // This clears top-level error
+  const handleAutoCreateToggle = (e) => {
+    const checked = e.target.checked;
+
+    setForm((prev) => ({
+      ...prev,
+      autoCreateMeeting: checked,
+      // clear manual link validation issue when auto create is enabled
+      meetingLink: checked ? "" : prev.meetingLink,
+    }));
+
+    setFieldErrors((prev) => ({
+      ...prev,
+      meetingLink: "",
+    }));
+
     if (error) setError("");
   };
 
   const toISOFromLocal = (localValue) => {
-    // This converts datetime-local to ISO string (UTC)
     if (!localValue) return null;
     return new Date(localValue).toISOString();
   };
@@ -151,10 +177,12 @@ export default function CreateLiveClass() {
       nextErrors.durationMin = "Duration must be between 10 and 600 minutes.";
     }
 
-    if (!meetingLink) {
-      nextErrors.meetingLink = "Please enter meeting link.";
-    } else if (!isValidHttpUrl(meetingLink)) {
-      nextErrors.meetingLink = "Please enter a valid http/https meeting link.";
+    if (!shouldAutoCreateZoom) {
+      if (!meetingLink) {
+        nextErrors.meetingLink = "Please enter meeting link.";
+      } else if (!isValidHttpUrl(meetingLink)) {
+        nextErrors.meetingLink = "Please enter a valid http/https meeting link.";
+      }
     }
 
     setFieldErrors(nextErrors);
@@ -172,8 +200,7 @@ export default function CreateLiveClass() {
         return;
       }
 
-      const isValid = validateForm();
-      if (!isValid) return;
+      if (!validateForm()) return;
 
       setSubmitting(true);
 
@@ -184,12 +211,15 @@ export default function CreateLiveClass() {
         provider: form.provider || "zoom",
         startAt: toISOFromLocal(form.startAtLocal),
         durationMin: Number(form.durationMin || 60),
-        meetingLink: form.meetingLink.trim(),
+        autoCreateMeeting: shouldAutoCreateZoom,
+        meetingLink: shouldAutoCreateZoom ? "" : form.meetingLink.trim(),
+        meetingId: form.meetingId.trim(),
+        meetingPassword: form.meetingPassword.trim(),
+        roomName: form.roomName.trim(),
+        recordingMode: form.recordingMode,
       };
 
       await api.post("/live-classes", payload);
-
-      // This redirects back to live classes list after success
       navigate("/instructor-dashboard/live-classes");
     } catch (e2) {
       setError(e2?.response?.data?.message || "Failed to create live class");
@@ -203,13 +233,11 @@ export default function CreateLiveClass() {
       <div className="mb-4">
         <h3 className="mb-1 fw-bold">Create Live Class</h3>
         <div className="text-muted small">
-          Schedule a session, attach a meeting link, and notify enrolled students.
+          Schedule a session, attach meeting details, and notify enrolled students.
         </div>
       </div>
 
-      {error ? (
-        <div className="alert alert-danger rounded-4 shadow-sm">{error}</div>
-      ) : null}
+      {error ? <div className="alert alert-danger rounded-4 shadow-sm">{error}</div> : null}
 
       {!loadingCourses && !hasApprovedCourses ? (
         <div className="alert alert-info rounded-4 shadow-sm">
@@ -245,6 +273,7 @@ export default function CreateLiveClass() {
                       </option>
                     ))}
                   </select>
+
                   {fieldErrors.courseId ? (
                     <div className="invalid-feedback">{fieldErrors.courseId}</div>
                   ) : (
@@ -261,16 +290,12 @@ export default function CreateLiveClass() {
                     name="title"
                     value={form.title}
                     onChange={handleChange}
-                    placeholder="e.g. Doubt Solving Session"
+                    placeholder="e.g. Revision Session"
                     disabled={submitting || !hasApprovedCourses}
                   />
                   {fieldErrors.title ? (
                     <div className="invalid-feedback">{fieldErrors.title}</div>
-                  ) : (
-                    <div className="form-text">
-                      Choose a clear title students can understand quickly.
-                    </div>
-                  )}
+                  ) : null}
                 </div>
 
                 <div className="mb-4">
@@ -284,9 +309,6 @@ export default function CreateLiveClass() {
                     placeholder="What will be covered in this session?"
                     disabled={submitting || !hasApprovedCourses}
                   />
-                  <div className="form-text">
-                    Optional, but useful for agenda, topic, or doubt-solving focus.
-                  </div>
                 </div>
 
                 <div className="row g-3 mb-4">
@@ -300,9 +322,8 @@ export default function CreateLiveClass() {
                       disabled={submitting || !hasApprovedCourses}
                     >
                       <option value="zoom">Zoom</option>
-                      <option value="webrtc">WebRTC (later)</option>
+                      <option value="webrtc">WebRTC</option>
                     </select>
-                    <div className="form-text">Zoom-first is stable and faster for now.</div>
                   </div>
 
                   <div className="col-md-4">
@@ -338,6 +359,27 @@ export default function CreateLiveClass() {
                   </div>
                 </div>
 
+                <div className="form-check mb-4">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id="autoCreateMeeting"
+                    checked={form.autoCreateMeeting}
+                    onChange={handleAutoCreateToggle}
+                    disabled={
+                      submitting ||
+                      !hasApprovedCourses ||
+                      form.provider !== "zoom"
+                    }
+                  />
+                  <label className="form-check-label" htmlFor="autoCreateMeeting">
+                    Auto create Zoom meeting from backend
+                  </label>
+                  <div className="form-text">
+                    Works only for Zoom provider. If enabled, backend creates the Zoom meeting automatically.
+                  </div>
+                </div>
+
                 <div className="mb-4">
                   <label className="form-label fw-semibold">Meeting Link</label>
                   <input
@@ -345,16 +387,77 @@ export default function CreateLiveClass() {
                     name="meetingLink"
                     value={form.meetingLink}
                     onChange={handleChange}
-                    placeholder="https://zoom.us/j/xxxxxx"
-                    disabled={submitting || !hasApprovedCourses}
+                    placeholder={
+                      shouldAutoCreateZoom
+                        ? "Auto-generated by backend"
+                        : "https://zoom.us/j/xxxxxx"
+                    }
+                    disabled={submitting || !hasApprovedCourses || shouldAutoCreateZoom}
                   />
                   {fieldErrors.meetingLink ? (
                     <div className="invalid-feedback">{fieldErrors.meetingLink}</div>
                   ) : (
                     <div className="form-text">
-                      Paste the direct join link. Later you can automate this with Zoom API.
+                      {shouldAutoCreateZoom
+                        ? "You do not need to paste a link. It will be generated automatically."
+                        : "Paste the direct meeting join link if you are creating the meeting manually."}
                     </div>
                   )}
+                </div>
+
+                <div className="row g-3 mb-4">
+                  <div className="col-md-4">
+                    <label className="form-label fw-semibold">Meeting ID</label>
+                    <input
+                      className="form-control rounded-3"
+                      name="meetingId"
+                      value={form.meetingId}
+                      onChange={handleChange}
+                      placeholder={shouldAutoCreateZoom ? "Optional seed value" : "Optional"}
+                      disabled={submitting || !hasApprovedCourses || shouldAutoCreateZoom}
+                    />
+                  </div>
+
+                  <div className="col-md-4">
+                    <label className="form-label fw-semibold">Meeting Password</label>
+                    <input
+                      className="form-control rounded-3"
+                      name="meetingPassword"
+                      value={form.meetingPassword}
+                      onChange={handleChange}
+                      placeholder="Optional"
+                      disabled={submitting || !hasApprovedCourses}
+                    />
+                  </div>
+
+                  <div className="col-md-4">
+                    <label className="form-label fw-semibold">Room Name</label>
+                    <input
+                      className="form-control rounded-3"
+                      name="roomName"
+                      value={form.roomName}
+                      onChange={handleChange}
+                      placeholder="Optional"
+                      disabled={submitting || !hasApprovedCourses || shouldAutoCreateZoom}
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="form-label fw-semibold">Recording Mode</label>
+                  <select
+                    className="form-select rounded-3"
+                    name="recordingMode"
+                    value={form.recordingMode}
+                    onChange={handleChange}
+                    disabled={submitting || !hasApprovedCourses}
+                  >
+                    <option value="manual">Manual</option>
+                    <option value="auto">Auto</option>
+                  </select>
+                  <div className="form-text">
+                    Auto is useful when provider webhook sync is enabled later.
+                  </div>
                 </div>
 
                 <div className="d-flex flex-wrap gap-2 pt-2">
@@ -401,17 +504,29 @@ export default function CreateLiveClass() {
               </div>
 
               <div className="mb-3">
+                <div className="text-muted small mb-1">Meeting Setup</div>
+                <div className="fw-semibold">
+                  {shouldAutoCreateZoom ? "Auto Zoom creation" : "Manual meeting link"}
+                </div>
+              </div>
+
+              <div className="mb-3">
                 <div className="text-muted small mb-1">Start Time</div>
                 <div className="fw-semibold">
                   {form.startAtLocal ? new Date(form.startAtLocal).toLocaleString() : "-"}
                 </div>
               </div>
 
-              <div className="mb-0">
+              <div className="mb-3">
                 <div className="text-muted small mb-1">Duration</div>
                 <div className="fw-semibold">
                   {form.durationMin ? `${form.durationMin} min` : "-"}
                 </div>
+              </div>
+
+              <div className="mb-0">
+                <div className="text-muted small mb-1">Recording Mode</div>
+                <div className="fw-semibold text-capitalize">{form.recordingMode}</div>
               </div>
             </div>
           </div>
@@ -419,15 +534,17 @@ export default function CreateLiveClass() {
           <div className="card border-0 shadow-sm rounded-4">
             <div className="card-body p-4">
               <h6 className="fw-bold mb-3">Helpful Notes</h6>
-
               <div className="small text-muted mb-2">
                 • Students can join when the class becomes live or enters the early join window.
               </div>
               <div className="small text-muted mb-2">
-                • Reminder emails can be triggered before the scheduled start.
+                • Reminder emails are sent automatically before the scheduled time.
+              </div>
+              <div className="small text-muted mb-2">
+                • Classroom page is used for live chat and Q&amp;A.
               </div>
               <div className="small text-muted mb-0">
-                • After class ends, you can add a recording link for students.
+                • After class ends, recording can be added manually or linked later by provider sync.
               </div>
             </div>
           </div>

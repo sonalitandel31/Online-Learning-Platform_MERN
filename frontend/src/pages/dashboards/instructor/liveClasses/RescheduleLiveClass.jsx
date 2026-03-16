@@ -23,13 +23,9 @@ const toDateTimeLocal = (value) => {
 
   const pad = (n) => String(n).padStart(2, "0");
 
-  const year = d.getFullYear();
-  const month = pad(d.getMonth() + 1);
-  const day = pad(d.getDate());
-  const hours = pad(d.getHours());
-  const mins = pad(d.getMinutes());
-
-  return `${year}-${month}-${day}T${hours}:${mins}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
 };
 
 export default function RescheduleLiveClass() {
@@ -114,7 +110,6 @@ export default function RescheduleLiveClass() {
 
   const validateForm = () => {
     const nextErrors = {};
-
     const startDate = form.newStartAtLocal ? new Date(form.newStartAtLocal) : null;
     const duration = Number(form.durationMin || 0);
 
@@ -141,9 +136,7 @@ export default function RescheduleLiveClass() {
 
     try {
       setError("");
-
-      const isValid = validateForm();
-      if (!isValid) return;
+      if (!validateForm()) return;
 
       setSubmitting(true);
 
@@ -162,10 +155,8 @@ export default function RescheduleLiveClass() {
 
   const newSchedulePreview = useMemo(() => {
     if (!form.newStartAtLocal) return "-";
-
     const d = new Date(form.newStartAtLocal);
     if (Number.isNaN(d.getTime())) return "-";
-
     return d.toLocaleString();
   }, [form.newStartAtLocal]);
 
@@ -199,22 +190,12 @@ export default function RescheduleLiveClass() {
                 <form onSubmit={handleSubmit} noValidate>
                   <div className="mb-4">
                     <label className="form-label fw-semibold">Live Class Title</label>
-                    <input
-                      className="form-control rounded-3"
-                      value={form.title}
-                      disabled
-                    />
-                    <div className="form-text">This field is read-only for reference.</div>
+                    <input className="form-control rounded-3" value={form.title} disabled />
                   </div>
 
                   <div className="mb-4">
                     <label className="form-label fw-semibold">Course</label>
-                    <input
-                      className="form-control rounded-3"
-                      value={form.courseTitle}
-                      disabled
-                    />
-                    <div className="form-text">This class belongs to this course.</div>
+                    <input className="form-control rounded-3" value={form.courseTitle} disabled />
                   </div>
 
                   <div className="mb-4">
@@ -224,7 +205,6 @@ export default function RescheduleLiveClass() {
                       value={form.currentStartAt ? new Date(form.currentStartAt).toLocaleString() : "-"}
                       disabled
                     />
-                    <div className="form-text">This is the currently saved class time.</div>
                   </div>
 
                   <div className="row g-3 mb-4">
@@ -240,11 +220,7 @@ export default function RescheduleLiveClass() {
                       />
                       {fieldErrors.newStartAtLocal ? (
                         <div className="invalid-feedback">{fieldErrors.newStartAtLocal}</div>
-                      ) : (
-                        <div className="form-text">
-                          Choose the new future time for the live session.
-                        </div>
-                      )}
+                      ) : null}
                     </div>
 
                     <div className="col-md-5">
@@ -261,11 +237,7 @@ export default function RescheduleLiveClass() {
                       />
                       {fieldErrors.durationMin ? (
                         <div className="invalid-feedback">{fieldErrors.durationMin}</div>
-                      ) : (
-                        <div className="form-text">
-                          Keep it between 10 and 600 minutes.
-                        </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
 
@@ -324,15 +296,14 @@ export default function RescheduleLiveClass() {
             <div className="card border-0 shadow-sm rounded-4">
               <div className="card-body p-4">
                 <h6 className="fw-bold mb-3">Helpful Notes</h6>
-
                 <div className="small text-muted mb-2">
-                  • Only scheduled classes should be rescheduled.
+                  • Only scheduled classes can be rescheduled.
                 </div>
                 <div className="small text-muted mb-2">
-                  • After rescheduling, students should see the updated class time.
+                  • Reminder flag resets automatically after reschedule.
                 </div>
                 <div className="small text-muted mb-0">
-                  • Reminder emails should use the new scheduled time if your backend resets the reminder flag.
+                  • Students and instructor receive updated schedule email from backend.
                 </div>
               </div>
             </div>
