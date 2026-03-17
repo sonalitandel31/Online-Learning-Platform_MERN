@@ -17,10 +17,6 @@ const { emitToLiveClass } = require("../socket/liveClassSocket");
 const { syncLiveClassAttendance } = require("../services/liveAttendanceSyncService");
 const { getMeetingRecordings } = require("../config/zoom");
 
-// -----------------------------
-// Helpers
-// -----------------------------
-
 const ALLOWED_PROVIDERS = ["zoom", "webrtc"];
 const JOIN_WINDOW_MINUTES = 10;
 
@@ -54,7 +50,7 @@ const getLiveClassEndAt = (liveClass) => {
   );
 };
 
-const getAttendanceStatus = (minutesAttended, totalDurationMin) => {
+/* const getAttendanceStatus = (minutesAttended, totalDurationMin) => {
   const total = Math.max(1, Number(totalDurationMin || 0));
   const attended = Math.max(0, Number(minutesAttended || 0));
   const ratio = attended / total;
@@ -62,6 +58,63 @@ const getAttendanceStatus = (minutesAttended, totalDurationMin) => {
   if (ratio >= 0.75) return "present";
   if (ratio > 0) return "partial";
   return "absent";
+};
+ */
+
+// -----------------------------
+// UPDATED HELPERS (5-min rule applied globally)
+// -----------------------------
+const getAttendanceStatus = (totalDuration, classDurationMin) => {
+  const attended = Math.max(0, Number(totalDuration || 0));
+  const total = Math.max(1, Number(classDurationMin || 0));
+
+  // Rule 1: Agar 5 minute se kam hai, toh strictly absent
+  if (attended < 5) return "absent";
+
+  // Rule 2: 70% se zyada hai toh present, warna partial
+  const ratio = attended / total;
+  if (ratio >= 0.70) return "present";
+  
+  return "partial";
+};
+
+// YEH FUNCTION DATA DESTROY KAR RAHA THA, ISKO UPDATE KIYA HAI
+const syncAttendanceForEndedClass = async (liveClassId) => {
+  const liveClass = await liveClassModel.findById(liveClassId).select(
+    "_id startAt durationMin status"
+  );
+
+  if (!liveClass || liveClass.status !== "ended") return;
+
+  const endAt = getLiveClassEndAt(liveClass);
+  const records = await liveAttendanceModel.find({ liveClass: liveClassId });
+
+  for (const record of records) {
+    // Agar bacche ne "Leave" nahi dabaya aur class end ho gayi (Open Session)
+    if (record.joinTimes.length > record.leaveTimes.length) {
+      record.leaveTimes.push(endAt);
+      const lastJoin = record.joinTimes[record.joinTimes.length - 1];
+      const diffMs = endAt.getTime() - new Date(lastJoin).getTime();
+      record.totalDuration += Math.max(0, Math.round(diffMs / 60000));
+    }
+
+    // Naya 5-min wala status lagao
+    record.attendanceStatus = getAttendanceStatus(
+      record.totalDuration,
+      liveClass.durationMin
+    );
+
+    await record.save();
+  }
+
+  emitToLiveClass(liveClassId, "attendance:summaryRefresh", {
+    liveClassId,
+  });
+
+  // Webhook sync sirf tab agar zaroorat ho
+  if (typeof syncLiveClassAttendance === 'function') {
+      await syncLiveClassAttendance(liveClassId).catch(e => console.log("Webhook sync skipped."));
+  }
 };
 
 const resolveLiveClassStatus = async (liveClass) => {
@@ -93,6 +146,57 @@ const resolveLiveClassStatus = async (liveClass) => {
   }
 
   return liveClass;
+};
+
+const buildLiveClassListResponse = async (list, userId = null) => {
+  if (!list || list.length === 0) return [];
+  
+  const classIds = list.map((item) => item._id);
+
+  // 1. Get total attendance counts for ALL students
+  const attendanceAgg = await liveAttendanceModel.aggregate([
+    { $match: { liveClass: { $in: classIds } } },
+    {
+      $group: {
+        _id: "$liveClass",
+        totalAttendees: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const attendanceMap = new Map(attendanceAgg.map((item) => [String(item._id), item]));
+
+  // 2. Fetch specific user's records to check if they are currently inside
+  let userAttendanceMap = new Map();
+  if (userId) {
+    const userRecords = await liveAttendanceModel.find({
+      student: userId,
+      liveClass: { $in: classIds }
+    });
+    
+    userRecords.forEach(record => {
+      // If joinTimes length > leaveTimes length, they are still in the meeting
+      const isJoined = (record.joinTimes?.length || 0) > (record.leaveTimes?.length || 0);
+      userAttendanceMap.set(String(record.liveClass), isJoined);
+    });
+  }
+
+  // 3. Build final output securely
+  return list.map((item) => {
+    const stats = attendanceMap.get(String(item._id));
+    const itemObj = typeof item.toObject === 'function' ? item.toObject() : item;
+
+    // Safely inject the flag right before sending to frontend
+    const isCurrentlyJoined = userId ? !!userAttendanceMap.get(String(item._id)) : false;
+
+    return {
+      ...itemObj,
+      isCurrentlyJoined, 
+      attendanceSummary: {
+        totalAttendees: stats?.totalAttendees || 0,
+      },
+    };
+  });
 };
 
 const syncRecordingAfterClass = async (liveClassId) => {
@@ -129,6 +233,7 @@ const syncRecordingAfterClass = async (liveClassId) => {
   }
 };
 
+/* 
 const syncAttendanceForEndedClass = async (liveClassId) => {
   const liveClass = await liveClassModel.findById(liveClassId).select(
     "_id startAt durationMin status"
@@ -168,7 +273,7 @@ const syncAttendanceForEndedClass = async (liveClassId) => {
 
   await syncLiveClassAttendance(liveClassId);
   await syncRecordingAfterClass(liveClassId);
-};
+}; */
 
 const canJoinLiveClassNow = (liveClass, now = new Date()) => {
   if (!liveClass) return false;
@@ -231,51 +336,6 @@ const ensureClassAccess = async ({ liveClass, user }) => {
   }
 
   return { allowed: true, roleType: role };
-};
-
-const buildLiveClassListResponse = async (list) => {
-  const classIds = list.map((item) => item._id);
-
-  const attendanceAgg = await liveAttendanceModel.aggregate([
-    {
-      $match: {
-        liveClass: { $in: classIds },
-      },
-    },
-    {
-      $group: {
-        _id: "$liveClass",
-        totalAttendees: { $sum: 1 },
-        presentCount: {
-          $sum: {
-            $cond: [{ $eq: ["$attendanceStatus", "present"] }, 1, 0],
-          },
-        },
-        partialCount: {
-          $sum: {
-            $cond: [{ $eq: ["$attendanceStatus", "partial"] }, 1, 0],
-          },
-        },
-      },
-    },
-  ]);
-
-  const attendanceMap = new Map(
-    attendanceAgg.map((item) => [String(item._id), item])
-  );
-
-  return list.map((item) => {
-    const stats = attendanceMap.get(String(item._id));
-
-    return {
-      ...item.toObject(),
-      attendanceSummary: {
-        totalAttendees: stats?.totalAttendees || 0,
-        presentCount: stats?.presentCount || 0,
-        partialCount: stats?.partialCount || 0,
-      },
-    };
-  });
 };
 
 // -----------------------------
@@ -509,7 +569,7 @@ exports.getCourseLiveClasses = async (req, res) => {
 };
 
 // -----------------------------
-// MY UPCOMING / ALL RELEVANT LIVE CLASSES
+// GET MY UPCOMING CLASSES (Persistent Joined Status)
 // -----------------------------
 exports.getMyUpcomingLiveClasses = async (req, res) => {
   try {
@@ -517,20 +577,16 @@ exports.getMyUpcomingLiveClasses = async (req, res) => {
     const role = normalizeRole(req.user.role);
 
     if (role === "student") {
-      const enrollments = await enrollmentModel
-        .find({
-          student: req.user._id,
-          status: { $in: ["active", "completed"] },
-          $or: [{ expiryDate: null }, { expiryDate: { $gte: now } }],
-        })
-        .select("course");
+      const enrollments = await enrollmentModel.find({
+        student: req.user._id,
+        status: { $in: ["active", "completed"] },
+        $or: [{ expiryDate: null }, { expiryDate: { $gte: now } }],
+      }).select("course");
 
       const courseIds = enrollments.map((e) => e.course);
 
       const list = await liveClassModel
-        .find({
-          course: { $in: courseIds },
-        })
+        .find({ course: { $in: courseIds } })
         .populate("course", "title thumbnail")
         .populate("instructor", "name email")
         .sort({ startAt: -1 });
@@ -539,44 +595,25 @@ exports.getMyUpcomingLiveClasses = async (req, res) => {
         await resolveLiveClassStatus(lc);
       }
 
-      const responseData = await buildLiveClassListResponse(list);
+      // We pass the req.user._id here so the helper knows to check persistence!
+      const responseData = await buildLiveClassListResponse(list, req.user._id);
+      
       return res.json({ success: true, data: responseData });
     }
 
-    if (role === "instructor") {
-      const list = await liveClassModel
-        .find({
-          instructor: req.user._id,
-        })
-        .populate("course", "title thumbnail")
-        .populate("instructor", "name email")
-        .sort({ startAt: -1 });
-
-      for (const lc of list) {
-        await resolveLiveClassStatus(lc);
-      }
-
-      const responseData = await buildLiveClassListResponse(list);
-      return res.json({ success: true, data: responseData });
+    // Instructor/Admin Logic
+    const query = role === "instructor" ? { instructor: req.user._id } : {};
+    const list = await liveClassModel.find(query).populate("course", "title thumbnail").populate("instructor", "name email").sort({ startAt: -1 });
+    
+    for (const lc of list) {
+      await resolveLiveClassStatus(lc);
     }
+    
+    const responseData = await buildLiveClassListResponse(list);
+    return res.json({ success: true, data: responseData });
 
-    if (role === "admin") {
-      const list = await liveClassModel
-        .find({})
-        .populate("course", "title thumbnail")
-        .populate("instructor", "name email")
-        .sort({ startAt: -1 });
-
-      for (const lc of list) {
-        await resolveLiveClassStatus(lc);
-      }
-
-      const responseData = await buildLiveClassListResponse(list);
-      return res.json({ success: true, data: responseData });
-    }
-
-    return res.json({ success: true, data: [] });
   } catch (err) {
+    console.error("CRITICAL ERROR in getMyUpcomingLiveClasses:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -748,120 +785,36 @@ exports.cancelLiveClass = async (req, res) => {
 };
 
 // -----------------------------
-// JOIN LIVE CLASS
+// JOIN LIVE CLASS (Updated for joinTimes array)
 // -----------------------------
 exports.joinLiveClass = async (req, res) => {
   try {
     const { liveClassId } = req.params;
+    const studentId = req.user?._id;
 
-    const liveClass = await liveClassModel
-      .findById(liveClassId)
-      .select(
-        "course instructor meetingLink status startAt durationMin provider"
-      );
+    const liveClass = await liveClassModel.findById(liveClassId);
+    if (!liveClass) return res.status(404).json({ message: "Class not found" });
 
-    if (!liveClass) {
-      return res.status(404).json({ success: false, message: "Live class not found" });
-    }
-
+    // Resolved status before joining
     await resolveLiveClassStatus(liveClass);
 
-    if (liveClass.status === "cancelled") {
-      return res.status(400).json({ success: false, message: "This class is cancelled" });
+    if (liveClass.status === "cancelled" || liveClass.status === "ended") {
+      return res.status(400).json({ message: `Class is ${liveClass.status}` });
     }
 
-    if (liveClass.status === "ended") {
-      return res.status(400).json({
-        success: false,
-        message: "This class has already ended",
-      });
-    }
-
-    if (!canJoinLiveClassNow(liveClass, new Date())) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "You can join only when class is live or within 10 minutes of start time",
-      });
-    }
-
-    const access = await ensureClassAccess({ liveClass, user: req.user });
-
-    if (!access.allowed) {
-      return res.status(403).json({
-        success: false,
-        message: "Not enrolled in this course",
-      });
-    }
-
-    if (access.roleType === "admin" || access.roleType === "instructor") {
-      emitToLiveClass(liveClassId, "participant:joined", {
-        liveClassId,
-        userId: req.user._id,
-        role: access.roleType,
-      });
-
-      return res.json({
-        success: true,
-        message: "Joined live class",
-        data: {
-          meetingLink: liveClass.meetingLink,
-          provider: liveClass.provider,
-          attendance: null,
-        },
-      });
-    }
-
-    let attendance = await liveAttendanceModel.findOne({
-      liveClass: liveClassId,
-      student: req.user._id,
-    });
-
-    if (!attendance) {
-      attendance = await liveAttendanceModel.create({
-        liveClass: liveClassId,
-        student: req.user._id,
-        joinAt: new Date(),
-        lastJoinedAt: new Date(),
-        attendanceStatus: "partial",
-        joinSource: "meeting_link",
-      });
-    } else {
-      if (!attendance.joinAt) {
-        attendance.joinAt = new Date();
-      }
-
-      attendance.lastJoinedAt = new Date();
-
-      if (attendance.leaveAt) {
-        attendance.leaveAt = null;
-      }
-
-      if (attendance.lastLeftAt) {
-        attendance.lastLeftAt = null;
-      }
-
-      await attendance.save();
-    }
-
-    emitToLiveClass(liveClassId, "participant:joined", {
-      liveClassId,
-      userId: req.user._id,
-      role: access.roleType,
-    });
-
-    emitToLiveClass(liveClassId, "attendance:summaryRefresh", {
-      liveClassId,
-    });
+    // Update DB using $push for the new array schema
+    await liveAttendanceModel.findOneAndUpdate(
+      { liveClass: liveClassId, student: studentId },
+      { 
+        $push: { joinTimes: new Date() },
+        $set: { attendanceStatus: "partial", joinSource: "meeting_link" } 
+      },
+      { upsert: true, new: true }
+    );
 
     return res.json({
       success: true,
-      message: "Joined live class",
-      data: {
-        meetingLink: liveClass.meetingLink,
-        provider: liveClass.provider,
-        attendance,
-      },
+      data: { meetingLink: liveClass.meetingLink }
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -874,63 +827,46 @@ exports.joinLiveClass = async (req, res) => {
 exports.leaveLiveClass = async (req, res) => {
   try {
     const { liveClassId } = req.params;
+    const userId = req.user._id;
 
-    const liveClass = await liveClassModel
-      .findById(liveClassId)
-      .select("_id durationMin startAt status");
+    const liveClass = await liveClassModel.findById(liveClassId);
+    if (!liveClass) return res.status(404).json({ success: false, message: "Live class not found" });
 
-    if (!liveClass) {
-      return res.status(404).json({ success: false, message: "Live class not found" });
-    }
-
-    const attendance = await liveAttendanceModel.findOne({
-      liveClass: liveClassId,
-      student: req.user._id,
+    const attendance = await liveAttendanceModel.findOne({ 
+      liveClass: liveClassId, 
+      student: userId 
     });
 
-    if (!attendance || !attendance.joinAt) {
+    if (!attendance) {
       return res.status(400).json({ success: false, message: "No join record found" });
     }
 
-    if (attendance.leaveAt) {
-      return res.json({
-        success: true,
-        message: "Leave already recorded",
-        data: attendance,
-      });
+    const now = new Date();
+    attendance.leaveTimes.push(now);
+
+    if (attendance.joinTimes.length > 0) {
+      const lastJoin = attendance.joinTimes[attendance.joinTimes.length - 1];
+      const diffMs = now.getTime() - new Date(lastJoin).getTime();
+      const sessionMinutes = Math.max(0, Math.round(diffMs / 60000));
+      
+      attendance.totalDuration += sessionMinutes;
     }
 
-    const leaveAt = new Date();
-    const diffMs = leaveAt.getTime() - new Date(attendance.joinAt).getTime();
-    const minutes = Math.max(0, Math.round(diffMs / 60000));
-
-    attendance.leaveAt = leaveAt;
-    attendance.lastLeftAt = leaveAt;
-    attendance.minutesAttended = Math.max(
-      Number(attendance.minutesAttended || 0),
-      minutes
-    );
-    attendance.attendanceStatus = getAttendanceStatus(
-      attendance.minutesAttended,
-      liveClass.durationMin
-    );
+    // UPDATED: Global helper use kar rahe hain
+    attendance.attendanceStatus = getAttendanceStatus(attendance.totalDuration, liveClass.durationMin);
 
     await attendance.save();
 
     emitToLiveClass(liveClassId, "participant:left", {
       liveClassId,
-      userId: req.user._id,
+      userId: userId,
       role: "student",
     });
 
-    emitToLiveClass(liveClassId, "attendance:summaryRefresh", {
-      liveClassId,
-    });
-
-    return res.json({
-      success: true,
-      message: "Left live class",
-      data: attendance,
+    return res.json({ 
+      success: true, 
+      message: "Left live class", 
+      data: attendance 
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
