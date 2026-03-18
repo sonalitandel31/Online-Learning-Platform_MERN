@@ -23,6 +23,8 @@ export default function PendingCourses() {
   const [contentError, setContentError] = useState("");
   const [contentCourse, setContentCourse] = useState(null);
 
+  const BASE_URL = import.meta.env.VITE_BASE_URL;
+
   useEffect(() => {
     // pending courses
     api
@@ -149,7 +151,7 @@ export default function PendingCourses() {
     summary: { cursor: "pointer", color: "#4a5568", fontWeight: 600, fontSize: "0.85rem" },
     ul: { marginTop: "6px", paddingLeft: "20px", maxHeight: "60px", overflowY: "auto", color: "#718096", marginBottom: 0 },
     viewBtn: { width: "100%",  margin: "12px 0",  borderRadius: "8px",  fontWeight: 600,  fontSize: "0.9rem", backgroundColor: "rgba(111, 66, 193, 0.1)",  color: "#6f42c1", border: "1px solid rgba(111, 66, 193, 0.2)", padding: "10px", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", transition: "all 0.2s ease-in-out"},
-    viewBtnHover: { backgroundColor: "rgba(111, 66, 193, 0.2)",},
+    viewBtnHover: { backgroundColor: "rgba(111, 66, 193, 0.2)"},
   };
 
   return (
@@ -259,7 +261,6 @@ export default function PendingCourses() {
                   </ul>
                 </details>
 
-                {/* Redesigned View Content Button */}
                 <button
                   style={styles.viewBtn}
                   onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.viewBtnHover)}
@@ -352,7 +353,7 @@ export default function PendingCourses() {
           <Modal.Title style={{ color: "#2d3748", fontWeight: 700 }}>Course Content Review</Modal.Title>
         </Modal.Header>
 
-        <Modal.Body style={{ backgroundColor: "#fafbfc", padding: "1.5rem" }}>
+        <Modal.Body style={{ backgroundColor: "#fafbfc", padding: "1.5rem", maxHeight: "75vh", overflowY: "auto" }}>
           {contentLoading ? (
             <div style={{ textAlign: "center", padding: "40px", color: "#6f42c1" }}>Loading course content...</div>
           ) : contentError ? (
@@ -368,7 +369,7 @@ export default function PendingCourses() {
                 <strong>Level:</strong> {contentCourse.level || "—"}
               </div>
 
-              {/* Lessons */}
+              {/* Lessons Section */}
               <div style={{ fontWeight: 800, fontSize: "1.1rem", marginBottom: "12px", color: "#2d3748" }}>
                 Lessons ({contentCourse.lessons?.length || 0})
               </div>
@@ -384,12 +385,22 @@ export default function PendingCourses() {
                       ? (l.fileUrl.startsWith("http") ? l.fileUrl : `${base}/${String(l.fileUrl).replace(/^\//, "")}`)
                       : "";
 
+                    // Calculate Minutes & Seconds
+                    const durSec = l.duration || 0;
+                    const m = Math.floor(durSec / 60);
+                    const s = durSec % 60;
+                    const timeString = m > 0 ? `${m}m ${s}s` : `${s}s`;
+
                     return (
                       <div key={l._id || `lesson-${idx}`} style={{ backgroundColor: "#fff", border: "1px solid #edf2f7", borderRadius: "12px", padding: "16px", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}>
-                        <div style={{ fontWeight: 700, fontSize: "1.05rem", color: "#2d3748" }}>
-                          {idx + 1}. {l.title}{" "}
-                          <span style={{ color: "#6f42c1", fontWeight: 600, fontSize: "0.8rem", backgroundColor: "#f3e8ff", padding: "2px 8px", borderRadius: "12px", marginLeft: "8px", verticalAlign: "middle" }}>
+                        {/* ✅ UPDATED LESSON HEADER WITH DURATION */}
+                        <div style={{ fontWeight: 700, fontSize: "1.05rem", color: "#2d3748", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                          <span>{idx + 1}. {l.title}</span>
+                          <span style={{ color: "#6f42c1", fontWeight: 600, fontSize: "0.8rem", backgroundColor: "#f3e8ff", padding: "2px 8px", borderRadius: "12px" }}>
                             {l.contentType}
+                          </span>
+                          <span style={{ color: "#475569", fontWeight: 600, fontSize: "0.8rem", backgroundColor: "#e2e8f0", padding: "2px 8px", borderRadius: "12px" }}>
+                            ⏱ {durSec > 0 ? timeString : "0s"}
                           </span>
                         </div>
 
@@ -430,7 +441,7 @@ export default function PendingCourses() {
                 </div>
               )}
 
-              {/* Exams */}
+              {/* Exams Section */}
               <div style={{ fontWeight: 800, fontSize: "1.1rem", marginBottom: "12px", color: "#2d3748" }}>
                 Exams ({contentCourse.exams?.length || 0})
               </div>
@@ -441,17 +452,48 @@ export default function PendingCourses() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                   {contentCourse.exams.map((ex, exIdx) => (
                     <div key={ex._id || `exam-${exIdx}`} style={{ backgroundColor: "#fff", border: "1px solid #edf2f7", borderRadius: "12px", padding: "16px", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}>
-                      <div style={{ fontWeight: 700, fontSize: "1.05rem", color: "#2d3748", marginBottom: "12px" }}>
-                        {exIdx + 1}. {ex.title}{" "}
-                        <span style={{ color: "#28a745", fontWeight: 600, fontSize: "0.8rem", backgroundColor: "#e6f4ea", padding: "2px 8px", borderRadius: "12px", marginLeft: "8px", verticalAlign: "middle" }}>
+                      <div style={{ fontWeight: 700, fontSize: "1.05rem", color: "#2d3748", display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span>{exIdx + 1}. {ex.title}</span>
+                        <span style={{ color: "#28a745", fontWeight: 600, fontSize: "0.8rem", backgroundColor: "#e6f4ea", padding: "2px 8px", borderRadius: "12px" }}>
                           {ex.duration} min
+                        </span>
+                        <span style={{ color: "#6f42c1", fontWeight: 600, fontSize: "0.8rem", backgroundColor: "#eef2ff", padding: "2px 8px", borderRadius: "12px" }}>
+                          {(ex.questions || []).length} Qs
                         </span>
                       </div>
 
+                      {/* UPDATED EXAM BADGES (Consistency with ManageExams) */}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px", paddingBottom: "12px", borderBottom: "1px dashed #e2e8f0" }}>
+                        <span style={{ fontSize: "0.75rem", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "3px 8px", borderRadius: "6px", color: "#475569", fontWeight: "600" }}>
+                          Pass: {ex.settings?.passingScore ?? 60}%
+                        </span>
+                        <span style={{ fontSize: "0.75rem", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "3px 8px", borderRadius: "6px", color: "#475569", fontWeight: "600" }}>
+                          Negative Marking: {ex.settings?.negativeMarking ?? 0}
+                        </span>
+                        <span style={{ fontSize: "0.75rem", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "3px 8px", borderRadius: "6px", color: "#475569", fontWeight: "600" }}>
+                          Attempts: {ex.settings?.maxAttempts ?? 3}
+                        </span>
+                        <span style={{ fontSize: "0.75rem", background: "#fff5f5", border: "1px solid #fed7d7", padding: "3px 8px", borderRadius: "6px", color: "#991b1b", fontWeight: "700" }}>
+                          Tab Limit: {ex.proctoring?.tabSwitchLimit ?? 3}
+                        </span>
+                        
+                        {ex.proctoring?.webcamRequired && (
+                          <span style={{ fontSize: "0.75rem", background: "#fee2e2", color: "#991b1b", padding: "3px 8px", borderRadius: "6px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
+                            📸 Webcam Req.
+                          </span>
+                        )}
+                        
+                        {ex.proctoring?.fullscreenRequired && (
+                          <span style={{ fontSize: "0.75rem", background: "#fee2e2", color: "#991b1b", padding: "3px 8px", borderRadius: "6px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
+                            🖥️ Fullscreen Req.
+                          </span>
+                        )}
+                      </div>
+
                       {(ex.questions || []).length === 0 ? (
-                        <div style={{ color: "#a0aec0", fontStyle: "italic" }}>No questions provided.</div>
+                        <div style={{ color: "#a0aec0", fontStyle: "italic", marginTop: "10px" }}>No questions provided.</div>
                       ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "12px" }}>
                           {ex.questions.map((q, qIdx) => (
                             <div key={q._id || `q-${qIdx}`} style={{ padding: "12px", borderRadius: "8px", background: "#f8f9fa", border: "1px solid #edf2f7" }}>
                               <div style={{ fontWeight: 600, color: "#2d3748", marginBottom: "8px" }}>
@@ -475,10 +517,6 @@ export default function PendingCourses() {
                                   );
                                 })}
                               </ul>
-{/* 
-                              <div style={{ marginTop: "10px", color: "#15803d", fontWeight: 700, fontSize: "0.9rem", backgroundColor: "#dcfce7", padding: "6px 10px", borderRadius: "6px", display: "inline-block" }}>
-                                Correct Answer: {q.correctAnswer || "—"}
-                              </div> */}
                             </div>
                           ))}
                         </div>
@@ -490,12 +528,6 @@ export default function PendingCourses() {
             </>
           )}
         </Modal.Body>
-
-        <Modal.Footer style={{ borderTop: "1px solid #edf2f7" }}>
-          {/* <Button variant="outline-secondary" onClick={closeContentModal} style={{ fontWeight: 600 }}>
-            Close Review
-          </Button> */}
-        </Modal.Footer>
       </Modal>
     </div>
   );

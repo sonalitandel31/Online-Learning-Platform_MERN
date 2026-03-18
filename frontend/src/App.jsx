@@ -189,7 +189,7 @@ function App() {
       <Footer />
     </>
   );
-}
+} 
 
 export default function WrappedApp() {
   return (

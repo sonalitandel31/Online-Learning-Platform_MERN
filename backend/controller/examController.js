@@ -36,7 +36,6 @@ exports.getExamsByCourse = async (req, res) => {
   }
 };
 
-// helper: remove correct answers
 const sanitizeExam = (examDoc) => {
   const obj = examDoc?.toObject ? examDoc.toObject() : examDoc;
   if (!obj) return obj;
@@ -70,20 +69,60 @@ exports.getExamById = async (req, res) => {
     if (!course.price || Number(course.price) === 0) {
       return res.json(sanitizeExam(exam));
     }
+    /* 
+        const now = new Date();
+        const enrollment = await Enrollment.findOne({ student: userId, course: course._id }).lean();
+        const enrollmentOk =
+          enrollment &&
+          enrollment.status !== "cancelled" &&
+          (!enrollment.expiryDate || new Date(enrollment.expiryDate) >= now); */
 
-    // ✅ Enrollment check
+    // apply randomization BEFORE sending response
+    if (exam.settings?.shuffleQuestions) {
+      exam.questions.sort(() => Math.random() - 0.5);
+    }
+
+    if (exam.settings?.shuffleOptions) {
+      exam.questions = exam.questions.map(q => ({
+        ...q.toObject(),
+        options: q.options.sort(() => Math.random() - 0.5)
+      }));
+    }
+
+    // then sanitize
+    const safeExam = sanitizeExam(exam);
+
+    // access checks
+    if (!course.price || Number(course.price) === 0) {
+      return res.json(safeExam);
+    }
+
     const now = new Date();
     const enrollment = await Enrollment.findOne({ student: userId, course: course._id }).lean();
+
     const enrollmentOk =
       enrollment &&
       enrollment.status !== "cancelled" &&
       (!enrollment.expiryDate || new Date(enrollment.expiryDate) >= now);
 
-    if (enrollmentOk) return res.json(sanitizeExam(exam));
+    if (enrollmentOk) return res.json(safeExam);
 
-    // ✅ Subscription check
     const subCheck = await checkSubscriptionForCourse({ userId, courseId: course._id });
-    if (subCheck.ok) return res.json(sanitizeExam(exam));
+    if (subCheck.ok) return res.json(safeExam);
+
+    return res.status(403).json({ message: "Access denied. Please enroll or subscribe." });
+    // shuffle questions
+    if (exam.settings?.shuffleQuestions) {
+      exam.questions.sort(() => Math.random() - 0.5);
+    }
+
+    // shuffle options
+    if (exam.settings?.shuffleOptions) {
+      exam.questions = exam.questions.map(q => ({
+        ...q.toObject(),
+        options: q.options.sort(() => Math.random() - 0.5)
+      }));
+    }
 
     return res.status(403).json({ message: "Access denied. Please enroll or subscribe." });
   } catch (err) {
@@ -96,7 +135,6 @@ exports.getExamResult = async (req, res) => {
   try {
     const { examId, studentId } = req.params;
 
-    // ✅ security: only self (or admin if you want)
     if (String(req.user?._id) !== String(studentId)) {
       return res.status(403).json({ message: "Forbidden" });
     }
@@ -110,20 +148,45 @@ exports.getExamResult = async (req, res) => {
         attemptNumber: 0,
         bestScore: 0,
         isCompleted: false,
+        allAttempts: [] 
       });
     }
 
     const latest = attempts[0];
     const bestScore = Math.max(...attempts.map((a) => a.score));
-    const isCompleted = bestScore >= 60;
+
+    const exam = await Exam.findById(examId).select("settings");
+    const isCompleted = bestScore >= Number(exam?.settings?.passingScore || 60);
+
+    const allAttempts = attempts.map(a => ({
+      attemptNumber: a.attemptNumber,
+      score: a.score,
+      isPassed: a.score >= Number(exam?.settings?.passingScore || 60),
+      tabSwitches: a.cheat?.tabSwitches || 0,
+      autoSubmitted: a.cheat?.autoSubmitted || false,
+      date: a.createdAt
+    }));
 
     return res.json({
       message: "Result fetched successfully",
       score: latest.score,
+      totalQuestions: latest.totalQuestions || 0,
+      correctCount: latest.correctCount || 0,
+      wrongCount: latest.wrongCount || 0,
+      skippedCount: latest.skippedCount || 0,
+      positiveMarks: latest.positiveMarks || 0,
+      negativeMarks: latest.negativeMarks || 0,
+      finalMarks: latest.finalMarks || 0,
+      isPassed: latest.isPassed || false,
       attemptNumber: latest.attemptNumber,
       bestScore,
       isCompleted,
-      remainingAttempts: Math.max(0, 3 - latest.attemptNumber),
+      allAttempts, 
+      remainingAttempts: Math.max(
+        0,
+        Number(exam?.settings?.maxAttempts || 3) - latest.attemptNumber
+      ),
+      passPercentage: Number(exam?.settings?.passingScore || 60),
     });
   } catch (err) {
     console.error("Error fetching result:", err);
@@ -162,14 +225,14 @@ exports.submitExam = async (req, res) => {
     const userId = req.user?._id;
     const courseId = req.params.courseId || req.body.courseId;
     const examId = req.params.examId || req.body.examId;
-    const { answers } = req.body;
+    const { answers, cheatCount = 0 } = req.body;
 
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     if (!courseId || !examId) return res.status(400).json({ message: "courseId and examId required" });
     if (!answers || typeof answers !== "object") return res.status(400).json({ message: "answers required" });
 
     // verify exam belongs to this course + get correct answers for scoring
-    const exam = await examModel.findById(examId).select("course questions");
+    const exam = await examModel.findById(examId).select("course questions settings proctoring");
     if (!exam) return res.status(404).json({ message: "Exam not found" });
     if (String(exam.course) !== String(courseId)) {
       return res.status(400).json({ message: "Exam does not belong to this course" });
@@ -177,13 +240,47 @@ exports.submitExam = async (req, res) => {
 
     // compute score on backend
     let correct = 0;
+    let wrong = 0;
+    let skipped = 0;
+
+    let positiveMarks = 0;
+    let negativeMarks = 0;
+
     for (const q of exam.questions || []) {
       const selected = answers[String(q._id)];
-      if (selected && selected === q.correctAnswer) correct++;
+
+      if (!selected) {
+        skipped++;
+        continue;
+      }
+
+      if (selected === q.correctAnswer) {
+        correct++;
+        positiveMarks += Number(q.marks || 1);
+      } else {
+        wrong++;
+        if (exam.settings?.negativeMarking > 0) {
+          negativeMarks += Number(exam.settings.negativeMarking);
+        }
+      }
     }
-    const total = (exam.questions || []).length || 0;
-    const score = total === 0 ? 0 : Math.round((correct / total) * 100);
-    const isPassed = score >= 60;
+
+    const totalQuestions = (exam.questions || []).length || 0;
+
+    const totalPossibleMarks = (exam.questions || []).reduce(
+      (sum, q) => sum + Number(q.marks || 1),
+      0
+    );
+
+    const finalMarks = Math.max(0, positiveMarks - negativeMarks);
+
+    const score =
+      totalPossibleMarks === 0
+        ? 0
+        : Math.round((finalMarks / totalPossibleMarks) * 100);
+
+    const passPercentage = Number(exam.settings?.passingScore || 60);
+    const isPassed = score >= passPercentage;
 
     // access via enrollment or subscription
     let enrollment;
@@ -216,10 +313,12 @@ exports.submitExam = async (req, res) => {
       enrollment.examProgress = enrollment.examProgress || [];
       enrollment.examProgress.push(examProgress);
     } else {
-      if (examProgress.attempts >= 3) return res.status(400).json({ message: "Max attempts reached" });
+      if (examProgress.attempts >= Number(exam.settings?.maxAttempts || 3)) {
+        return res.status(400).json({ message: "Max attempts reached" });
+      }
       examProgress.attempts += 1;
       examProgress.bestScore = Math.max(Number(examProgress.bestScore || 0), score);
-      examProgress.isCompleted = examProgress.bestScore >= 60;
+      examProgress.isCompleted = examProgress.bestScore >= Number(exam.settings?.passingScore || 60);
       examProgress.lastAttemptAt = new Date();
     }
 
@@ -229,9 +328,21 @@ exports.submitExam = async (req, res) => {
     await new Result({
       exam: examId,
       student: userId,
-      score,
       answers,
+      totalQuestions,
+      correctCount: correct,
+      wrongCount: wrong,
+      skippedCount: skipped,
+      positiveMarks,
+      negativeMarks,
+      finalMarks,
+      score,
+      isPassed,
       attemptNumber: examProgress.attempts,
+      cheat: {
+        tabSwitches: cheatCount,
+        autoSubmitted: cheatCount >= (exam.settings?.tabSwitchLimit || 3)
+      },
     }).save();
 
     // overall progress (lessons + exams)
@@ -298,8 +409,14 @@ exports.submitExam = async (req, res) => {
     return res.json({
       message: examProgress.isCompleted ? "Exam passed" : "Exam submitted",
       score,
+      totalQuestions,
       correct,
-      total,
+      wrong,
+      skipped,
+      positiveMarks,
+      negativeMarks,
+      finalMarks,
+      passPercentage,
       attemptNumber: examProgress.attempts,
       bestScore: examProgress.bestScore,
       isCompleted: examProgress.isCompleted,

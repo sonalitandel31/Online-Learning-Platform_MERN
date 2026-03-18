@@ -1506,6 +1506,9 @@ function CourseDetail() {
                       const prog = examProgress.find((p) => p.examId === exam._id);
                       const isCompleted = prog?.isCompleted;
                       const bestScore = prog?.bestScore ?? null;
+                      const maxAttempts = exam?.settings?.maxAttempts ?? 3;
+                      const attemptsUsed = prog?.attempts ?? 0;
+                      const remainingAttempts = Math.max(0, maxAttempts - attemptsUsed);
 
                       return (
                         <div
@@ -1519,21 +1522,35 @@ function CourseDetail() {
                             {isCompleted && <CheckCircle size={16} className="text-success flex-shrink-0" />}
                             {!hasAccess && <Lock size={14} className="text-muted" />}
                           </div>
-                          <div className="d-flex gap-3 small text-muted">
+                          
+                          <div className="d-flex gap-3 small text-muted mb-2">
                             <span className="d-flex align-items-center gap-1">
                               <Clock size={12} /> {exam.duration ?? 0}m
                             </span>
                             <span className="d-flex align-items-center gap-1">
-                              <FileText size={12} /> {exam.questions?.length ?? 0} Questions
+                              <FileText size={12} /> {exam.questions?.length ?? 0} Qs
                             </span>
                           </div>
 
-                          {isEnrolled && bestScore !== null && (
+                          {/* 👇 NAYA: Enhanced Progress Display */}
+                          {isEnrolled && (
                             <div className="mt-2 pt-2 border-top d-flex justify-content-between align-items-center">
-                              <span className="small text-muted">Best Score</span>
-                              <span className={`badge ${bestScore >= 70 ? "bg-success" : "bg-primary"} rounded-pill px-2`}>
-                                {bestScore}%
-                              </span>
+                              {bestScore !== null ? (
+                                <>
+                                  <div className="d-flex flex-column">
+                                    <span className="small text-muted" style={{ fontSize: "10px" }}>Best Score</span>
+                                    <span className={`badge ${isCompleted ? "bg-success" : "bg-warning text-dark"} rounded-pill`} style={{width: "fit-content"}}>
+                                      {bestScore}%
+                                    </span>
+                                  </div>
+                                  <div className="text-end">
+                                    <span className="small text-muted d-block" style={{ fontSize: "10px" }}>Attempts</span>
+                                    <span className="small fw-bold">{attemptsUsed}/{maxAttempts}</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <span className="small text-info fw-bold">Not attempted yet</span>
+                              )}
                             </div>
                           )}
                         </div>

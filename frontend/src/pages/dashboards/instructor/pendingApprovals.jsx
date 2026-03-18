@@ -304,6 +304,7 @@ function PendingApprovals() {
         </div>
       )}
 
+      {/* Content Preview Modal */}
       {showContent && (
         <div style={{
           position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
@@ -343,7 +344,7 @@ function PendingApprovals() {
                   <strong>Price:</strong> {Number(contentCourse.price || 0) > 0 ? `₹${contentCourse.price}` : "Free"}
                 </div>
 
-                {/* Lessons */}
+                {/* Lessons Section */}
                 <div style={{ fontWeight: 900, fontSize: "1.05rem", marginBottom: "10px", color: "#0f172a" }}>
                   Lessons ({contentCourse.lessons?.length || 0})
                 </div>
@@ -358,19 +359,32 @@ function PendingApprovals() {
                       const src = l.fileUrl
                         ? (l.fileUrl.startsWith("http") ? l.fileUrl : `${base}/${String(l.fileUrl).replace(/^\//, "")}`)
                         : "";
+                      
+                      // Calculate Minutes & Seconds
+                      const durSec = l.duration || 0;
+                      const m = Math.floor(durSec / 60);
+                      const s = durSec % 60;
+                      const timeString = m > 0 ? `${m}m ${s}s` : `${s}s`;
 
                       return (
                         <div key={l._id || idx} style={{
                           background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px",
                           padding: "14px"
                         }}>
-                          <div style={{ fontWeight: 800, color: "#0f172a" }}>
-                            {idx + 1}. {l.title}
+                          {/* ✅ UPDATED LESSON HEADER WITH DURATION */}
+                          <div style={{ fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                            <span>{idx + 1}. {l.title}</span>
                             <span style={{
-                              marginLeft: "10px", fontSize: "0.78rem", fontWeight: 800,
+                              fontSize: "0.78rem", fontWeight: 800,
                               background: "#f3e8ff", color: colors.primary, padding: "2px 10px", borderRadius: "999px"
                             }}>
                               {l.contentType}
+                            </span>
+                            <span style={{
+                              fontSize: "0.78rem", fontWeight: 800,
+                              background: "#e2e8f0", color: "#475569", padding: "2px 10px", borderRadius: "999px"
+                            }}>
+                              ⏱ {durSec > 0 ? timeString : "0s"}
                             </span>
                           </div>
 
@@ -401,7 +415,7 @@ function PendingApprovals() {
                   </div>
                 )}
 
-                {/* Exams */}
+                {/* Exams Section */}
                 <div style={{ fontWeight: 900, fontSize: "1.05rem", marginBottom: "10px", color: "#0f172a" }}>
                   Exams ({contentCourse.exams?.length || 0})
                 </div>
@@ -414,42 +428,66 @@ function PendingApprovals() {
                       <div key={ex._id || exIdx} style={{
                         background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px", padding: "14px"
                       }}>
-                        <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: "10px" }}>
-                          {exIdx + 1}. {ex.title}
-                          <span style={{
-                            marginLeft: "10px", fontSize: "0.78rem", fontWeight: 800,
-                            background: "#e6f4ea", color: "#15803d", padding: "2px 10px", borderRadius: "999px"
-                          }}>
-                            {ex.duration} min
+                        <div style={{ fontWeight: 900, color: "#0f172a", display: "flex", alignItems: "center", gap: "10px" }}>
+                          <span>{exIdx + 1}. {ex.title}</span>
+                          <span style={{ fontSize: "0.78rem", fontWeight: 900, background: "#e6f4ea", color: "#15803d", padding: "2px 10px", borderRadius: "999px" }}>{ex.duration} min</span>
+                          <span style={{ fontSize: "0.78rem", fontWeight: 900, background: "#eef2ff", color: colors.primary, padding: "2px 10px", borderRadius: "999px" }}>{(ex.questions || []).length} Qs</span>
+                        </div>
+
+                        {/* ✅ UPDATED EXAM BADGES (Consistency with ManageExams) */}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px", paddingBottom: "12px", borderBottom: `1px dashed ${colors.border}` }}>
+                          <span style={{ fontSize: "0.75rem", background: "#f8fafc", border: `1px solid ${colors.border}`, padding: "3px 8px", borderRadius: "6px", color: "#475569", fontWeight: "600" }}>
+                            Pass: {ex.settings?.passingScore ?? 60}%
                           </span>
+                          <span style={{ fontSize: "0.75rem", background: "#f8fafc", border: `1px solid ${colors.border}`, padding: "3px 8px", borderRadius: "6px", color: "#475569", fontWeight: "600" }}>
+                            Negative Marking: {ex.settings?.negativeMarking ?? 0}
+                          </span>
+                          <span style={{ fontSize: "0.75rem", background: "#f8fafc", border: `1px solid ${colors.border}`, padding: "3px 8px", borderRadius: "6px", color: "#475569", fontWeight: "600" }}>
+                            Attempts: {ex.settings?.maxAttempts ?? 3}
+                          </span>
+                          <span style={{ fontSize: "0.75rem", background: "#fff5f5", border: "1px solid #fed7d7", padding: "3px 8px", borderRadius: "6px", color: "#991b1b", fontWeight: "700" }}>
+                            Tab Limit: {ex.proctoring?.tabSwitchLimit ?? 3}
+                          </span>
+                          
+                          {ex.proctoring?.webcamRequired && (
+                            <span style={{ fontSize: "0.75rem", background: "#fee2e2", color: "#991b1b", padding: "3px 8px", borderRadius: "6px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
+                              📸 Webcam Req.
+                            </span>
+                          )}
+                          
+                          {ex.proctoring?.fullscreenRequired && (
+                            <span style={{ fontSize: "0.75rem", background: "#fee2e2", color: "#991b1b", padding: "3px 8px", borderRadius: "6px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
+                              🖥️ Fullscreen Req.
+                            </span>
+                          )}
                         </div>
 
                         {(ex.questions || []).length === 0 ? (
-                          <div style={{ color: "#94a3b8", fontStyle: "italic" }}>No questions provided.</div>
+                          <div style={{ marginTop: "10px", color: "#94a3b8", fontStyle: "italic" }}>No questions provided.</div>
                         ) : (
-                          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                          <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
                             {ex.questions.map((q, qIdx) => (
                               <div key={q._id || qIdx} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px" }}>
                                 <div style={{ fontWeight: 700, marginBottom: "6px", color: "#0f172a" }}>
                                   Q{qIdx + 1}. {q.questionText}
                                 </div>
                                 <ul style={{ margin: 0, paddingLeft: "24px", color: "#4a5568" }}>
-                                {(q.options || []).map((opt, oIdx) => {
-                                  const isCorrect = opt === q.correctAnswer;
-                                  return (
-                                    <li
-                                      key={`${qIdx}-opt-${oIdx}`}
-                                      style={{
-                                        marginBottom: "6px",
-                                        fontWeight: isCorrect ? 700 : 400,
-                                        color: isCorrect ? "#15803d" : "inherit",
-                                      }}
-                                    >
-                                      {opt} {isCorrect ? "✅" : ""}
-                                    </li>
-                                  );
-                                })}
-                              </ul>
+                                  {(q.options || []).map((opt, oIdx) => {
+                                    const isCorrect = opt === q.correctAnswer;
+                                    return (
+                                      <li
+                                        key={`${qIdx}-opt-${oIdx}`}
+                                        style={{
+                                          marginBottom: "6px",
+                                          fontWeight: isCorrect ? 700 : 400,
+                                          color: isCorrect ? "#15803d" : "inherit",
+                                        }}
+                                      >
+                                        {opt} {isCorrect ? "✅" : ""}
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
                               </div>
                             ))}
                           </div>

@@ -76,12 +76,6 @@ const lessonStorage = multer.diskStorage({
 });
 const uploadLessonFile = multer({ storage: lessonStorage });
 
-/* const uploadLesson = (req, res) => {
-  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
-  const fullUrl = `${req.protocol}://${req.get("host")}/uploads/lessons/${req.file.filename}`;
-  res.json({ fileUrl: fullUrl });
-}; */
-
 const uploadLesson = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
@@ -200,7 +194,7 @@ const dashboard = async (req, res) => {
   }
 };
 
-const courses = async (req, res) => {
+/* const courses = async (req, res) => {
   try {
     const instructorId = req.user._id;
     const filter = { instructor: instructorId };
@@ -216,6 +210,38 @@ const courses = async (req, res) => {
       .populate({
         path: "exams",
         select: "title duration questions",
+      });
+
+    const coursesWithCounts = coursesData.map((c) => ({
+      ...c.toObject(),
+      lessonsCount: c.lessons?.length || 0,
+      examsCount: c.exams?.length || 0,
+    }));
+
+    return res.json({ courses: coursesWithCounts });
+  } catch (error) {
+    console.error("Fetch courses failed:", error);
+    return res.status(500).json({ message: "Fetch courses failed", error });
+  }
+}; */
+
+const courses = async (req, res) => {
+  try {
+    const instructorId = req.user._id;
+    const filter = { instructor: instructorId };
+    if (req.query.status) filter.status = req.query.status;
+
+    const coursesData = await Course.find(filter)
+      .populate("category", "name")
+      .populate({
+        path: "lessons",
+        select: "title contentType fileUrl description isPreviewFree duration createdAt",
+        options: { sort: { createdAt: 1 } },
+      })
+      .populate({
+        path: "exams",
+        // Added settings and proctoring to the select string
+        select: "title duration settings proctoring questions", 
       });
 
     const coursesWithCounts = coursesData.map((c) => ({
@@ -295,7 +321,7 @@ const hasActiveEnrollment = async ({ userId, courseId }) => {
   );
 };
 
-const getCourseDetail = async (req, res) => {
+/* const getCourseDetail = async (req, res) => {
   try {
     const { courseId } = req.params;
     const userId = req.user?._id;
@@ -312,6 +338,94 @@ const getCourseDetail = async (req, res) => {
       .populate({
         path: "exams",
         select: "title duration questions createdAt",
+        options: { sort: { createdAt: 1 } },
+      });
+
+    if (!course) return res.status(404).json({ message: "Course not found" });
+
+    // free course: allow everything (but still sanitize exam answers)
+    const isPaid = Number(course.price || 0) > 0;
+
+    let access = { ok: true, type: "free" };
+
+    if (isPaid) {
+      const enrolled = await hasActiveEnrollment({ userId, courseId });
+      if (enrolled) {
+        access = { ok: true, type: "purchase" };
+      } else {
+        const subCheck = await checkSubscriptionForCourse({ userId, courseId });
+        access = subCheck.ok
+          ? { ok: true, type: "subscription" }
+          : { ok: false, type: "none", reason: subCheck.reason };
+      }
+    }
+
+    // ✅ build response safely
+    let lessons = course.lessons || [];
+    let exams = course.exams || [];
+
+    if (!access.ok) {
+      // Only preview lessons, and never expose fileUrl for locked course
+      lessons = lessons
+        .filter((l) => l.isPreviewFree === true)
+        .map(stripLessonFileUrl);
+
+      // For exams, show only meta (no questions)
+      exams = exams.map((e) => {
+        const ex = e?.toObject ? e.toObject() : e;
+        delete ex.questions;
+        return ex;
+      });
+    } else {
+      // User has access → sanitize exam answers
+      exams = exams.map(sanitizeExamQuestions);
+    }
+
+    // enrollment progress info (optional)
+    let completedLessons = [];
+    let isEnrolled = false;
+
+    const enrollment = await Enrollment.findOne({ course: courseId, student: userId }).lean();
+    if (enrollment) {
+      isEnrolled = true;
+      completedLessons = enrollment.completedLessons?.map((l) => String(l)) || [];
+    }
+
+    // Return "course" but replace lessons/exams with safe versions
+    const courseObj = course.toObject();
+    courseObj.lessons = lessons;
+    courseObj.exams = exams;
+
+    return res.json({
+      course: courseObj,
+      isEnrolled,
+      completedLessons,
+      access, // ✅ frontend can show "Subscribe to unlock"
+    });
+  } catch (error) {
+    console.error("Fetch course detail failed:", error);
+    return res.status(500).json({ message: "Failed to fetch course detail" });
+  }
+}; */
+
+const getCourseDetail = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user?._id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const course = await Course.findById(courseId)
+      .populate("category", "name")
+      .populate("instructor", "name email profilePic")
+      .populate({
+        path: "lessons",
+        select: "title contentType fileUrl description isPreviewFree duration createdAt",
+        options: { sort: { createdAt: 1 } },
+      })
+      .populate({
+        path: "exams",
+        // ✅ Added settings and proctoring
+        select: "title duration settings proctoring questions createdAt", 
         options: { sort: { createdAt: 1 } },
       });
 
@@ -578,7 +692,7 @@ const reorderLessons = async (req, res) => {
   }
 };
 
-const getExamResults = async (req, res) => {
+/* const getExamResults = async (req, res) => {
   try {
     const { examId } = req.params;
 
@@ -598,6 +712,23 @@ const getExamResults = async (req, res) => {
     });
 
     results.sort((a, b) => b.score - a.score);
+
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error("Fetch exam results failed:", error);
+    res.status(500).json({ success: false, message: "Server Error", error: error.message });
+  }
+}; */
+
+const getExamResults = async (req, res) => {
+  try {
+    const { examId } = req.params;
+
+    // We fetch directly from the Result model to get the detailed cheat logs
+    const results = await ExamResult.find({ exam: examId })
+      .populate("student", "name email")
+      .sort({ score: -1 }) // Sort by highest score first
+      .lean();
 
     res.json({ success: true, results });
   } catch (error) {
@@ -698,7 +829,7 @@ const validateQuestions = (questions) => {
   return null;
 };
 
-const addExam = async (req, res) => {
+/* const addExam = async (req, res) => {
   try {
     const { title, duration, questions } = req.body;
     const courseId = req.params.courseId;
@@ -719,9 +850,42 @@ const addExam = async (req, res) => {
     console.error(error);
     res.status(500).json({ message: "Exam creation failed", error: error.message });
   }
+}; */
+
+const addExam = async (req, res) => {
+  try {
+    // ✅ Extract settings and proctoring from req.body
+    const { title, duration, settings, proctoring, questions } = req.body;
+    const courseId = req.params.courseId;
+
+    if (!title || !duration) return res.status(400).json({ message: "Title and duration are required" });
+    if (!questions || !Array.isArray(questions) || questions.length === 0) return res.status(400).json({ message: "At least one question is required" });
+
+    const errorMsg = validateQuestions(questions);
+    if (errorMsg) return res.status(400).json({ message: errorMsg });
+
+    // ✅ Pass settings and proctoring to the Exam document creation
+    const exam = await Exam.create({ 
+      course: courseId, 
+      title, 
+      duration, 
+      settings, 
+      proctoring, 
+      questions 
+    });
+    
+    await Course.findByIdAndUpdate(courseId, { $push: { exams: exam._id } });
+
+    await recalcCourseTotalDuration(courseId);
+
+    res.status(201).json({ message: "Exam created", exam });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Exam creation failed", error: error.message });
+  }
 };
 
-const updateExam = async (req, res) => {
+/* const updateExam = async (req, res) => {
   try {
     const { examId } = req.params;
     const { title, duration, questions } = req.body;
@@ -742,6 +906,44 @@ const updateExam = async (req, res) => {
 
     exam.title = title || exam.title;
     exam.duration = duration || exam.duration;
+
+    await exam.save();
+
+    await recalcCourseTotalDuration(exam.course);
+
+    res.status(200).json({ message: "Exam updated", exam });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Exam update failed", error: error.message });
+  }
+}; */
+
+const updateExam = async (req, res) => {
+  try {
+    const { examId } = req.params;
+    // ✅ Extract settings and proctoring from req.body
+    const { title, duration, settings, proctoring, questions } = req.body;
+
+    const exam = await Exam.findById(examId);
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
+
+    const course = await Course.findById(exam.course);
+    if (course.instructor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    if (questions && Array.isArray(questions)) {
+      const errorMsg = validateQuestions(questions);
+      if (errorMsg) return res.status(400).json({ message: errorMsg });
+      exam.questions = questions;
+    }
+
+    exam.title = title || exam.title;
+    exam.duration = duration || exam.duration;
+    
+    // ✅ Update settings and proctoring objects
+    if (settings) exam.settings = settings;
+    if (proctoring) exam.proctoring = proctoring;
 
     await exam.save();
 
@@ -793,69 +995,7 @@ const deleteExam = async (req, res) => {
   }
 };
 
-/* const getCourseExams = async (req, res) => {
-  try {
-    const { courseId } = req.params;
-    const userId = req.user?._id;
-    if (!userId) return res.status(401).json({ message: "Unauthorized" });
-
-    // check course (for price)
-    const course = await Course.findById(courseId).select("price status").lean();
-    if (!course || course.status !== "approved") {
-      return res.status(404).json({ message: "Course not available" });
-    }
-
-    // free course => allow (but sanitize answers)
-    const isPaid = Number(course.price || 0) > 0;
-
-    let canAccess = true;
-    if (isPaid) {
-      const enrolled = await hasActiveEnrollment({ userId, courseId });
-      if (!enrolled) {
-        const subCheck = await checkSubscriptionForCourse({ userId, courseId });
-        canAccess = subCheck.ok;
-        if (!canAccess) {
-          const exams = await Exam.find({ course: courseId })
-            .select("title duration questions createdAt")
-            .lean();
-
-          const formatted = exams.map((e) => ({
-            _id: e._id,
-            title: e.title,
-            duration: e.duration,
-            createdAt: e.createdAt,
-            questionsCount: Array.isArray(e.questions) ? e.questions.length : 0,
-          }));
-
-          return res.status(200).json({ exams: formatted, access: true });
-        }
-      }
-    }
-
-    // allowed => return exams but sanitize correct answers
-    const exams = await Exam.find({ course: courseId }).lean();
-    const safe = exams.map((e) => {
-      if (Array.isArray(e.questions)) {
-        e.questions = e.questions.map((q) => {
-          const qq = { ...q };
-          delete qq.correctAnswer;
-          delete qq.correctOption;
-          delete qq.answer;
-          delete qq.solution;
-          return qq;
-        });
-      }
-      return e;
-    });
-
-    return res.status(200).json({ exams: safe, access: true });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Fetch exams failed" });
-  }
-}; */
-
-const getInstructorCourseExams = async (req, res) => {
+/* const getInstructorCourseExams = async (req, res) => {
   try {
     const { courseId } = req.params;
     const instructorId = req.user._id;
@@ -884,7 +1024,67 @@ const getInstructorCourseExams = async (req, res) => {
     console.error("getInstructorCourseExams error:", err);
     return res.status(500).json({ message: "Failed to fetch exams" });
   }
+}; */
+
+const getInstructorCourseExams = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const instructorId = req.user._id;
+
+    // Instructor ownership check
+    const course = await Course.findOne({ _id: courseId, instructor: instructorId })
+      .select("_id")
+      .lean();
+
+    if (!course) return res.status(404).json({ message: "Course not found" });
+
+    // Fetch all exams for this course
+    const exams = await Exam.find({ course: courseId })
+      // ✅ Added settings and proctoring
+      .select("title duration settings proctoring questions createdAt") 
+      .sort({ createdAt: 1 })
+      .lean();
+
+    // optional: add questionsCount for UI
+    const formatted = exams.map((e) => ({
+      ...e,
+      questionsCount: Array.isArray(e.questions) ? e.questions.length : 0,
+    }));
+
+    return res.json({ exams: formatted, examsCount: formatted.length });
+  } catch (err) {
+    console.error("getInstructorCourseExams error:", err);
+    return res.status(500).json({ message: "Failed to fetch exams" });
+  }
 };
+
+/* const getCourseDetailForInstructor = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const instructorId = req.user._id;
+
+    const course = await Course.findOne({ _id: courseId, instructor: instructorId })
+      .populate("category", "name")
+      .populate("instructor", "name email profilePic")
+      .populate({
+        path: "lessons",
+        select: "title contentType fileUrl description isPreviewFree duration createdAt",
+        options: { sort: { createdAt: 1 } },
+      })
+      .populate({
+        path: "exams",
+        select: "title duration questions createdAt",
+        options: { sort: { createdAt: 1 } },
+      });
+
+    if (!course) return res.status(404).json({ message: "Course not found" });
+
+    return res.json({ course: course.toObject() });
+  } catch (err) {
+    console.error("getCourseDetailForInstructor error:", err);
+    return res.status(500).json({ message: "Failed to fetch course detail" });
+  }
+}; */
 
 const getCourseDetailForInstructor = async (req, res) => {
   try {
@@ -901,7 +1101,8 @@ const getCourseDetailForInstructor = async (req, res) => {
       })
       .populate({
         path: "exams",
-        select: "title duration questions createdAt",
+        // ✅ Added settings and proctoring
+        select: "title duration settings proctoring questions createdAt", 
         options: { sort: { createdAt: 1 } },
       });
 
@@ -1024,14 +1225,13 @@ module.exports = {
   addExam,
   updateExam,
   deleteExam,
-  // getCourseExams,
   getInstructorCourseExams,
   getCourseDetailForInstructor,
   uploadLesson,
-  uploadLessonFile,
   uploadThumbnail,
-  uploadThumbnailFile,
   getCourseAnalytics,
   getInstructorEarnings,
   getPayoutHistory,
+  uploadLessonFile,
+  uploadThumbnailFile,
 };

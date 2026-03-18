@@ -177,7 +177,7 @@ exports.getPendingCourses = async (req, res) => {
       .populate("instructor", "name email")
       .populate("category", "name")
       .populate("lessons", "title contentType") 
-      .populate("exams", "title duration");     
+      .populate("exams", "title duration");   
 
     res.json(courses);
   } catch (err) {
@@ -195,13 +195,13 @@ exports.getCourseContentForReview = async (req, res) => {
       .populate({
         path: "lessons",
         // include everything needed to display actual content
-        select: "title contentType fileUrl description isPreviewFree createdAt",
+        select: "title contentType fileUrl description isPreviewFree  duration createdAt",
         options: { sort: { createdAt: 1 } },
       })
       .populate({
         path: "exams",
         // include questions + correctAnswer for admin review
-        select: "title duration questions createdAt",
+        select: "title duration settings proctoring questions createdAt",
         options: { sort: { createdAt: 1 } },
       });
 
