@@ -1,6 +1,6 @@
 const crypto = require("crypto");
-const UserSubscription = require("../models/UserSubscriptionModel");
-const SubscriptionPayment = require("../models/SubscriptionPaymentModel");
+const UserSubscription = require("../models/userSubscriptionModel");
+const SubscriptionPayment = require("../models/subscriptionPaymentModel");
 
 const verifySignature = (rawBody, signature) => {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;

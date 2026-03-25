@@ -17,6 +17,16 @@ const studentSchema = mongoose.Schema(
       },
     ],
 
+    skillProficiency: [{
+        skill: { type: String, required: true },
+        level: { type: Number, default: 1, min: 1, max: 10 }, // 1=Beginner, 10=Expert
+        lastUpdated: { type: Date, default: Date.now }
+    }],
+    targetGoals: {
+        type: [String],
+        default: [] // Ex: ["Fullstack Developer", "MERN Stack"]
+    },
+
     xpTotal: { type: Number, default: 0, min: 0 },
     xpByCourse: [
       {

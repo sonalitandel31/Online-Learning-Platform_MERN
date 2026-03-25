@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import api from "../../api/api";
 import { track } from "../../utils/track";
+import GamificationCard from "../../components/GamificationCard";
 
 function Home() {
   const [categories, setCategories] = useState([]);
@@ -13,6 +14,15 @@ function Home() {
   const [showAllRecommended, setShowAllRecommended] = useState(false);
   const [showAllTrending, setShowAllTrending] = useState(false);
   const [durationFilter, setDurationFilter] = useState("");
+
+  // --- NAYE AI RECOMMENDATION STATES ---
+  const [aiData, setAiData] = useState({
+    identifiedWeakSkills: [],
+    skillGapFixers: [],
+    nextInPath: []
+  });
+  const [isAiLoading, setIsAiLoading] = useState(true);
+  // -------------------------------------
 
   const navigate = useNavigate();
   const BASE_URL = import.meta.env.VITE_BASE_URL;
@@ -29,7 +39,10 @@ function Home() {
   }, []);
 
   useEffect(() => {
-    if (isLoggedIn) fetchRecommended();
+    if (isLoggedIn) {
+      fetchRecommended();
+      fetchAiRecommendations(); // <-- Nayi API call
+    }
   }, [recLevel, durationFilter, isLoggedIn]);
 
   const fetchTrending = async () => {
@@ -54,6 +67,21 @@ function Home() {
       console.error(err);
     }
   };
+
+  // --- NAYA FUNCTION: AI Recommendations Fetch Karne Ke Liye ---
+  const fetchAiRecommendations = async () => {
+    try {
+      const res = await api.get("/courses/recommendations/personalized", { withCredentials: true });
+      if (res.data && res.data.success) {
+        setAiData(res.data.data);
+      }
+    } catch (err) {
+      console.error("Error fetching AI recommendations", err);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+  // -------------------------------------------------------------
 
   const fetchCategories = async () => {
     try {
@@ -204,6 +232,60 @@ function Home() {
         </div>
       </section>
 
+      <div className="container mt-4">
+        <GamificationCard />
+      </div>
+
+      {/* --- NAYA AI PERSONALIZED LEARNING SECTION --- */}
+      {isLoggedIn && !isAiLoading && (aiData.identifiedWeakSkills.length > 0 || aiData.nextInPath.length > 0 || aiData.skillGapFixers.length > 0) && (
+        <section className="container py-5 mt-4" style={{ backgroundColor: "#fcfaff", borderRadius: "24px", border: `1px solid ${BRAND_COLOR}20` }}>
+          <div className="d-flex align-items-center mb-4 px-2">
+            <div className="p-3 rounded-circle me-3" style={{ background: `${BRAND_COLOR}15`, color: BRAND_COLOR }}>
+              <i className="fa fa-brain fa-2x"></i>
+            </div>
+            <div>
+              <h2 className="fw-bold mb-0">Your Smart Learning Path</h2>
+              <p className="text-muted mb-0">AI-driven recommendations based on your recent progress</p>
+            </div>
+          </div>
+
+          {/* Weak Skills Tags - Clean Inline UI without annoying alerts */}
+          {aiData.identifiedWeakSkills.length > 0 && (
+            <div className="mb-4 mx-2 p-3 bg-white rounded-3 shadow-sm border-0 d-flex flex-wrap align-items-center">
+              <span className="fw-bold me-3 text-dark mb-2 mb-md-0">Focus Areas to Improve:</span>
+              <div>
+                {aiData.identifiedWeakSkills.map((skill, index) => (
+                  <span key={index} className="badge rounded-pill me-2 mb-2 px-3 py-2" style={{ backgroundColor: "#ffebee", color: "#d32f2f", border: "1px solid #ffcdd2", fontWeight: "600" }}>
+                    <i className="fa fa-arrow-trend-up me-1"></i> {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Skill Gap Fixers Courses */}
+          {aiData.skillGapFixers.length > 0 && (
+            <div className="mb-5 px-2">
+              <h5 className="fw-bold mb-3" style={{ color: "#444" }}>Recommended to strengthen your weak skills</h5>
+              <div className="row">
+                {aiData.skillGapFixers.map(course => <CourseCard key={`gap-${course._id}`} course={course} />)}
+              </div>
+            </div>
+          )}
+
+          {/* Next in Path Courses */}
+          {aiData.nextInPath.length > 0 && (
+            <div className="px-2">
+              <h5 className="fw-bold mb-3" style={{ color: "#444" }}>Next steps for your career goals</h5>
+              <div className="row">
+                {aiData.nextInPath.map(course => <CourseCard key={`path-${course._id}`} course={course} />)}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+      {/* --- END AI SECTION --- */}
+
       {/* Recommended Section */}
       {isLoggedIn && recommendedCourses.length > 0 && (
         <section className="container py-5">
@@ -238,7 +320,7 @@ function Home() {
             </div>
           </div>
           <div className="row">
-            {recommendedCourses.slice(0, showAllRecommended ? 8 : 4).map(course => <CourseCard key={course._id} course={course} />)}
+            {recommendedCourses.slice(0, showAllRecommended ? 8 : 4).map(course => <CourseCard key={`rec-${course._id}`} course={course} />)}
           </div>
           <div className="d-flex justify-content-end mt-2">
             <button className="btn fw-bold" style={{ color: BRAND_COLOR }} onClick={() => setShowAllRecommended(!showAllRecommended)}>
@@ -260,16 +342,14 @@ function Home() {
                   style={{
                     borderRadius: "18px",
                     cursor: "pointer",
-                    border: "2px solid transparent", // Default transparent border
-                    transition: "all 0.3s ease",      // Smooth effect
+                    border: "2px solid transparent",
+                    transition: "all 0.3s ease",
                   }}
                   onClick={() => navigate(`/courses?category=${cat._id}`)}
-
-                  // --- INLINE HOVER LOGIC ---
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = BRAND_COLOR;
                     e.currentTarget.style.transform = "translateY(-5px)";
-                    e.currentTarget.style.backgroundColor = "#fcfaff"; // Light purple hint
+                    e.currentTarget.style.backgroundColor = "#fcfaff";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = "transparent";
@@ -289,9 +369,9 @@ function Home() {
       <section className="container py-5">
         <h2 className="fw-bold mb-4">Trending Now <i className="fa fa-fire text-danger"></i></h2>
         <div className="row">
-          {trendingCourses.slice(0, 4).map(course => <CourseCard key={course._id} course={course} />)}
+          {trendingCourses.slice(0, 4).map(course => <CourseCard key={`trend-${course._id}`} course={course} />)}
           {showAllTrending && trendingCourses.slice(4, 8).map(course => (
-            <CourseCard key={course._id} course={course} extraClass="animate-row" />
+            <CourseCard key={`trend2-${course._id}`} course={course} extraClass="animate-row" />
           ))}
         </div>
         <div className="d-flex justify-content-end">
@@ -311,7 +391,7 @@ function Home() {
           <div className="row">
             {newCourses.slice(0, 4).map(course => (
               <div key={course._id} className="col-md-3 mb-3">
-                <div className="bg-white p-2 rounded-4 text-dark h-100" onClick={() => navigate(`/courses/${course._id}`)}>
+                <div className="bg-white p-2 rounded-4 text-dark h-100" style={{ cursor: "pointer" }} onClick={() => navigate(`/courses/${course._id}`)}>
                   <img src={course.thumbnail ? `${BASE_URL}${course.thumbnail}` : ""} className="w-100 rounded-3 mb-2" style={{ height: "120px", objectFit: "cover" }} alt="" />
                   <p className="fw-bold small mb-1">{course.title}</p>
                 </div>

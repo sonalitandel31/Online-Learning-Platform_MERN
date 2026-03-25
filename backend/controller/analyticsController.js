@@ -1,5 +1,8 @@
 const AnalyticsEvent = require("../models/AnalyticsEventModel");
 const EngagementScore = require("../models/EngagementScoreModel");
+const userModel = require("../models/userModel");
+const resultModel = require("../models/resultModel");
+const studentModel = require("../models/studentModel");
 
 let Course;
 try {
@@ -713,7 +716,6 @@ const calcInstructorScore = async (instructorId) => {
   };
 };
 
-
 const instructorScoreMe = async (req, res) => {
   try {
     const data = await calcInstructorScore(req.user._id);
@@ -939,6 +941,62 @@ const getPlatformRiskOverview = async (req, res) => {
   }
 };
 
+const getAiMetrics = async (req, res) => {
+  try {
+    const data = [];
+    const today = new Date();
+    
+    // Last 7 days ka loop
+    for (let i = 6; i >= 0; i--) {
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() - i);
+      
+      const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+      
+      const dayName = startOfDay.toLocaleDateString("en-US", { weekday: 'short' });
+
+      // 1. Active Users (Jinka lastActiveAt aaj ke din me hai)
+      const activeUsers = await userModel.countDocuments({
+        lastActiveAt: { $gte: startOfDay, $lte: endOfDay }
+      });
+
+      // 2. AI Insights (Jinhone exam diya aur weak skills identify hui)
+      const aiInsights = await resultModel.countDocuments({
+        createdAt: { $gte: startOfDay, $lte: endOfDay },
+        weakSkillsIdentified: { $exists: true, $not: { $size: 0 } }
+      });
+
+      // 3. Badges Awarded (Students jinko in dates me badge mila)
+      // Note: MongoDB aggregation for nested arrays is complex, using a simplified count for now
+      const studentsWithBadges = await studentModel.find({
+        "badges.earnedAt": { $gte: startOfDay, $lte: endOfDay }
+      }).select("badges");
+      
+      let badgesAwarded = 0;
+      studentsWithBadges.forEach(student => {
+        student.badges.forEach(badge => {
+          if (badge.earnedAt >= startOfDay && badge.earnedAt <= endOfDay) {
+            badgesAwarded++;
+          }
+        });
+      });
+
+      data.push({
+        name: dayName,
+        activeUsers,
+        aiInsightsGenerated: aiInsights,
+        badgesAwarded
+      });
+    }
+
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error("Error fetching AI metrics:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 module.exports = {
   trackSingle,
   trackBatch,
@@ -956,4 +1014,5 @@ module.exports = {
   getLessonDropoff,
   getPlatformHeatmap,
   getPlatformRiskOverview,
+  getAiMetrics,
 };

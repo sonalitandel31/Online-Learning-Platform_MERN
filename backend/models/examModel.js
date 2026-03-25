@@ -39,6 +39,10 @@ const examSchema = mongoose.Schema({
         marks: {
             type: Number,
             default: 1
+        },
+        skillTag: { 
+            type: String, 
+            required: true 
         }
     }],
 }, { timestamps: true });

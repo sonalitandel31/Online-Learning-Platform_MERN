@@ -48,6 +48,9 @@ function CourseDetail() {
   const [hasAccess, setHasAccess] = useState(false);
   const [accessReason, setAccessReason] = useState("");
 
+  const [relatedCourses, setRelatedCourses] = useState([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+
   const [liveClasses, setLiveClasses] = useState([]);
   const [liveLoading, setLiveLoading] = useState(false);
   const [liveError, setLiveError] = useState("");
@@ -58,6 +61,9 @@ function CourseDetail() {
   const studentId = loggedInUser?._id;
 
   const videoRef = useRef(null);
+  const startTimeRef = useRef(Date.now());
+  const lastPositionRef = useRef(0);
+  const rewindCountRef = useRef(0);
 
   // normalize base url (avoid double slashes)
   const BASE_URL = (import.meta.env.VITE_BASE_URL || "").replace(/\/+$/, "");
@@ -71,11 +77,11 @@ function CourseDetail() {
 
   // ---------- helpers ----------
   const isPaidCourse = Number(course?.price || 0) > 0;
-  const showSubscribeCTA = isPaidCourse && !hasAccess; // show subscribe button only if paid & no access
-  const showStartViaSubscription = hasAccess && !isEnrolled; // user has access (sub) but enrollment record missing
+  const showSubscribeCTA = isPaidCourse && !hasAccess;
+  const showStartViaSubscription = hasAccess && !isEnrolled;
 
   const safeUrl = (u) => {
-    if (!u) return "";
+    if (!u) return undefined;
     return u.startsWith("http") ? u : `${BASE_URL}/${String(u).replace(/^\//, "")}`;
   };
 
@@ -83,6 +89,7 @@ function CourseDetail() {
     const d = res?.data;
     if (Array.isArray(d)) return d;
     if (Array.isArray(d?.data)) return d.data;
+    if (Array.isArray(d?.courses)) return d.courses;
     if (Array.isArray(d?.classes)) return d.classes;
     if (Array.isArray(d?.result)) return d.result;
     if (Array.isArray(d?.payload)) return d.payload;
@@ -299,6 +306,34 @@ function CourseDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, studentId]);
 
+  useEffect(() => {
+    // Safely extract category ID
+    const categoryId = course?.category?._id || course?.category;
+    if (!categoryId) return;
+
+    const fetchRelatedCourses = async () => {
+      try {
+        setRelatedLoading(true);
+        
+        const res = await api.get(`/courses?category=${categoryId}&approved=true`);
+
+        let coursesList = pickArray(res);
+        
+        let filteredCourses = coursesList.filter(c => 
+          c._id !== id && c.status === "approved"
+        );
+        
+        setRelatedCourses(filteredCourses.slice(0, 6));
+      } catch (err) {
+        console.error("Error fetching related courses", err);
+      } finally {
+        setRelatedLoading(false);
+      }
+    };
+
+    fetchRelatedCourses();
+  }, [course?.category, id]);
+
   // ---------- discussion ----------
   const handleDiscussionAccess = () => {
     track("discussion_open_attempt", { courseId: id, hasAccess });
@@ -311,6 +346,32 @@ function CourseDetail() {
 
     track("discussion_open", { courseId: id });
     navigate(`/course/${id}/discussion`);
+  };
+
+  // --- YAHAN NAYA FUNCTION ADD KAREIN ---
+  const logBehavior = async () => {
+    if (!selectedLesson || !isEnrolled) return;
+
+    const timeSpentSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
+
+    // Data tayyar karein
+    const behaviorData = {
+      courseId: id,
+      lessonId: selectedLesson._id,
+      timeSpentSeconds: timeSpentSeconds,
+      videoProgress: Math.round(videoProgress),
+      rewindCount: rewindCountRef.current,
+      contentType: selectedLesson.contentType
+    };
+
+    try {
+      // Hamari banayi hui AI tracking API call karein
+      await api.post("/analytics/log-behavior", behaviorData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.error("AI Behavior Track Error:", err);
+    }
   };
 
   // ---------- Razorpay loader ----------
@@ -565,20 +626,35 @@ function CourseDetail() {
     }
   };
 
-  // ---------- video progress ----------
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     const handleTimeUpdate = () => {
       if (!video.duration || Number.isNaN(video.duration)) return;
+
+      // REWIND DETECTION LOGIC
+      if (video.currentTime < lastPositionRef.current - 2) {
+        rewindCountRef.current += 1;
+      }
+      lastPositionRef.current = video.currentTime;
+
       const percent = (video.currentTime / video.duration) * 100;
       setVideoProgress(percent);
     };
 
     video.addEventListener("timeupdate", handleTimeUpdate);
-    return () => video.removeEventListener("timeupdate", handleTimeUpdate);
-  }, [selectedLesson]);
+
+    // Cleanup: Jab lesson badle ya page chhodien, toh data save ho jaye
+    return () => {
+      video.removeEventListener("timeupdate", handleTimeUpdate);
+      logBehavior(); // Save data to AI engine
+      // Reset trackers for next lesson
+      startTimeRef.current = Date.now();
+      rewindCountRef.current = 0;
+      lastPositionRef.current = 0;
+    };
+  }, [selectedLesson?._id]);
 
   // ---------- mark lesson complete ----------
   useEffect(() => {
@@ -1522,7 +1598,7 @@ function CourseDetail() {
                             {isCompleted && <CheckCircle size={16} className="text-success flex-shrink-0" />}
                             {!hasAccess && <Lock size={14} className="text-muted" />}
                           </div>
-                          
+
                           <div className="d-flex gap-3 small text-muted mb-2">
                             <span className="d-flex align-items-center gap-1">
                               <Clock size={12} /> {exam.duration ?? 0}m
@@ -1539,7 +1615,7 @@ function CourseDetail() {
                                 <>
                                   <div className="d-flex flex-column">
                                     <span className="small text-muted" style={{ fontSize: "10px" }}>Best Score</span>
-                                    <span className={`badge ${isCompleted ? "bg-success" : "bg-warning text-dark"} rounded-pill`} style={{width: "fit-content"}}>
+                                    <span className={`badge ${isCompleted ? "bg-success" : "bg-warning text-dark"} rounded-pill`} style={{ width: "fit-content" }}>
                                       {bestScore}%
                                     </span>
                                   </div>
@@ -1586,6 +1662,54 @@ function CourseDetail() {
         </div>
       </div>
 
+      {!relatedLoading && relatedCourses.length > 0 && (
+        <div className="container mt-5 pt-4 border-top">
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h4 className="fw-bolder text-dark m-0">More Courses You Might Like</h4>
+          </div>
+
+          <div className="d-flex justify-content-start overflow-auto pb-4 custom-horizontal-scrollbar gap-4 px-2">
+            {relatedCourses.map(c => (
+              <div
+                key={c._id}
+                className="card border-0 shadow-sm rounded-4 flex-shrink-0 cursor-pointer hover-scale overflow-hidden bg-white"
+                style={{ width: "280px", minWidth: "280px", maxWidth: "280px" }}
+                onClick={() => {
+                  navigate(`/courses/${c._id}`);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              >
+                <div className="position-relative">
+                  <img
+                    src={safeUrl(c.thumbnail)}
+                    className="card-img-top object-fit-cover"
+                    style={{ height: "160px" }}
+                    alt={c.title}
+                  />
+                  <span className="position-absolute top-0 end-0 badge bg-dark bg-opacity-75 m-2 backdrop-blur">
+                    {c.level || "Beginner"}
+                  </span>
+                </div>
+                <div className="card-body p-3">
+                  <h6 className="fw-bold text-dark text-truncate mb-1" title={c.title}>{c.title}</h6>
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    <span className="fw-bold text-dark small">⭐ {Number(c.averageRating || 0).toFixed(1)}</span>
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
+                    <span className="fw-bolder text-warning">
+                      {Number(c.price) > 0 ? `₹${c.price}` : "Free"}
+                    </span>
+                    <button className="btn btn-sm btn-light rounded-pill text-primary fw-bold" style={{ fontSize: "12px" }}>
+                      View Details
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <style>{`
         .header-gradient { background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); }
         .cursor-pointer { cursor: pointer; }
@@ -1607,6 +1731,11 @@ function CourseDetail() {
         .text-lesson-content { font-size: 15px; line-height: 1.75; color: #111827;}
         .text-lesson-content img { max-width: 100%; height: auto; }
         .text-lesson-content pre { white-space: pre-wrap; }
+        .custom-horizontal-scrollbar::-webkit-scrollbar { height: 8px; }
+        .custom-horizontal-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
+        .custom-horizontal-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-horizontal-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .backdrop-blur { backdrop-filter: blur(4px); }
       `}</style>
     </div>
   );

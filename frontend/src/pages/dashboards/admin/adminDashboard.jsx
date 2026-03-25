@@ -22,6 +22,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
+import AdminEngagementChart from "../../../components/AdminEngagementChart";
 
 ChartJS.register(
   CategoryScale,
@@ -210,6 +211,9 @@ export default function AdminDashboard() {
               <div style={{ height: '270px' }}>
                 {chartData?.datasets && <Line data={chartData} options={chartOptions} />}
               </div>
+            </div>
+            <div className="mt-4">
+              <AdminEngagementChart />
             </div>
           </>
         ) : (

@@ -6,6 +6,7 @@ const analyticsController = require("../controller/analyticsController");
 
 router.post("/track", analyticsController.trackSingle);
 router.post("/track-batch", analyticsController.trackBatch);
+router.get("/ai-metrics", authMiddleware, analyticsController.getAiMetrics);
 
 router.get("/overview", authMiddleware, analyticsController.getOverview);
 router.get("/dau", authMiddleware, analyticsController.getDAU);

@@ -6,6 +6,7 @@ const instructorProfileModel = require("../models/instructorModel");
 const Enrollment = require("../models/enrollmentModel");
 const Course = require("../models/courseModel");
 const Rating = require("../models/ratingModel");
+const resultModel = require("../models/resultModel");
 
 const { checkSubscriptionForCourse } = require("../utils/subscriptionAccess");
 
@@ -677,6 +678,81 @@ const rateCourse = async (req, res) => {
   }
 };
 
+// Get AI Personalized Course Recommendations
+const getPersonalizedRecommendations = async (req, res) => {
+  try {
+    const studentId = req.user._id;
+
+    // 1. Get Student Profile & Enrolled Courses
+    const student = await studentModel.findOne({ user: studentId });
+    if (!student) return res.status(404).json({ message: "Student profile not found" });
+
+    // Ensure we don't recommend courses they already bought
+    const enrolledCourseIds = student.enrolledCourses || [];
+
+    // 2. Identify Weak Skills from recent exams (Let's check the last 5 exams)
+    const recentResults = await resultModel.find({ student: studentId })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select("weakSkillsIdentified");
+
+    let weakSkillsSet = new Set();
+    recentResults.forEach(result => {
+      if (result.weakSkillsIdentified) {
+        result.weakSkillsIdentified.forEach(skill => weakSkillsSet.add(skill));
+      }
+    });
+    const weakSkills = Array.from(weakSkillsSet);
+
+    // 3. User's target goals (e.g., "Full Stack", "Data Science")
+    const targetGoals = student.targetGoals || [];
+
+    // 4. THE AI ENGINE LOGIC: Querying the right courses
+    const recommendedCourses = await courseModel.find({
+      _id: { $nin: enrolledCourseIds }, // Exclude already enrolled courses
+      status: "approved",               // Only show live courses
+      $or: [
+        { skillsTaught: { $in: weakSkills } }, // Condition A: Fixes a weak skill
+        { category: { $in: targetGoals } }     // Condition B: Matches a career goal
+        // Yahan aap future me Prerequisites wala logic bhi add kar sakte hain
+      ]
+    })
+    .select("title thumbnail price level averageRating skillsTaught description")
+    .limit(8) // Limit to top 8 recommendations
+    .lean();
+
+    // 5. Categorize for the Frontend UI
+    // Separate courses that specifically fix weak skills vs general learning path
+    const skillGapFixers = [];
+    const nextInPath = [];
+
+    recommendedCourses.forEach(course => {
+      // Agar course ki koi skill user ki weak skill se match karti hai
+      const isSkillGapFixer = course.skillsTaught?.some(skill => weakSkills.includes(skill));
+      
+      if (isSkillGapFixer) {
+        skillGapFixers.push(course);
+      } else {
+        nextInPath.push(course);
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: "Personalized recommendations generated successfully.",
+      data: {
+        identifiedWeakSkills: weakSkills,
+        skillGapFixers: skillGapFixers,
+        nextInPath: nextInPath
+      }
+    });
+
+  } catch (error) {
+    console.error("Recommendation Engine Error:", error);
+    return res.status(500).json({ message: "Internal server error while fetching recommendations." });
+  }
+};
+
 module.exports = {
   getCourses,
   getCourseById,
@@ -692,4 +768,5 @@ module.exports = {
   getMyCourseRating,
   getMyCourseRating,
   rateCourse,
+  getPersonalizedRecommendations,
 };

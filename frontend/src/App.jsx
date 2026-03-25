@@ -81,6 +81,8 @@ import RescheduleLiveClass from "./pages/dashboards/instructor/liveClasses/Resch
 import AddRecording from "./pages/dashboards/instructor/liveClasses/addRecording";
 import InstructorLiveClassRoom from "./pages/dashboards/instructor/liveClasses/liveClassRoom";
 import StudentLiveClassRoom from "./pages/dashboards/student/liveClassRoom";
+import SkillAnalysis from "./pages/dashboards/student/SkillAnalysis";
+import LearningPath from "./pages/dashboards/student/LearningPath";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -122,6 +124,8 @@ function App() {
         <Route path="/subscription-plans" element={<SubscriptionPlans />} />
         <Route path="/me/subscription" element={<MySubscription />} />
         <Route path="/live-classes" element={<StudentLiveClasses />} />
+        <Route path="/skill-analysis" element={<SkillAnalysis />} />
+        <Route path="/learning-path" element={<LearningPath />} />
 
         <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
           <Route path="/admin-dashboard" element={<AdminDashboard />}>

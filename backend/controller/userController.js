@@ -37,7 +37,14 @@ const registerUser = async (req, res) => {
 
         let extraData = null;
         if (normalizedRole === "student") {
-            extraData = await studentModel.create({ user: user._id, education, interests });
+            // Naya registration hai, toh first day streak set kar do
+            extraData = await studentModel.create({ 
+                user: user._id, 
+                education, 
+                interests,
+                streakCount: 1, 
+                lastStreakDate: new Date()
+            });
         }
         if (normalizedRole === "instructor") {
             extraData = await instructorModel.create({ user: user._id, bio, expertise, qualifications, experience });
@@ -87,6 +94,38 @@ const loginUser = async (req, res) => {
         user.lastLoginAt = new Date();
         user.lastActiveAt = new Date();
         await user.save();
+
+        // --- DAILY STREAK LOGIC START ---
+        if (user.role === "student") {
+            const studentProfile = await studentModel.findOne({ user: user._id });
+            if (studentProfile) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // Reset time to midnight for accurate day calculation
+
+                const lastStreak = studentProfile.lastStreakDate ? new Date(studentProfile.lastStreakDate) : null;
+                if (lastStreak) lastStreak.setHours(0, 0, 0, 0);
+
+                const diffTime = lastStreak ? Math.abs(today - lastStreak) : null;
+                const diffDays = diffTime !== null ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : null;
+
+                if (!lastStreak) {
+                    // First time login ever
+                    studentProfile.streakCount = 1;
+                    studentProfile.lastStreakDate = new Date();
+                } else if (diffDays === 1) {
+                    // Logged in the very next day -> Increase streak
+                    studentProfile.streakCount = (studentProfile.streakCount || 0) + 1;
+                    studentProfile.lastStreakDate = new Date();
+                } else if (diffDays > 1) {
+                    // Missed a day -> Reset streak to 1
+                    studentProfile.streakCount = 1;
+                    studentProfile.lastStreakDate = new Date();
+                }
+                
+                await studentProfile.save();
+            }
+        }
+        // --- DAILY STREAK LOGIC END ---
 
         const token = jwt.sign({ id: user._id, email: user.email, role: user.role },
             process.env.JWT_SECRET || "secretkey", { expiresIn: "1d" });

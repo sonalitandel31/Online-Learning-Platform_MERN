@@ -1,5 +1,5 @@
 const SubscriptionPlan = require("../models/SubscriptionPlanModel");
-const UserSubscription = require("../models/UserSubscriptionModel");
+const UserSubscription = require("../models/userSubscriptionModel");
 const razorpay = require("../config/razorpay");
 
 // ---------- Access computation (single source of truth) ----------

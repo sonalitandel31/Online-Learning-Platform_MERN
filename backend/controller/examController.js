@@ -6,13 +6,14 @@ const courseModel = require("../models/courseModel");
 const resultModel = require("../models/resultModel");
 const lessonModel = require("../models/lessonModel");
 const examModel = require("../models/examModel");
+const studentModel = require("../models/studentModel");
+const UserSkill = require("../models/userSkillModel");
 
 const path = require("path");
 const fs = require("fs");
 const { generateCertificate, sendCompletionEmail } = require("../utils/sendCompletionEmail");
 const { v4: uuidv4 } = require("uuid");
 
-const studentModel = require("../models/studentModel");
 const { awardXpOnce } = require("../services/gamificationService");
 
 const { checkSubscriptionForCourse } = require("../utils/subscriptionAccess");
@@ -220,7 +221,7 @@ exports.getExamProgress = async (req, res) => {
   }
 };
 
-exports.submitExam = async (req, res) => {
+/* exports.submitExam = async (req, res) => {
   try {
     const userId = req.user?._id;
     const courseId = req.params.courseId || req.body.courseId;
@@ -426,5 +427,252 @@ exports.submitExam = async (req, res) => {
   } catch (err) {
     console.error("submitExam error:", err);
     return res.status(500).json({ message: err?.message || "Server error" });
+  }
+}; */
+
+exports.submitExam = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    const courseId = req.params.courseId || req.body.courseId;
+    const examId = req.params.examId || req.body.examId;
+    const { answers, cheatCount = 0 } = req.body;
+
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    if (!courseId || !examId) return res.status(400).json({ message: "courseId and examId required" });
+    if (!answers || typeof answers !== "object") return res.status(400).json({ message: "answers required" });
+
+    // 1. Verify exam and get questions
+    const exam = await examModel.findById(examId).select("course questions settings proctoring");
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
+    if (String(exam.course) !== String(courseId)) {
+      return res.status(400).json({ message: "Exam does not belong to this course" });
+    }
+
+    let correct = 0;
+    let wrong = 0;
+    let skipped = 0;
+    let positiveMarks = 0;
+    let negativeMarks = 0;
+
+    // --- ADVANCED AI LOGIC: Sets for quick tags and Object for performance mapping ---
+    let weakSkills = new Set();
+    let strongSkills = new Set();
+    let skillPerformance = {}; // { "React": { correct: 1, total: 2 } }
+
+    for (const q of exam.questions || []) {
+      const selected = answers[String(q._id)];
+      const sTag = q.skillTag || "General";
+
+      // Initialize skill counter if not exists
+      if (!skillPerformance[sTag]) {
+        skillPerformance[sTag] = { correct: 0, total: 0 };
+      }
+      skillPerformance[sTag].total += 1;
+
+      if (!selected) {
+        skipped++;
+        if (q.skillTag) weakSkills.add(q.skillTag); 
+        continue;
+      }
+
+      if (selected === q.correctAnswer) {
+        correct++;
+        positiveMarks += Number(q.marks || 1);
+        if (q.skillTag) {
+          strongSkills.add(q.skillTag);
+          skillPerformance[sTag].correct += 1; // For Radar Chart
+        }
+      } else {
+        wrong++;
+        if (exam.settings?.negativeMarking > 0) {
+          negativeMarks += Number(exam.settings.negativeMarking);
+        }
+        if (q.skillTag) weakSkills.add(q.skillTag);
+      }
+    }
+
+    const totalQuestions = (exam.questions || []).length || 0;
+    const totalPossibleMarks = (exam.questions || []).reduce((sum, q) => sum + Number(q.marks || 1), 0);
+    const finalMarks = Math.max(0, positiveMarks - negativeMarks);
+    const score = totalPossibleMarks === 0 ? 0 : Math.round((finalMarks / totalPossibleMarks) * 100);
+    const passPercentage = Number(exam.settings?.passingScore || 60);
+    const isPassed = score >= passPercentage;
+
+    // 2. Access control (Enrollment check)
+    let enrollment;
+    try {
+      const accessRes = await getOrCreateEnrollmentForAccess({ userId, courseId });
+      enrollment = accessRes?.enrollment;
+    } catch (e) {
+      return res.status(500).json({ message: "Enrollment access check failed" });
+    }
+    if (!enrollment) return res.status(403).json({ message: "Access denied" });
+
+    const studentDoc = await studentModel.findOne({ user: userId });
+    if (!studentDoc) return res.status(404).json({ message: "Student profile not found" });
+
+    // 3. Update attempts and best score
+    let examProgress = (enrollment.examProgress || []).find((e) => String(e.examId) === String(examId));
+    const wasPassedBefore = examProgress?.isCompleted || false;
+
+    if (!examProgress) {
+      examProgress = {
+        examId,
+        attempts: 1,
+        bestScore: score,
+        isCompleted: isPassed,
+        lastAttemptAt: new Date(),
+      };
+      enrollment.examProgress = enrollment.examProgress || [];
+      enrollment.examProgress.push(examProgress);
+    } else {
+      if (examProgress.attempts >= Number(exam.settings?.maxAttempts || 3)) {
+        return res.status(400).json({ message: "Max attempts reached" });
+      }
+      examProgress.attempts += 1;
+      examProgress.bestScore = Math.max(Number(examProgress.bestScore || 0), score);
+      examProgress.isCompleted = examProgress.bestScore >= Number(exam.settings?.passingScore || 60);
+      examProgress.lastAttemptAt = new Date();
+    }
+
+    const becamePassedNow = !wasPassedBefore && examProgress.isCompleted;
+
+    // --- PRO AI LOGIC: Database me UserSkill Update karna (Radar Chart Data) ---
+    for (const sName in skillPerformance) {
+      const { correct: cCount, total: tCount } = skillPerformance[sName];
+      
+      const existingSkill = await UserSkill.findOne({ userId, skillName: sName });
+      if (existingSkill) {
+        existingSkill.totalQuestionsAttempted += tCount;
+        existingSkill.correctAnswers += cCount;
+        // Re-calculate level accuracy percentage
+        existingSkill.level = Math.round((existingSkill.correctAnswers / existingSkill.totalQuestionsAttempted) * 100);
+        existingSkill.lastUpdated = new Date();
+        await existingSkill.save();
+      } else {
+        await UserSkill.create({
+          userId,
+          skillName: sName,
+          totalQuestionsAttempted: tCount,
+          correctAnswers: cCount,
+          level: Math.round((cCount / tCount) * 100)
+        });
+      }
+    }
+
+    // 4. Save detailed result in Result Model
+    const newResult = await new resultModel({
+      exam: examId,
+      student: userId,
+      answers,
+      totalQuestions,
+      correctCount: correct,
+      wrongCount: wrong,
+      skippedCount: skipped,
+      positiveMarks,
+      negativeMarks,
+      finalMarks,
+      score,
+      isPassed,
+      attemptNumber: examProgress.attempts,
+      weakSkillsIdentified: Array.from(weakSkills),
+      cheat: {
+        tabSwitches: cheatCount,
+        autoSubmitted: cheatCount >= (exam.settings?.tabSwitchLimit || 3)
+      },
+    }).save();
+
+    // 5. Calculate overall course progress
+    const totalLessons = await lessonModel.countDocuments({ course: courseId });
+    const totalExams = await examModel.countDocuments({ course: courseId });
+    const completedLessons = (enrollment.completedLessons || []).length;
+    const completedExams = (enrollment.examProgress || []).filter((e) => e.isCompleted).length;
+
+    const totalItems = totalLessons + totalExams;
+    const totalCompleted = completedLessons + completedExams;
+    enrollment.progress = totalItems === 0 ? 0 : Math.min(100, Math.round((totalCompleted / totalItems) * 100));
+
+    const wasCourseCompleted = enrollment.status === "completed";
+    const isCourseCompletedNow = enrollment.progress >= 100 && !wasCourseCompleted;
+
+    // 6. Gamification: Award XP
+    const xpAwards = [];
+    if (becamePassedNow) {
+      const xpRes = await awardXpOnce({
+        studentId: studentDoc._id,
+        courseId,
+        event: "EXAM_PASS",
+        refId: examId,
+        xp: 30,
+      });
+      if (xpRes?.awarded) xpAwards.push(xpRes);
+      
+      // Update Proficiency in Student Profile (Keep existing logic)
+      let updatedProfileSkills = false;
+      strongSkills.forEach(skill => {
+        let existingSkill = studentDoc.skillProficiency.find(s => s.skill === skill);
+        if (existingSkill) {
+          if (existingSkill.level < 10) existingSkill.level += 1;
+        } else {
+          studentDoc.skillProficiency.push({ skill: skill, level: 1 });
+        }
+        updatedProfileSkills = true;
+      });
+      if (updatedProfileSkills) await studentDoc.save();
+    }
+
+    if (isCourseCompletedNow) {
+      const xpRes = await awardXpOnce({
+        studentId: studentDoc._id,
+        courseId,
+        event: "COURSE_COMPLETE",
+        refId: courseId,
+        xp: 100,
+      });
+      if (xpRes?.awarded) xpAwards.push(xpRes);
+      enrollment.status = "completed";
+
+      // 7. Generate Certificate and Send Email
+      try {
+        const courseDetails = await courseModel.findById(courseId).populate("instructor", "name");
+        const certId = uuidv4();
+        const certPath = await generateCertificate(
+          req.user?.name || "Student",
+          courseDetails.title,
+          courseDetails.instructor?.name || "Instructor",
+          certId
+        );
+        enrollment.certificate = `/uploads/certificates/${certId}.pdf`;
+        await sendCompletionEmail(req.user, courseDetails, certPath);
+      } catch (e) {
+        console.error("Certificate/email process failed:", e);
+      }
+    }
+
+    await enrollment.save();
+
+    // 8. Send Final Response
+    return res.json({
+      message: examProgress.isCompleted ? "Exam passed" : "Exam submitted",
+      score,
+      totalQuestions,
+      correct,
+      wrong,
+      skipped,
+      positiveMarks,
+      negativeMarks,
+      finalMarks,
+      passPercentage,
+      attemptNumber: examProgress.attempts,
+      bestScore: examProgress.bestScore,
+      isCompleted: examProgress.isCompleted,
+      progress: enrollment.progress,
+      xpAwards,
+      weakSkills: Array.from(weakSkills)
+    });
+
+  } catch (err) {
+    console.error("submitExam full error:", err);
+    return res.status(500).json({ message: err?.message || "Internal Server Error" });
   }
 };

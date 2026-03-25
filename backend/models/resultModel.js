@@ -43,6 +43,10 @@ const resultSchema = mongoose.Schema({
         enum: ["in-progress", "completed", "disqualified"],
         default: "in-progress"
     },
+    weakSkillsIdentified: {
+        type: [String],
+        default: [] 
+    },
     startedAt: {
         type: Date,
         default: Date.now

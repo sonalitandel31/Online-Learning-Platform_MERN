@@ -38,6 +38,7 @@ const liveClassRoutes = require("./routes/liveClassRoutes");
 const liveClassChatRoutes = require("./routes/liveClassChatRoutes");
 const liveClassQuestionRoutes = require("./routes/liveClassQuestionRoutes");
 const zoomWebhookRoutes = require("./routes/zoomWebhookRoutes");
+const aiRoute = require("./routes/aiRoute");
 
 const { razorpayWebhookHandler } = require("./controller/razorpayWebhookController");
 
@@ -99,6 +100,7 @@ app.use("/system-settings", sysSetting);
 app.use("/live-classes", liveClassRoutes);
 app.use("/live-class-chat", liveClassChatRoutes);
 app.use("/live-class-questions", liveClassQuestionRoutes);
+app.use("/ai", aiRoute);
 
 const PORT = process.env.PORT || 3000;
 

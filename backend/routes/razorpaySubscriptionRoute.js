@@ -22,4 +22,11 @@ router.post(
   ctrl.createRazorpaySubscription
 );
 
+router.post(
+  "/verify-subscription",
+  authMiddleware,
+  roleMiddleware(["student"]),
+  ctrl.verifySubscription
+);
+
 module.exports = router;

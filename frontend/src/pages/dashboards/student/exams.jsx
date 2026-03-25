@@ -13,7 +13,8 @@ import {
   PlayCircle,
   Lock,
   Camera,
-  Maximize
+  Maximize,
+  AlertTriangle
 } from "lucide-react";
 
 const PLANS_ROUTE = "/plans";
@@ -43,10 +44,13 @@ export default function Exams() {
   const [cheatCount, setCheatCount] = useState(0);
   const [systemMessage, setSystemMessage] = useState({ text: "", type: "" });
   
+  // --- NAYA STATE: Fullscreen track karne ke liye ---
+  const [isFullscreen, setIsFullscreen] = useState(true); 
+
   // Refs for logic & fixes
   const videoRef = useRef(null);
-  const cheatCountRef = useRef(0); // Fix for Strict Mode double invoke
-  const isSubmittingRef = useRef(false); // Lock to prevent double submit APIs
+  const cheatCountRef = useRef(0); 
+  const isSubmittingRef = useRef(false); 
 
   // access control
   const [hasAccess, setHasAccess] = useState(false);
@@ -203,7 +207,6 @@ export default function Exams() {
     fetchExams();
   }, [courseId, examId, studentId, refreshKey, loadResult]);
 
-  // Timer Hook
   useEffect(() => {
     if (!timeLeft || submitted || !proctoringActive) return;
     const timer = setInterval(() => {
@@ -219,14 +222,14 @@ export default function Exams() {
     return () => clearInterval(timer);
   }, [timeLeft, submitted, proctoringActive]);
 
-  // Proctoring Hooks: Tab Visibility & Fullscreen (Fixed for Strict Mode)
+  // --- UPDATED Proctoring Hooks ---
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && proctoringActive && !submitted) {
         cheatCountRef.current += 1;
         const newCount = cheatCountRef.current;
         
-        setCheatCount(newCount); // Update UI state
+        setCheatCount(newCount);
 
         if (newCount >= tabLimit) {
           displayMessage("Too many violations. Auto-submitting...", "danger");
@@ -239,9 +242,15 @@ export default function Exams() {
 
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement && proctoringActive && !submitted) {
-        displayMessage("Warning: You exited fullscreen mode. Please return to continue.", "warning");
+        setIsFullscreen(false); // Set state to block UI
         cheatCountRef.current += 1;
         setCheatCount(cheatCountRef.current);
+        
+        if (cheatCountRef.current >= tabLimit) {
+          handleSubmit(true);
+        }
+      } else if (document.fullscreenElement) {
+        setIsFullscreen(true); // Restore UI when back in fullscreen
       }
     };
 
@@ -254,22 +263,20 @@ export default function Exams() {
     };
   }, [proctoringActive, submitted, tabLimit]);
 
-  // NEW: Ensure camera attaches to videoRef properly when exam starts
   useEffect(() => {
     if (proctoringActive && cameraStream && videoRef.current) {
       videoRef.current.srcObject = cameraStream;
     }
   }, [proctoringActive, cameraStream]);
 
-  // Start Proctoring Routine
   const startProctoredExam = async () => {
-    // Reset state & refs for a fresh attempt
     setSubmitted(false);
     setAnswers({});
     setTimeLeft((exam?.duration || 0) * 60);
     setCheatCount(0);
     cheatCountRef.current = 0; 
     isSubmittingRef.current = false; 
+    setIsFullscreen(true);
     
     window.scrollTo({ top: 0, behavior: "smooth" });
 
@@ -277,7 +284,6 @@ export default function Exams() {
       if (exam?.proctoring?.webcamRequired !== false) {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         setCameraStream(stream);
-        // Fallback attachment (handled better by the useEffect now)
         if (videoRef.current) videoRef.current.srcObject = stream;
       }
       
@@ -292,7 +298,12 @@ export default function Exams() {
     }
   };
 
-  // Stop Camera
+  const forceEnterFullscreen = () => {
+    document.documentElement.requestFullscreen().catch(err => {
+      displayMessage("Failed to enter fullscreen.", "danger");
+    });
+  };
+
   const stopCamera = () => {
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
@@ -303,7 +314,6 @@ export default function Exams() {
     }
   };
 
-  // Submit Exam (Fixed with Lock)
   const handleSubmit = async (isAuto = false) => {
     if (!examId || !exam || submitted || isSubmittingRef.current) return;
     
@@ -312,7 +322,6 @@ export default function Exams() {
       return;
     }
 
-    // Apply lock
     isSubmittingRef.current = true;
     setSubmitted(true);
     stopCamera();
@@ -320,7 +329,7 @@ export default function Exams() {
 
     try {
       track("exam_submit_attempt", { courseId, examId, isAuto });
-      const currentCheatCount = cheatCountRef.current; // Grab precise cheat count from ref
+      const currentCheatCount = cheatCountRef.current;
       const res = await api.post(`/exams/course/${courseId}/exam/${examId}/submit`, { answers, cheatCount: currentCheatCount });
       const earnedXp = (res.data?.xpAwards || []).reduce((sum, x) => sum + Number(x?.xp || 0), 0);
 
@@ -332,7 +341,7 @@ export default function Exams() {
       track("exam_submit_success", { courseId, examId, earnedXp });
     } catch (err) {
       setSubmitted(false);
-      isSubmittingRef.current = false; // Remove lock on failure
+      isSubmittingRef.current = false;
       track("exam_submit_failed", { courseId, examId });
       displayMessage(err.response?.data?.message || "Submission failed.", "danger");
     }
@@ -494,7 +503,6 @@ export default function Exams() {
             </div>
           ) : (
             <>
-              {/* ALWAYS show the past result summary if the exam is not currently running and they've taken it before */}
               {result && !proctoringActive && attemptNumber > 0 && (
                 <div className="card border-0 shadow-sm p-3 p-md-4 rounded-4 mb-4 text-start">
                   <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -535,7 +543,6 @@ export default function Exams() {
                     </div>
                   </div>
 
-                  {/* Attempt History Table */}
                   {result.allAttempts && result.allAttempts.length > 0 && (
                     <div className="mt-4 pt-4 border-top">
                       <h6 className="fw-bold mb-3 text-dark">Attempt History</h6>
@@ -582,7 +589,6 @@ export default function Exams() {
                 </div>
               )}
 
-              {/* Show Pre-Exam Setup Screen if they CAN attempt and exam is not active */}
               {!proctoringActive && canAttempt && !submitted && (
                 <div className="card border-0 shadow-sm p-4 rounded-4 text-start mt-4">
                   <h3 className="fw-bold mb-3">Pre-Exam Check</h3>
@@ -598,7 +604,6 @@ export default function Exams() {
                 </div>
               )}
 
-              {/* Show completely locked Assessment View if they CANNOT attempt anymore */}
               {!proctoringActive && !canAttempt && !submitted && (
                 <div className="card border-0 shadow-sm p-4 p-md-5 text-center rounded-4 mt-3">
                   <Award size={60} className="text-purple mb-4 mx-auto" />
@@ -611,8 +616,20 @@ export default function Exams() {
                 </div>
               )}
 
-              {/* Show Active Exam Questions if Proctoring is ON */}
-              {proctoringActive && (
+              {/* --- NAYA LOGIC: Agar Fullscreen nahi hai toh Questions chupa do --- */}
+              {proctoringActive && !isFullscreen && exam?.proctoring?.fullscreenRequired !== false && (
+                <div className="card border-0 shadow-lg p-5 text-center rounded-4 mt-4" style={{ backgroundColor: "#fff5f5", border: "2px solid #f87171" }}>
+                  <AlertTriangle size={60} className="text-danger mb-3 mx-auto" />
+                  <h3 className="fw-bolder text-dark mb-2">Proctoring Alert</h3>
+                  <p className="text-muted fs-5 mb-4">You have exited fullscreen mode. The exam is paused and a warning has been recorded. Please return to fullscreen to continue.</p>
+                  <button className="btn btn-danger btn-lg rounded-pill px-5 fw-bold mx-auto" onClick={forceEnterFullscreen}>
+                    <Maximize size={20} className="me-2 d-inline" /> Return to Fullscreen
+                  </button>
+                </div>
+              )}
+
+              {/* Sirf tabhi questions dikhao jab student rules follow kar raha ho */}
+              {proctoringActive && (isFullscreen || exam?.proctoring?.fullscreenRequired === false) && (
                 <>
                   <div className="mb-4 border-bottom pb-3 text-start">
                     <h2 className="fw-bold text-dark h4">{exam.title}</h2>
@@ -659,7 +676,6 @@ export default function Exams() {
           )}
         </div>
         
-        {/* FIXED: Correct attributes for seamless webcam display */}
         {proctoringActive && exam?.proctoring?.webcamRequired !== false && (
           <video 
             ref={videoRef} 

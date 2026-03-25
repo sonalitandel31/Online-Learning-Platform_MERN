@@ -1,6 +1,8 @@
+const crypto = require("crypto");
 const razorpay = require("../config/razorpay");
 const SubscriptionPlan = require("../models/SubscriptionPlanModel");
-const UserSubscription = require("../models/UserSubscriptionModel");
+const UserSubscription = require("../models/userSubscriptionModel");
+const SubscriptionPayment = require("../models/subscriptionPaymentModel");
 
 const toPaise = (amt) => {
   const n = Number(amt || 0);
@@ -270,5 +272,70 @@ exports.createRazorpaySubscription = async (req, res) => {
       statusCode: info.status,
       metadata: info.meta,
     });
+  }
+};
+
+exports.verifySubscription = async (req, res) => {
+  try {
+    const {
+      razorpay_payment_id,
+      razorpay_subscription_id,
+      razorpay_signature,
+    } = req.body;
+
+    if (!razorpay_payment_id || !razorpay_subscription_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, message: "Missing required Razorpay parameters." });
+    }
+
+    // 1. Verify the signature
+    // IMPORTANT: Subscriptions use payment_id + "|" + subscription_id for the signature payload
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(razorpay_payment_id + "|" + razorpay_subscription_id)
+      .digest("hex");
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({ success: false, message: "Invalid payment signature." });
+    }
+
+    // 2. Find the pending subscription
+    const dbSub = await UserSubscription.findOne({ razorpaySubscriptionId: razorpay_subscription_id });
+
+    if (!dbSub) {
+      return res.status(404).json({ success: false, message: "Subscription not found in database." });
+    }
+
+    // 3. Update the database immediately for instant UI feedback
+    if (dbSub.status === "pending") {
+      dbSub.status = "active";
+      dbSub.razorpayPaymentId = razorpay_payment_id;
+      dbSub.lastPaymentAt = new Date();
+      dbSub.autoRenew = true;
+      dbSub.lastEvent = "frontend_verification_success";
+      
+      await dbSub.save();
+    }
+
+    // 4. Log the payment to prevent the webhook from creating a duplicate entry later
+    const paymentExists = await SubscriptionPayment.findOne({ paymentId: razorpay_payment_id }).lean();
+    if (!paymentExists) {
+       await SubscriptionPayment.create({
+         userId: dbSub.userId,
+         planId: dbSub.planId,
+         userSubscriptionId: dbSub._id,
+         amount: dbSub.amount, // Fallback amount, webhook will update with exact captured amount if needed
+         currency: dbSub.currency || "INR",
+         status: "completed",
+         paymentMethod: "Razorpay",
+         paymentId: razorpay_payment_id,
+         subscriptionId: razorpay_subscription_id,
+       });
+    }
+
+    return res.json({ success: true, message: "Payment verified successfully." });
+
+  } catch (error) {
+    console.error("Verification Error:", error);
+    return res.status(500).json({ success: false, message: "Server error during verification." });
   }
 };

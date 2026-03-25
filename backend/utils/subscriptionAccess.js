@@ -1,4 +1,4 @@
-const UserSubscription = require("../models/UserSubscriptionModel");
+const UserSubscription = require("../models/userSubscriptionModel");
 
 const isFuture = (date) => {
   if (!date) return false;

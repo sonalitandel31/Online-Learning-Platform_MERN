@@ -180,12 +180,13 @@ export default function ManageExams() {
     }));
   };
 
+  // --- CHANGED: Added skillTag to default object ---
   const addQuestion = () => {
     setForm((prev) => ({
       ...prev,
       questions: [
         ...prev.questions,
-        { questionText: "", options: ["", "", "", ""], correctAnswer: "", marks: 1 },
+        { questionText: "", options: ["", "", "", ""], correctAnswer: "", marks: 1, skillTag: "" },
       ],
     }));
   };
@@ -668,6 +669,10 @@ export default function ManageExams() {
                   <label style={labelStyle}>Question Text</label>
                   <input value={q.questionText} onChange={(e) => handleQuestionChange(qIndex, "questionText", e.target.value)} required style={inputStyle} placeholder="What is the output of..." />
 
+                  {/* --- CHANGED: Added Skill Tag Input --- */}
+                  <label style={labelStyle}>Skill Tag (AI Tracking)</label>
+                  <input value={q.skillTag || ""} onChange={(e) => handleQuestionChange(qIndex, "skillTag", e.target.value)} required style={inputStyle} placeholder="e.g. React Hooks, Algebra, CSS Grid" />
+
                   <label style={labelStyle}>Options</label>
                   <div className="opt-grid">
                     {q.options.map((opt, i) => (
@@ -795,7 +800,6 @@ export default function ManageExams() {
                       <span style={{ fontSize: "0.78rem", fontWeight: 900, background: "#eef2ff", color: colors.primary, padding: "2px 10px", borderRadius: "999px" }}>{(ex.questions || []).length} Qs</span>
                     </div>
 
-                    {/* NAYA: Settings & Proctoring Summary Badges */}
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px", paddingBottom: "12px", borderBottom: `1px dashed ${colors.border}` }}>
                       <span style={{ fontSize: "0.75rem", background: "#f8fafc", border: `1px solid ${colors.border}`, padding: "3px 8px", borderRadius: "6px", color: "#475569", fontWeight: "600" }}>
                         Pass: {ex.settings?.passingScore ?? 60}%
@@ -822,7 +826,6 @@ export default function ManageExams() {
                         </span>
                       )}
                     </div>
-                    {/* END NAYA CODE */}
 
                     {(ex.questions || []).length === 0 ? (
                       <div style={{ marginTop: "10px", color: "#94a3b8", fontStyle: "italic" }}>No questions provided.</div>
@@ -830,7 +833,15 @@ export default function ManageExams() {
                       <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
                         {(ex.questions || []).map((q, qIdx) => (
                           <div key={q._id || qIdx} style={{ background: "#f8fafc", border: `1px solid ${colors.border}`, borderRadius: "12px", padding: "12px" }}>
-                            <div style={{ fontWeight: 800, marginBottom: "6px", color: "#0f172a" }}>Q{qIdx + 1}. {q.questionText}</div>
+                            <div style={{ fontWeight: 800, marginBottom: "6px", color: "#0f172a" }}>
+                              Q{qIdx + 1}. {q.questionText}
+                              {/* --- CHANGED: Show Skill Tag in Preview --- */}
+                              {q.skillTag && (
+                                <span style={{ marginLeft: "10px", fontSize: "0.7rem", background: "#fef3c7", color: "#92400e", padding: "2px 6px", borderRadius: "4px" }}>
+                                  {q.skillTag}
+                                </span>
+                              )}
+                            </div>
                             <ul style={{ margin: 0, paddingLeft: "22px", color: "#334155" }}>
                               {(q.options || []).map((opt, oIdx) => {
                                 const isCorrect = opt === q.correctAnswer;

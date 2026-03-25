@@ -27,7 +27,17 @@ const courseSchema = new mongoose.Schema({
     },
     averageRating: { type: Number, default: 0 },
     totalRatings: { type: Number, default: 0 },
-    
+
+    skillsTaught: {
+        type: [String],
+        default: []
+        // Example: ["React", "State Management", "Frontend"]
+    },
+    prerequisites: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "course"
+    }],
+
 }, { timestamps: true });
 
 courseSchema.virtual("formattedDuration").get(function () {
