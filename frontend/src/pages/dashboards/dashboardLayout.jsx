@@ -12,7 +12,8 @@ import {
   FaRupeeSign,
   FaBars,
   FaTimes,
-  FaVideo
+  FaVideo,
+  FaBuilding // ===== NEW MODULE 7 UPDATE: Added Building Icon =====
 } from "react-icons/fa";
 
 const findActiveSectionLabel = (links, pathname) => {
@@ -35,7 +36,6 @@ const findActiveSectionLabel = (links, pathname) => {
 };
 
 export default function DashboardLayout({ sidebarLinks, children }) {
-  // Changed state to hold only a single active section name (string)
   const [openSection, setOpenSection] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 992);
@@ -43,6 +43,10 @@ export default function DashboardLayout({ sidebarLinks, children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const userRole = localStorage.getItem("role") || "instructor";
+
+  let dashboardHomeLink = "/instructor-dashboard";
+  if (userRole === "admin") dashboardHomeLink = "/admin-dashboard";
+  else if (userRole === "hr_manager") dashboardHomeLink = "/hr-dashboard";
 
   useEffect(() => {
     const handleResize = () => {
@@ -63,13 +67,10 @@ export default function DashboardLayout({ sidebarLinks, children }) {
   useEffect(() => {
     const activeLabel = findActiveSectionLabel(sidebarLinks, location.pathname);
     if (!activeLabel) return;
-
-    // Open the section corresponding to the current URL route
     setOpenSection(activeLabel);
   }, [location.pathname, sidebarLinks]);
 
   const toggleSection = (label) => {
-    // If clicking the already open section, close it. Otherwise, open the new one (closing others).
     setOpenSection((prev) => (prev === label ? "" : label));
   };
 
@@ -195,25 +196,15 @@ export default function DashboardLayout({ sidebarLinks, children }) {
   return (
     <>
       <style>{`
-        .sidebar-scroll::-webkit-scrollbar {
-          width: 6px;
-        }
-        .sidebar-scroll::-webkit-scrollbar-track {
-          background: transparent;
-        }
+        .sidebar-scroll::-webkit-scrollbar { width: 6px; }
+        .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
         .sidebar-scroll::-webkit-scrollbar-thumb {
           background: rgba(255, 255, 255, 0.15);
           border-radius: 10px;
         }
-        .sidebar-scroll::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.3);
-        }
-        .nav-item:hover {
-          background-color: rgba(255, 255, 255, 0.1) !important;
-        }
-        .child-nav {
-          transition: all 0.2s ease;
-        }
+        .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+        .nav-item:hover { background-color: rgba(255, 255, 255, 0.1) !important; }
+        .child-nav { transition: all 0.2s ease; }
         .child-nav:hover {
           background-color: rgba(255, 255, 255, 0.15) !important;
           color: white !important;
@@ -242,7 +233,7 @@ export default function DashboardLayout({ sidebarLinks, children }) {
           <div style={styles.sidebarHeader}>
             <h4 className="m-0 fw-bold">
               <Link
-                to={userRole === "admin" ? "/admin-dashboard" : "/instructor-dashboard"}
+                to={dashboardHomeLink}
                 style={{ textDecoration: "none", color: "white", letterSpacing: "1px" }}
               >
                 Dashboard
@@ -253,7 +244,6 @@ export default function DashboardLayout({ sidebarLinks, children }) {
           <div style={styles.navContainer} className="sidebar-scroll">
             {Array.isArray(sidebarLinks) &&
               sidebarLinks.map((link, idx) => {
-                // Check if this specific link is the currently open one
                 const isOpen = openSection === link.label;
 
                 return (
@@ -338,6 +328,9 @@ export default function DashboardLayout({ sidebarLinks, children }) {
   );
 }
 
+// ==========================================
+// INSTRUCTOR SIDEBAR
+// ==========================================
 export const instructorSidebarLinks = [
   {
     label: "Course Management",
@@ -348,6 +341,14 @@ export const instructorSidebarLinks = [
       { label: "Pending Approvals", path: "/instructor-dashboard/pending_approvals" },
       { label: "Manage Lessons", path: "/instructor-dashboard/manage_lessons" },
       { label: "Manage Exams", path: "/instructor-dashboard/manage_exams" },
+    ],
+  },
+  // 👇 NEW MODULE 7 UPDATE: Instructor B2B Section 👇
+  {
+    label: "Corporate Projects",
+    icon: <FaBuilding />,
+    children: [
+      { label: "Assigned Projects", path: "/instructor-dashboard/b2b-projects" },
     ],
   },
   {
@@ -367,7 +368,7 @@ export const instructorSidebarLinks = [
   },
   {
     label: "Live Classes",
-    icon: <FaVideo />, // or any icon you like (FaVideo is better if you import it)
+    icon: <FaVideo />,
     children: [
       { label: "Manage Live Classes", path: "/instructor-dashboard/live-classes" },
       { label: "Create Live Class", path: "/instructor-dashboard/live-classes/create" },
@@ -398,12 +399,23 @@ export const instructorSidebarLinks = [
   },
 ];
 
+// ==========================================
+// ADMIN SIDEBAR
+// ==========================================
 export const adminSidebarLinks = [
   {
     label: "User Management",
     icon: <FaUsers />,
     children: [
       { label: "All Users", path: "/admin-dashboard/users" },
+    ],
+  },
+  {
+    label: "B2B & Enterprise",
+    icon: <FaBuilding />,
+    children: [
+      { label: "Manage Companies", path: "/admin-dashboard/companies" },
+      { label: "B2B Course Requests", path: "/admin-dashboard/b2b-requests" },
     ],
   },
   {
@@ -473,4 +485,41 @@ export const adminSidebarLinks = [
       { label: "System Settings", path: "/admin-dashboard/system-settings" },
     ],
   },
+];
+
+// ==========================================
+// HR SIDEBAR
+// ==========================================
+export const hrSidebarLinks = [
+  {
+    label: "Dashboard & Insights",
+    icon: <FaChartLine />,
+    children: [
+      { label: "Detailed Analytics", path: "/hr-dashboard/analytics" },
+    ],
+  },
+  {
+    label: "Employee Management",
+    icon: <FaUsers />,
+    children: [
+      { label: "Employee Roster", path: "/hr-dashboard/employees" },
+      { label: "Bulk Enrollment", path: "/hr-dashboard/bulk-enroll" },
+    ],
+  },
+  {
+    label: "Learning & Training",
+    icon: <FaBook />, 
+    children: [
+      { label: "Learning Paths", path: "/hr-dashboard/manage-paths" },
+      { label: "Request Custom Course", path: "/hr-dashboard/request-course" },
+      { label: "Request Status", path: "/hr-dashboard/request-status" },
+    ],
+  },
+  {
+    label: "Company Settings",
+    icon: <FaBuilding />,
+    children: [
+      { label: "Branding & Billing", path: "/hr-dashboard/corporate-settings" },
+    ],
+  }
 ];

@@ -45,4 +45,6 @@ router.get("/payouts", instructorController.getPayoutHistory);
 router.get("/course/:courseId/detail", instructorController.getCourseDetail);
 router.get("/course/:courseId/details", instructorController.getCourseDetailForInstructor);
 
+router.get("/assigned-b2b-projects", instructorController.getAssignedB2BProjects);
+
 module.exports = router;

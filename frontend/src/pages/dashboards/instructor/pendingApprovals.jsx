@@ -8,6 +8,11 @@ function PendingApprovals() {
   const [successMsg, setSuccessMsg] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [companies, setCompanies] = useState([]); // ✅ NEW MODULE 7: Companies state
+  const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -15,10 +20,9 @@ function PendingApprovals() {
     level: "",
     price: "",
     thumbnail: "",
+    isGlobal: true, // ✅ NEW MODULE 7
+    allowedCompanies: [], // ✅ NEW MODULE 7
   });
-  const [categories, setCategories] = useState([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
   const [showContent, setShowContent] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
@@ -57,6 +61,7 @@ function PendingApprovals() {
 
   useEffect(() => {
     fetchPending();
+    
     const fetchCategories = async () => {
       try {
         const res = await api.get("/courses/categories");
@@ -65,7 +70,22 @@ function PendingApprovals() {
         console.error(err);
       }
     };
+
+    // ✅ NEW MODULE 7: Fetch Companies
+    const fetchCompanies = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await api.get("/companies/all", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setCompanies(res.data.data || []);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
     fetchCategories();
+    fetchCompanies();
   }, []);
 
   const openEditModal = (course) => {
@@ -77,6 +97,11 @@ function PendingApprovals() {
       level: course.level || "",
       price: course.price || "",
       thumbnail: course.thumbnail || "",
+      // ✅ NEW MODULE 7: Bind B2B Data
+      isGlobal: course.isGlobal !== false,
+      allowedCompanies: course.allowedCompanies?.length > 0 
+        ? [typeof course.allowedCompanies[0] === 'object' ? course.allowedCompanies[0]._id : course.allowedCompanies[0]] 
+        : []
     });
     setModalOpen(true);
     setError("");
@@ -119,7 +144,14 @@ function PendingApprovals() {
     try {
       setSubmitting(true);
       const token = localStorage.getItem("token");
-      const res = await api.put(`/instructor/course/${editingCourse._id}`, form, {
+
+      // ✅ NEW MODULE 7: Payload construction
+      const payload = {
+        ...form,
+        allowedCompanies: form.isGlobal ? [] : form.allowedCompanies
+      };
+
+      const res = await api.put(`/instructor/course/${editingCourse._id}`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -212,7 +244,17 @@ function PendingApprovals() {
                 <div style={{ fontSize: "0.9rem", color: "#64748b", marginBottom: "15px" }}>
                   <div style={{ marginBottom: "5px" }}><strong>Category:</strong> {course.category?.name || "N/A"}</div>
                   <div style={{ marginBottom: "5px" }}><strong>Level:</strong> {course.level}</div>
-                  <div><strong>Price:</strong> {course.price > 0 ? `₹${course.price}` : <span style={{ color: "#10b981", fontWeight: "600" }}>Free</span>}</div>
+                  <div style={{ marginBottom: "5px" }}><strong>Price:</strong> {course.price > 0 ? `₹${course.price}` : <span style={{ color: "#10b981", fontWeight: "600" }}>Free</span>}</div>
+                  
+                  {/* ✅ NEW MODULE 7: Visibility Badge */}
+                  <div style={{ marginTop: "8px" }}>
+                    <strong>Visibility:</strong>{" "}
+                    {course.isGlobal === false ? (
+                      <span style={{ color: "#d97706", fontWeight: "bold", fontSize: "0.85rem", backgroundColor: "#fef3c7", padding: "2px 6px", borderRadius: "4px" }}>Private (B2B)</span>
+                    ) : (
+                      <span style={{ color: "#059669", fontWeight: "bold", fontSize: "0.85rem", backgroundColor: "#d1fae5", padding: "2px 6px", borderRadius: "4px" }}>Global (B2C)</span>
+                    )}
+                  </div>
                 </div>
               </div>
               <button
@@ -281,13 +323,50 @@ function PendingApprovals() {
               </div>
             </div>
 
+            {/* ✅ NEW MODULE 7: B2B Visibility Settings in Edit Modal */}
+            <div style={{ background: "#f8fafc", padding: "15px", borderRadius: "10px", border: `1px solid ${colors.border}`, marginBottom: "15px" }}>
+              <h4 style={{ margin: "0 0 10px 0", fontSize: "0.95rem", color: colors.primary }}>Course Visibility</h4>
+              
+              <div style={{ display: "flex", alignItems: "center", marginBottom: "10px" }}>
+                <input
+                  type="checkbox"
+                  id="globalToggleEditPending"
+                  checked={form.isGlobal}
+                  onChange={(e) => setForm({ ...form, isGlobal: e.target.checked, allowedCompanies: e.target.checked ? [] : form.allowedCompanies })}
+                  style={{ width: "16px", height: "16px", marginRight: "8px" }}
+                />
+                <label htmlFor="globalToggleEditPending" style={{ fontSize: "0.85rem", margin: 0, fontWeight: "600", cursor: "pointer" }}>
+                  Global Course (Available to Public)
+                </label>
+              </div>
+
+              {!form.isGlobal && (
+                <div style={{ marginTop: "10px" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", color: "#92400e", fontWeight: "600", marginBottom: "5px" }}>
+                    Select Corporate Client for this Private Course
+                  </label>
+                  <select
+                    value={form.allowedCompanies[0] || ""}
+                    onChange={(e) => setForm({ ...form, allowedCompanies: e.target.value ? [e.target.value] : [] })}
+                    required={!form.isGlobal}
+                    style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #fcd34d", background: "#fffbeb", outline: "none" }}
+                  >
+                    <option value="">-- Choose a Company --</option>
+                    {companies.map((comp) => (
+                      <option key={comp._id} value={comp._id}>{comp.companyName}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
             <label style={{ display: "block", marginBottom: "5px", fontWeight: "600", fontSize: "0.85rem" }}>Thumbnail</label>
             <input type="file" onChange={handleThumbnailUpload} style={{ width: "100%", marginBottom: "10px", fontSize: "0.8rem" }} />
 
             {(form.thumbnail || uploading) && (
               <div style={{ marginBottom: "20px", textAlign: "center", background: "#f8fafc", padding: "10px", borderRadius: "10px", border: `1px dashed ${colors.border}` }}>
                 {uploading ? <p style={{ fontSize: "0.8rem", color: colors.primary }}>Uploading...</p> :
-                  <img src={`${BASE_URL}${form.thumbnail}`} alt="preview" style={{ width: "100%", maxHeight: "150px", objectFit: "cover", borderRadius: "8px" }} />
+                  <img src={form.thumbnail.startsWith("http") ? form.thumbnail : `${BASE_URL}${form.thumbnail}`} alt="preview" style={{ width: "100%", maxHeight: "150px", objectFit: "cover", borderRadius: "8px" }} />
                 }
               </div>
             )}
@@ -360,7 +439,6 @@ function PendingApprovals() {
                         ? (l.fileUrl.startsWith("http") ? l.fileUrl : `${base}/${String(l.fileUrl).replace(/^\//, "")}`)
                         : "";
                       
-                      // Calculate Minutes & Seconds
                       const durSec = l.duration || 0;
                       const m = Math.floor(durSec / 60);
                       const s = durSec % 60;
@@ -368,10 +446,8 @@ function PendingApprovals() {
 
                       return (
                         <div key={l._id || idx} style={{
-                          background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px",
-                          padding: "14px"
+                          background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px", padding: "14px"
                         }}>
-                          {/* ✅ UPDATED LESSON HEADER WITH DURATION */}
                           <div style={{ fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                             <span>{idx + 1}. {l.title}</span>
                             <span style={{
@@ -434,7 +510,6 @@ function PendingApprovals() {
                           <span style={{ fontSize: "0.78rem", fontWeight: 900, background: "#eef2ff", color: colors.primary, padding: "2px 10px", borderRadius: "999px" }}>{(ex.questions || []).length} Qs</span>
                         </div>
 
-                        {/* ✅ UPDATED EXAM BADGES (Consistency with ManageExams) */}
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px", paddingBottom: "12px", borderBottom: `1px dashed ${colors.border}` }}>
                           <span style={{ fontSize: "0.75rem", background: "#f8fafc", border: `1px solid ${colors.border}`, padding: "3px 8px", borderRadius: "6px", color: "#475569", fontWeight: "600" }}>
                             Pass: {ex.settings?.passingScore ?? 60}%

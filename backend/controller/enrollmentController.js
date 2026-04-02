@@ -1,7 +1,7 @@
 const Enrollment = require("../models/enrollmentModel");
 const Course = require("../models/courseModel");
 const Student = require("../models/studentModel");
-const UserSubscription = require("../models/UserSubscriptionModel");
+const UserSubscription = require("../models/userSubscriptionModel");
 const { checkSubscriptionForCourse } = require("../utils/subscriptionAccess");
 
 const path = require("path");
@@ -209,6 +209,26 @@ const enrollCourse = async (req, res) => {
 
     const course = await Course.findById(courseId);
     if (!course) return res.status(404).json({ success: false, message: "Course not found" });
+
+    // ===== NEW MODULE 7 UPDATE: B2B PAYMENT BYPASS =====
+    let finalAmount = amount;
+    let finalSource = source;
+    let finalPaymentStatus = source === "subscription" ? "subscription" : "complete";
+
+    // Agar course Private/Corporate hai
+    if (course.isGlobal === false) {
+      const userCompanyId = req.user?.companyId?.toString() || studentUser?.companyId?.toString();
+      const allowedCompanies = course.allowedCompanies?.map(c => c.toString()) || [];
+
+      if (userCompanyId && allowedCompanies.includes(userCompanyId)) {
+        // Corporate employee matched! Bypass payment
+        finalAmount = 0;
+        finalSource = "corporate_b2b";
+        finalPaymentStatus = "bypassed_corporate";
+      } else {
+        return res.status(403).json({ success: false, message: "Access Denied: This is a private corporate course." });
+      }
+    }
 
     // 3. Check for existing active enrollment
     let existing = await Enrollment.findOne({ student: userId, course: courseId });

@@ -37,6 +37,14 @@ const courseSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "course"
     }],
+    isGlobal: {
+        type: Boolean,
+        default: true // True means accessible to B2C and all users
+    },
+    allowedCompanies: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Company' // Specific companies ke liye private course
+    }],
 
 }, { timestamps: true });
 

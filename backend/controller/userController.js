@@ -50,8 +50,10 @@ const registerUser = async (req, res) => {
             extraData = await instructorModel.create({ user: user._id, bio, expertise, qualifications, experience });
         }
 
+        // ===== NEW MODULE 7 UPDATE =====
+        // Attached companyId to the token if a B2B user registers (though usually HR handles this)
         const token = jwt.sign(
-            { id: user._id, email: user.email, role: user.role },
+            { id: user._id, email: user.email, role: user.role, companyId: user.companyId || null },
             process.env.JWT_SECRET || "secretkey",
             { expiresIn: "1d" }
         );
@@ -100,7 +102,7 @@ const loginUser = async (req, res) => {
             const studentProfile = await studentModel.findOne({ user: user._id });
             if (studentProfile) {
                 const today = new Date();
-                today.setHours(0, 0, 0, 0); // Reset time to midnight for accurate day calculation
+                today.setHours(0, 0, 0, 0); 
 
                 const lastStreak = studentProfile.lastStreakDate ? new Date(studentProfile.lastStreakDate) : null;
                 if (lastStreak) lastStreak.setHours(0, 0, 0, 0);
@@ -109,15 +111,12 @@ const loginUser = async (req, res) => {
                 const diffDays = diffTime !== null ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : null;
 
                 if (!lastStreak) {
-                    // First time login ever
                     studentProfile.streakCount = 1;
                     studentProfile.lastStreakDate = new Date();
                 } else if (diffDays === 1) {
-                    // Logged in the very next day -> Increase streak
                     studentProfile.streakCount = (studentProfile.streakCount || 0) + 1;
                     studentProfile.lastStreakDate = new Date();
                 } else if (diffDays > 1) {
-                    // Missed a day -> Reset streak to 1
                     studentProfile.streakCount = 1;
                     studentProfile.lastStreakDate = new Date();
                 }
@@ -127,8 +126,20 @@ const loginUser = async (req, res) => {
         }
         // --- DAILY STREAK LOGIC END ---
 
-        const token = jwt.sign({ id: user._id, email: user.email, role: user.role },
-            process.env.JWT_SECRET || "secretkey", { expiresIn: "1d" });
+        // ===== NEW MODULE 7 UPDATE =====
+        // The JWT token now securely carries the companyId. 
+        // This is how tenantAuth middleware will identify which company the user belongs to!
+        const token = jwt.sign(
+            { 
+                id: user._id, 
+                email: user.email, 
+                role: user.role, 
+                companyId: user.companyId || null 
+            },
+            process.env.JWT_SECRET || "secretkey", 
+            { expiresIn: "1d" }
+        );
+        // ================================
 
         const userObj = user.toObject();
         delete userObj.password;

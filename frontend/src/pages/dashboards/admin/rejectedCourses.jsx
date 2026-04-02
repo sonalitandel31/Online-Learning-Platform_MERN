@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import api from "../../../api/api";
-import { Modal } from "react-bootstrap"; // ✅ Added import
+import { Modal } from "react-bootstrap";
 
 export default function RejectedCourses() {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Added Content Modal States
+  // Content Modal States
   const [showContent, setShowContent] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState("");
@@ -20,7 +20,6 @@ export default function RejectedCourses() {
       .finally(() => setLoading(false));
   }, []);
 
-  // ✅ Added Content Modal Functions
   const openContentModal = async (courseId) => {
     try {
       setShowContent(true);
@@ -77,7 +76,7 @@ export default function RejectedCourses() {
     },
     cardHover: {
       transform: "translateY(-4px)",
-      boxShadow: "0 8px 20px rgba(220, 53, 69, 0.15)", // Soft red shadow for rejected theme
+      boxShadow: "0 8px 20px rgba(220, 53, 69, 0.15)", 
     },
     thumb: { width: "100%", height: "140px", objectFit: "cover" },
     body: { padding: "16px", flexGrow: 1 },
@@ -91,7 +90,6 @@ export default function RejectedCourses() {
     text: { fontSize: "0.85rem", color: "#4a5568", marginBottom: "4px" },
     label: { fontWeight: 600, color: "#6f42c1", marginRight: "6px" },
     
-    // Improved expandables matching the Pending page
     details: {
       marginBottom: "8px",
       fontSize: "0.85rem",
@@ -109,7 +107,6 @@ export default function RejectedCourses() {
       marginBottom: 0,
     },
     
-    // Improved Rejection Box Styles
     rejectBox: {
       margin: "12px 0",
       background: "#fff5f5",
@@ -139,7 +136,7 @@ export default function RejectedCourses() {
       color: "#9b2c2c",
       opacity: 0.9,
       lineHeight: 1.4,
-      backgroundColor: "rgba(254, 215, 215, 0.3)", // slight highlight for the note
+      backgroundColor: "rgba(254, 215, 215, 0.3)", 
       padding: "6px",
       borderRadius: "4px",
     },
@@ -152,7 +149,6 @@ export default function RejectedCourses() {
       color: "#a0aec0",
       textAlign: "right",
     },
-    // ✅ Added Button Styles
     viewBtn: { width: "100%", margin: "12px 0", borderRadius: "8px", fontWeight: 600, fontSize: "0.9rem", backgroundColor: "rgba(111, 66, 193, 0.1)", color: "#6f42c1", border: "1px solid rgba(111, 66, 193, 0.2)", padding: "10px", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", transition: "all 0.2s ease-in-out", cursor: "pointer" },
     viewBtnHover: { backgroundColor: "rgba(111, 66, 193, 0.2)" },
   };
@@ -256,7 +252,21 @@ export default function RejectedCourses() {
                     <span style={styles.label}>Price:</span> ₹{c.price ?? 0}
                   </div>
 
-                  {/* Redesigned Rejection info */}
+                  {/* ✅ NEW MODULE 7: B2B Visibility Badge for Admin */}
+                  <div style={{ ...styles.text, marginTop: "6px" }}>
+                    <span style={styles.label}>Visibility:</span>{" "}
+                    {c.isGlobal === false ? (
+                      <span style={{ color: "#b45309", backgroundColor: "#fffbeb", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold", fontSize: "0.8rem", border: "1px solid #fde68a" }}>
+                        Private (B2B)
+                      </span>
+                    ) : (
+                      <span style={{ color: "#047857", backgroundColor: "#ecfdf5", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold", fontSize: "0.8rem", border: "1px solid #a7f3d0" }}>
+                        Global (B2C)
+                      </span>
+                    )}
+                  </div>
+                  {/* ===================================================== */}
+
                   {hasRejectInfo ? (
                     <div style={styles.rejectBox}>
                       <div style={styles.rejectHeader}>
@@ -299,7 +309,7 @@ export default function RejectedCourses() {
                     </div>
                   )}
 
-                  <details style={styles.details}>
+                  <details style={{ ...styles.details, marginTop: "12px" }}>
                     <summary style={styles.summary}>
                       Lessons ({c.lessons?.length || 0})
                     </summary>
@@ -325,7 +335,6 @@ export default function RejectedCourses() {
                     </ul>
                   </details>
 
-                  {/* ✅ Added View Content Button */}
                   <button
                     style={styles.viewBtn}
                     onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.viewBtnHover)}
@@ -351,7 +360,7 @@ export default function RejectedCourses() {
         </div>
       )}
 
-      {/* ✅ Added Content Modal */}
+      {/* Content Modal */}
       <Modal show={showContent} onHide={closeContentModal} centered size="lg">
         <Modal.Header closeButton style={{ borderBottom: "1px solid #edf2f7" }}>
           <Modal.Title style={{ color: "#2d3748", fontWeight: 700 }}>Course Content Review</Modal.Title>

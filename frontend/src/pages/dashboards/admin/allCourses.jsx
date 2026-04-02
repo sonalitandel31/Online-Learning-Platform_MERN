@@ -250,13 +250,28 @@ export default function AllCourses() {
 
             <div className="card-body">
               <h5 style={{ color: "#333", margin: "0 0 10px 0", fontSize: "1.1rem" }}>{course.title}</h5>
-              
+
               <div style={{ fontSize: "13px", color: "#666", lineHeight: "1.8" }}>
                 <div><strong>Instructor:</strong> {course.instructor?.name || "N/A"}</div>
                 <div><strong>Category:</strong> {course.category?.name || "N/A"}</div>
                 <div><strong>Level:</strong> {course.level}</div>
-                <div style={{ marginTop: '8px' }}>
-                   <span className="badge" style={{ backgroundColor: getStatusColor(course.status) }}>
+
+                {/* ===== NEW MODULE 7 UPDATE: B2B Visibility Badge ===== */}
+                <div style={{ marginTop: "4px" }}>
+                  <strong>Visibility:</strong>{" "}
+                  {course.isGlobal === false ? (
+                    <span style={{ backgroundColor: "#fffbeb", color: "#b45309", border: "1px solid #fde68a", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold", fontSize: "11px" }}>
+                      🏢 Private (B2B)
+                    </span>
+                  ) : (
+                    <span style={{ backgroundColor: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold", fontSize: "11px" }}>
+                      🌍 Global (B2C)
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ marginTop: '10px' }}>
+                  <span className="badge" style={{ backgroundColor: getStatusColor(course.status) }}>
                     {course.status}
                   </span>
                   <span style={{ float: 'right', fontWeight: 'bold', color: '#6f42c1', fontSize: '15px' }}>
@@ -309,7 +324,7 @@ export default function AllCourses() {
           </div>
         ))}
       </div>
-      
+
       {filtered.length === 0 && (
         <div style={{ textAlign: 'center', marginTop: '50px', color: '#999' }}>
           <h4>No courses found matching your criteria.</h4>
@@ -333,8 +348,8 @@ export default function AllCourses() {
             <>
               <div style={{ fontWeight: 800, fontSize: "1.4rem", color: "#6f42c1", marginBottom: "4px" }}>{contentCourse.title}</div>
               <div style={{ color: "#718096", fontSize: "0.95rem", marginBottom: "20px" }}>
-                <strong>Instructor:</strong> {contentCourse.instructor?.name || "N/A"} &nbsp;|&nbsp; 
-                <strong>Category:</strong> {contentCourse.category?.name || "N/A"} &nbsp;|&nbsp; 
+                <strong>Instructor:</strong> {contentCourse.instructor?.name || "N/A"} &nbsp;|&nbsp;
+                <strong>Category:</strong> {contentCourse.category?.name || "N/A"} &nbsp;|&nbsp;
                 <strong>Level:</strong> {contentCourse.level || "—"}
               </div>
 
@@ -438,13 +453,13 @@ export default function AllCourses() {
                         <span style={{ fontSize: "0.75rem", background: "#fff5f5", border: "1px solid #fed7d7", padding: "3px 8px", borderRadius: "6px", color: "#991b1b", fontWeight: "700" }}>
                           Tab Limit: {ex.proctoring?.tabSwitchLimit ?? 3}
                         </span>
-                        
+
                         {ex.proctoring?.webcamRequired && (
                           <span style={{ fontSize: "0.75rem", background: "#fee2e2", color: "#991b1b", padding: "3px 8px", borderRadius: "6px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
                             📸 Webcam Req.
                           </span>
                         )}
-                        
+
                         {ex.proctoring?.fullscreenRequired && (
                           <span style={{ fontSize: "0.75rem", background: "#fee2e2", color: "#991b1b", padding: "3px 8px", borderRadius: "6px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
                             🖥️ Fullscreen Req.

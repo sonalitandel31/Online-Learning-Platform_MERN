@@ -65,6 +65,10 @@ function CourseDetail() {
   const lastPositionRef = useRef(0);
   const rewindCountRef = useRef(0);
 
+  // B2B specific flags
+  const isCorporateCourse = course?.isGlobal === false;
+  const isCompanyEmployee = !!loggedInUser?.companyId;
+
   // normalize base url (avoid double slashes)
   const BASE_URL = (import.meta.env.VITE_BASE_URL || "").replace(/\/+$/, "");
 
@@ -314,15 +318,15 @@ function CourseDetail() {
     const fetchRelatedCourses = async () => {
       try {
         setRelatedLoading(true);
-        
+
         const res = await api.get(`/courses?category=${categoryId}&approved=true`);
 
         let coursesList = pickArray(res);
-        
-        let filteredCourses = coursesList.filter(c => 
+
+        let filteredCourses = coursesList.filter(c =>
           c._id !== id && c.status === "approved"
         );
-        
+
         setRelatedCourses(filteredCourses.slice(0, 6));
       } catch (err) {
         console.error("Error fetching related courses", err);
@@ -411,8 +415,8 @@ function CourseDetail() {
       // We won't block individual purchase, just let them choose.
     }
 
-    // FREE COURSE
-    if (!isPaidCourse) {
+    // FREE COURSE OR CORPORATE BYPASS
+    if (!isPaidCourse || (isCorporateCourse && isCompanyEmployee)) {
       try {
         setEnrollLoading(true);
 
@@ -1404,14 +1408,25 @@ function CourseDetail() {
                 ) : !hasAccess ? (
                   <div className="text-center">
                     <div className="d-flex align-items-center justify-content-center gap-2 mb-3">
-                      <span className="h1 fw-bolder mb-0">{isPaidCourse ? `₹${course?.price}` : "Free"}</span>
-                      {isPaidCourse && (
-                        <span className="text-muted text-decoration-line-through">₹{Math.round(Number(course?.price || 0) * 1.5)}</span>
+                      {isCorporateCourse && isCompanyEmployee ? (
+                        <div className="d-flex flex-column align-items-center">
+                          <span className="badge bg-warning bg-opacity-10 text-dark border border-warning px-3 py-2 mb-2 fs-6 rounded-pill">
+                            Corporate Sponsored
+                          </span>
+                          <span className="h1 fw-bolder mb-0 text-success">Free Access</span>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="h1 fw-bolder mb-0">{isPaidCourse ? `₹${course?.price}` : "Free"}</span>
+                          {isPaidCourse && (
+                            <span className="text-muted text-decoration-line-through">₹{Math.round(Number(course?.price || 0) * 1.5)}</span>
+                          )}
+                        </>
                       )}
                     </div>
 
                     <button
-                      className="btn btn-warning btn-lg w-100 fw-bold rounded-pill mb-3 py-2 shadow-lg hover-scale d-flex align-items-center justify-content-center gap-2"
+                      className={`btn ${isCorporateCourse ? "btn-dark" : "btn-warning"} btn-lg w-100 fw-bold rounded-pill mb-3 py-2 shadow-lg hover-scale d-flex align-items-center justify-content-center gap-2`}
                       onClick={handleEnroll}
                       disabled={enrollLoading}
                     >
@@ -1419,8 +1434,17 @@ function CourseDetail() {
                         <span className="spinner-border spinner-border-sm"></span>
                       ) : (
                         <>
-                          {isPaidCourse && <ShieldAlert size={18} />}
-                          Enroll Now
+                          {isCorporateCourse && isCompanyEmployee ? (
+                            <>
+                              <Award size={18} />
+                              Start Corporate Training
+                            </>
+                          ) : (
+                            <>
+                              {isPaidCourse && <ShieldAlert size={18} />}
+                              Enroll Now
+                            </>
+                          )}
                         </>
                       )}
                     </button>

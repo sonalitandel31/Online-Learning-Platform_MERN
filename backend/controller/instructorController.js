@@ -8,6 +8,8 @@ const User = require("../models/userModel");
 const InstructorProfile = require("../models/instructorModel");
 const ExamResult = require("../models/resultModel");
 const Payment = require("../models/paymentModel");
+const courseRequestModel = require("../models/courseRequestModel"); 
+
 
 const multer = require("multer");
 const path = require("path");
@@ -193,37 +195,6 @@ const dashboard = async (req, res) => {
     res.status(500).json({ message: "Dashboard fetch failed", error });
   }
 };
-
-/* const courses = async (req, res) => {
-  try {
-    const instructorId = req.user._id;
-    const filter = { instructor: instructorId };
-    if (req.query.status) filter.status = req.query.status;
-
-    const coursesData = await Course.find(filter)
-      .populate("category", "name")
-      .populate({
-        path: "lessons",
-        select: "title contentType fileUrl description isPreviewFree duration createdAt",
-        options: { sort: { createdAt: 1 } },
-      })
-      .populate({
-        path: "exams",
-        select: "title duration questions",
-      });
-
-    const coursesWithCounts = coursesData.map((c) => ({
-      ...c.toObject(),
-      lessonsCount: c.lessons?.length || 0,
-      examsCount: c.exams?.length || 0,
-    }));
-
-    return res.json({ courses: coursesWithCounts });
-  } catch (error) {
-    console.error("Fetch courses failed:", error);
-    return res.status(500).json({ message: "Fetch courses failed", error });
-  }
-}; */
 
 const courses = async (req, res) => {
   try {
@@ -1204,6 +1175,27 @@ const getPayoutHistory = async (req, res) => {
   }
 };
 
+const getAssignedB2BProjects = async (req, res) => {
+    try {
+        // Instructor ka ID token se aayega (authMiddleware ke through)
+        const instructorId = req.user.id || req.user._id;
+
+        // Sirf wahi projects dhundho jo is instructor ko assign hue hain 
+        // aur jinka status 'in-development' hai
+        const myProjects = await courseRequestModel.find({ 
+            assignedInstructor: instructorId,
+            status: 'in-development' 
+        })
+        .populate('companyId', 'companyName domain') // Company details ke liye
+        .sort({ updatedAt: -1 }); // Latest sabse upar
+
+        res.status(200).json({ success: true, data: myProjects });
+    } catch (error) {
+        console.error("Fetch Assigned Projects Error:", error);
+        res.status(500).json({ success: false, message: "Failed to load assigned projects." });
+    }
+};
+
 module.exports = {
   dashboard,
   createCourse,
@@ -1234,4 +1226,5 @@ module.exports = {
   getPayoutHistory,
   uploadLessonFile,
   uploadThumbnailFile,
+  getAssignedB2BProjects,
 };

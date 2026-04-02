@@ -10,161 +10,69 @@ const resultModel = require("../models/resultModel");
 
 const { checkSubscriptionForCourse } = require("../utils/subscriptionAccess");
 
-/* const getCourses = async (req, res) => {
-  try {
-    const {
-      search,
-      category,
-      categories,
-      limit = 10,
-      page = 1,
-      approved,
-      sort = "newest",
-    } = req.query;
-
-    const parsedLimit = parseInt(limit);
-    const parsedPage = parseInt(page);
-
-    const filter = {};
-
-    if (approved === "true") filter.status = "approved";
-
-    if (search) filter.title = { $regex: search, $options: "i" };
-
-    // CATEGORY FILTER (supports multi)
-    if (categories) {
-      const ids = String(categories)
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean);
-
-      filter.category = { $in: ids };
-    } else if (category) {
-      filter.category = category;
-    }
-
-    let sortOption = { createdAt: -1 };
-    if (sort === "priceLow") sortOption = { price: 1 };
-    if (sort === "priceHigh") sortOption = { price: -1 };
-    if (sort === "newest") sortOption = { createdAt: -1 };
-
-    const total = await courseModel.countDocuments(filter);
-
-    const courses = await courseModel
-      .find(filter)
-      .populate("instructor", "name email")
-      .populate("category", "name")
-      .populate({
-        path: "lessons",
-        select: "duration",
-      })
-      .sort(sortOption)
-      .skip((parsedPage - 1) * parsedLimit)
-      .limit(parsedLimit);
-
-    const coursesWithEnrollment = await Promise.all(
-      courses.map(async (course) => {
-        const totalEnrolled = await Enrollment.countDocuments({
-          course: course._id,
-          status: { $in: ["active", "completed"] },
-        });
-
-        const lessonDurations = (course.lessons || []).map(l => Number(l.duration || 0));
-        const totalDuration = lessonDurations.reduce((sum, d) => sum + d, 0); // in minutes
-
-        return { ...course.toObject(), totalEnrolled };
-      })
-    );
-
-    return res.json({
-      success: true,
-      courses: coursesWithEnrollment,
-      total,
-      page: parsedPage,
-      pages: Math.ceil(total / parsedLimit),
-    });
-  } catch (err) {
-    console.error("Get Courses Error:", err);
-    return res.status(500).json({ error: err.message });
+const getVisibilityFilter = (req) => {
+  const userCompanyId = req.user?.companyId;
+  if (userCompanyId) {
+    return {
+      $or: [
+        { isGlobal: true },
+        { isGlobal: { $exists: false } },
+        { allowedCompanies: userCompanyId }
+      ]
+    };
   }
-}; */
+  return {
+    $or: [
+      { isGlobal: true },
+      { isGlobal: { $exists: false } }
+    ]
+  };
+};
 
 const getCourses = async (req, res) => {
   try {
     const {
-      search,
-      category,
-      categories,
-      limit = 10,
-      page = 1,
-      approved,
-      level,
-      minDuration,
-      maxDuration,
-      price,
-      paidOnly,
-      minRating,
-      sortBy = "newest",
+      search, category, categories, limit = 10, page = 1,
+      approved, level, minDuration, maxDuration, price,
+      paidOnly, minRating, sortBy = "newest",
     } = req.query;
 
     const parsedLimit = parseInt(limit);
     const parsedPage = parseInt(page);
 
-    const filter = {};
+    // ===== NEW MODULE 7 UPDATE =====
+    // Start filter with B2B visibility rules
+    const filter = { ...getVisibilityFilter(req) };
+    // ================================
 
-    // Only approved courses by default
     if (approved === "true") filter.status = "approved";
+    if (search) filter.title = { $regex: search, $options: "i" };
 
-    // Search
-    if (search) {
-      filter.title = { $regex: search, $options: "i" };
-    }
-
-    // Category filter
     if (categories) {
-      const ids = String(categories)
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean);
-
+      const ids = String(categories).split(",").map((x) => x.trim()).filter(Boolean);
       filter.category = { $in: ids };
     } else if (category) {
       filter.category = category;
     }
 
-    // Level filter
-    if (level) {
-      filter.level = level;
-    }
+    if (level) filter.level = level;
+    if (price === "0") filter.price = 0;
+    if (paidOnly === "true") filter.price = { $gt: 0 };
 
-    // Price filter
-    if (price === "0") {
-      filter.price = 0;
-    }
-
-    if (paidOnly === "true") {
-      filter.price = { $gt: 0 };
-    }
-
-    // Duration filter (totalDuration stored in seconds)
     if (minDuration || maxDuration) {
       filter.totalDuration = {};
       if (minDuration) filter.totalDuration.$gte = Number(minDuration);
       if (maxDuration) filter.totalDuration.$lte = Number(maxDuration);
     }
 
-    // Rating filter
-    if (minRating) {
-      filter.averageRating = { $gte: Number(minRating) };
-    }
+    if (minRating) filter.averageRating = { $gte: Number(minRating) };
 
-    // Sorting
     let sortOption = { createdAt: -1 };
-
     if (sortBy === "price_low") sortOption = { price: 1 };
     if (sortBy === "price_high") sortOption = { price: -1 };
     if (sortBy === "rating") sortOption = { averageRating: -1 };
     if (sortBy === "newest") sortOption = { createdAt: -1 };
+
 
     const total = await courseModel.countDocuments(filter);
 
@@ -177,7 +85,6 @@ const getCourses = async (req, res) => {
       .limit(parsedLimit)
       .lean();
 
-    // Add enrollment count
     const coursesWithEnrollment = await Promise.all(
       courses.map(async (course) => {
         const totalEnrolled = await Enrollment.countDocuments({
@@ -185,11 +92,7 @@ const getCourses = async (req, res) => {
           status: { $in: ["active", "completed"] },
         });
 
-        return {
-          ...course,
-          totalEnrolled,
-          enrolledCount: totalEnrolled,
-        };
+        return { ...course, totalEnrolled, enrolledCount: totalEnrolled };
       })
     );
 
@@ -208,29 +111,25 @@ const getCourses = async (req, res) => {
 
 const getTrendingCourses = async (req, res) => {
   try {
-    // 1. Fetch all approved courses. 
-    // .lean() use karne se performance fast ho jayegi kyunki hume sirf data chahiye, complex Mongoose methods nahi.
-    const courses = await courseModel.find({ status: "approved" }).populate("category", "name").lean();
+    // ===== NEW MODULE 7 UPDATE =====
+    // Fetch only approved courses that the user is allowed to see (B2B isolation)
+    const filter = { status: "approved", ...getVisibilityFilter(req) };
+    const courses = await courseModel.find(filter).populate("category", "name").lean();
+    // ================================
 
-    // 2. Fetch enrollment counts
     const trending = await Promise.all(
       courses.map(async (course) => {
         const enrolledCount = await Enrollment.countDocuments({
           course: course._id,
           status: { $in: ["active", "completed"] },
         });
-        return {
-          ...course,
-          enrolledCount,
-          totalEnrolled: enrolledCount
-        };
+        return { ...course, enrolledCount, totalEnrolled: enrolledCount };
       })
     );
 
-    // 3. Sort by enrollment count and SLICE TO 8 (instead of 4)
     const sortedTrending = trending
       .sort((a, b) => b.enrolledCount - a.enrolledCount)
-      .slice(0, 8); // Ab 8 courses bhej raha hai frontend ko
+      .slice(0, 8); 
 
     res.json({ success: true, courses: sortedTrending });
   } catch (err) {
@@ -243,11 +142,11 @@ const getRecommendedCourses = async (req, res) => {
     const userId = req.user?._id;
     const { level } = req.query;
 
-    let filter = { status: "approved" };
+    // ===== NEW MODULE 7 UPDATE =====
+    let filter = { status: "approved", ...getVisibilityFilter(req) };
+    // ================================
 
-    if (level) {
-      filter.level = { $regex: new RegExp(`^${level}$`, "i") };
-    }
+    if (level) filter.level = { $regex: new RegExp(`^${level}$`, "i") };
 
     const minD = Number(req.query.minDuration);
     const maxD = Number(req.query.maxDuration);
@@ -276,18 +175,17 @@ const getRecommendedCourses = async (req, res) => {
           _id: { $nin: student.enrolledCourses || [] }
         })
           .populate("category", "name")
-          .limit(8) // Increased to support the 'View More' row
+          .limit(8) 
           .lean();
       }
     }
 
-    // Fallback if no interests or no courses found for interests
     if (recommended.length === 0) {
       recommended = await courseModel
         .find(filter)
         .populate("category", "name")
         .sort({ createdAt: -1 })
-        .limit(8) // Increased to support the 'View More' row
+        .limit(8) 
         .lean();
     }
 
@@ -298,11 +196,7 @@ const getRecommendedCourses = async (req, res) => {
           status: { $in: ["active", "completed"] },
         });
 
-        return {
-          ...course, // No need for .toObject() if using .lean()
-          totalEnrolled: count,
-          enrolledCount: count,
-        };
+        return { ...course, totalEnrolled: count, enrolledCount: count };
       })
     );
 
@@ -356,7 +250,6 @@ const getCourseById = async (req, res) => {
       return res.status(400).json({ error: "Invalid course ID" });
     }
 
-    // load course with lessons/exams
     const course = await courseModel
       .findById(courseId)
       .populate("instructor", "name email")
@@ -368,23 +261,35 @@ const getCourseById = async (req, res) => {
       })
       .populate({
         path: "exams",
-        // do not blindly send questions
         select: "title duration questions createdAt",
         options: { sort: { createdAt: 1 } },
       });
 
     if (!course) return res.status(404).json({ error: "Course not found" });
 
+    // ===== NEW MODULE 7 UPDATE =====
+    // Protect private corporate courses from unauthorized access
+    if (course.isGlobal === false) {
+      const userCompanyId = req.user?.companyId?.toString();
+      const allowedCompanies = course.allowedCompanies?.map(c => c.toString()) || [];
+      
+      // If the user doesn't have a company ID, or their company ID is not in the allowed list
+      if (!userCompanyId || !allowedCompanies.includes(userCompanyId)) {
+        return res.status(403).json({ 
+          error: "Access Denied: This is a private corporate training course." 
+        });
+      }
+    }
+    // ================================
+
     const isPaid = Number(course.price || 0) > 0;
 
-    // Free course: allow full access, but sanitize exams
     if (!isPaid) {
       const obj = course.toObject();
       obj.exams = (obj.exams || []).map(sanitizeExam);
       return res.json({ course: obj, access: { ok: true, type: "free" } });
     }
 
-    // Paid course: if no login -> preview only
     const userId = req.user?._id;
     if (!userId) {
       const obj = course.toObject();
@@ -407,7 +312,6 @@ const getCourseById = async (req, res) => {
       });
     }
 
-    // Check purchase enrollment first
     const enrolled = await hasActiveEnrollment({ userId, courseId });
     if (enrolled) {
       const obj = course.toObject();
@@ -415,7 +319,6 @@ const getCourseById = async (req, res) => {
       return res.json({ course: obj, access: { ok: true, type: "purchase" } });
     }
 
-    // Check subscription
     const subCheck = await checkSubscriptionForCourse({ userId, courseId });
     if (subCheck.ok) {
       const obj = course.toObject();
@@ -423,7 +326,6 @@ const getCourseById = async (req, res) => {
       return res.json({ course: obj, access: { ok: true, type: "subscription" } });
     }
 
-    // No access => preview only
     const obj = course.toObject();
 
     obj.lessons = (obj.lessons || [])
@@ -678,19 +580,15 @@ const rateCourse = async (req, res) => {
   }
 };
 
-// Get AI Personalized Course Recommendations
 const getPersonalizedRecommendations = async (req, res) => {
   try {
     const studentId = req.user._id;
 
-    // 1. Get Student Profile & Enrolled Courses
     const student = await studentModel.findOne({ user: studentId });
     if (!student) return res.status(404).json({ message: "Student profile not found" });
 
-    // Ensure we don't recommend courses they already bought
     const enrolledCourseIds = student.enrolledCourses || [];
 
-    // 2. Identify Weak Skills from recent exams (Let's check the last 5 exams)
     const recentResults = await resultModel.find({ student: studentId })
       .sort({ createdAt: -1 })
       .limit(5)
@@ -703,31 +601,32 @@ const getPersonalizedRecommendations = async (req, res) => {
       }
     });
     const weakSkills = Array.from(weakSkillsSet);
-
-    // 3. User's target goals (e.g., "Full Stack", "Data Science")
     const targetGoals = student.targetGoals || [];
 
-    // 4. THE AI ENGINE LOGIC: Querying the right courses
+    // ===== NEW MODULE 7 UPDATE =====
+    // Use $and to combine B2B isolation with your AI logic
     const recommendedCourses = await courseModel.find({
-      _id: { $nin: enrolledCourseIds }, // Exclude already enrolled courses
-      status: "approved",               // Only show live courses
-      $or: [
-        { skillsTaught: { $in: weakSkills } }, // Condition A: Fixes a weak skill
-        { category: { $in: targetGoals } }     // Condition B: Matches a career goal
-        // Yahan aap future me Prerequisites wala logic bhi add kar sakte hain
+      _id: { $nin: enrolledCourseIds }, 
+      status: "approved", 
+      $and: [
+        getVisibilityFilter(req), // Ensures user can only see allowed courses
+        {
+          $or: [
+            { skillsTaught: { $in: weakSkills } }, 
+            { category: { $in: targetGoals } }     
+          ]
+        }
       ]
     })
+    // ================================
     .select("title thumbnail price level averageRating skillsTaught description")
-    .limit(8) // Limit to top 8 recommendations
+    .limit(8)
     .lean();
 
-    // 5. Categorize for the Frontend UI
-    // Separate courses that specifically fix weak skills vs general learning path
     const skillGapFixers = [];
     const nextInPath = [];
 
     recommendedCourses.forEach(course => {
-      // Agar course ki koi skill user ki weak skill se match karti hai
       const isSkillGapFixer = course.skillsTaught?.some(skill => weakSkills.includes(skill));
       
       if (isSkillGapFixer) {
@@ -765,7 +664,6 @@ module.exports = {
   getTrendingCourses,
   rateCourse,
   getCourseRatings,
-  getMyCourseRating,
   getMyCourseRating,
   rateCourse,
   getPersonalizedRecommendations,

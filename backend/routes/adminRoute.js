@@ -27,4 +27,10 @@ router.get("/transactions", admin.getTransactions);
 router.get("/enrollment-stats", admin.getEnrollmentStats);
 router.get("/course-performance", admin.getCoursePerformance);
 
+router.get("/b2b-requests", authMiddleware, admin.getAllCourseRequests);
+router.put("/b2b-requests/:requestId", authMiddleware, admin.updateRequestStatus);
+router.get('/instructors-list', authMiddleware, roleMiddleware(["admin"]), admin.getInstructorsList);
+router.put('/assign-instructor/:requestId', authMiddleware, roleMiddleware(["admin"]), admin.assignInstructorToRequest);
+router.get("/b2b-requests/export", authMiddleware, admin.exportRequestsToCSV);
+
 module.exports = router;

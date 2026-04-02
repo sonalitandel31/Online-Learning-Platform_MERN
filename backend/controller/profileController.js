@@ -5,8 +5,15 @@ const instructorModel = require("../models/instructorModel");
 
 const getUserProfile = async (req, res) => {
   try {
-    const user = req.user;
-    let profile;
+    const user = await userModel
+      .findById(req.user._id || req.user.id)
+      .populate("companyId", "companyName domain branding"); // 🎨 Branding details fetch kar li!
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    let profile = null;
 
     if (user.role === "student") {
       profile = await studentModel

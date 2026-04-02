@@ -49,6 +49,10 @@ function Courses() {
   const PLANS_ROUTE = "/subscription-plans";
   const MY_SUB_ROUTE = "/me/subscription";
 
+  // Dynamic Theme Colors
+  const THEME_PRIMARY = "var(--primary-color, #6f42c1)";
+  const THEME_PRIMARY_LIGHT = "var(--primary-color-light, rgba(111, 66, 193, 0.08))";
+
   // Helper to show custom notification
   const notify = (message, type = "success") => {
     setNotification({ show: true, message, type });
@@ -241,8 +245,11 @@ function Courses() {
         return;
       }
 
-      // Handle free course enrollment directly
-      if (!course.price || course.price === 0) {
+      // ===== NEW MODULE 7: Bypass Razorpay for Free OR Corporate Courses =====
+      const isCorporateCourse = course.isGlobal === false;
+      const isCompanyEmployee = !!user?.companyId;
+
+      if (!course.price || course.price === 0 || (isCorporateCourse && isCompanyEmployee)) {
         const { data } = await api.post("/enrollments", { courseId: course._id, amount: 0 });
 
         if (data.success) {
@@ -303,7 +310,7 @@ function Courses() {
           } else notify("Payment verification failed!", "danger");
         },
         prefill: { name: user.name, email: user.email, contact: user.phone || "" },
-        theme: { color: "#7b2cbf" },
+        theme: { color: THEME_PRIMARY }, // Dynamic Razorpay theme color
       };
 
       const razorpay = new window.Razorpay(options);
@@ -323,7 +330,7 @@ function Courses() {
     setConfirmModal({
       show: true,
       title: "Re-enroll Course",
-      message: `Do you want to re-enroll in ${course.title}?`,
+      message: `Your access has expired or been cancelled. Do you want to re-enroll in "${course.title}"?`,
       onConfirm: executeReenroll,
       data: course,
     });
@@ -389,7 +396,7 @@ function Courses() {
           } else notify("Payment verification failed!", "danger");
         },
         prefill: { name: user.name, email: user.email, contact: user.phone || "" },
-        theme: { color: "#7b2cbf" },
+        theme: { color: THEME_PRIMARY },
       };
 
       const razorpay = new window.Razorpay(options);
@@ -403,7 +410,7 @@ function Courses() {
   const formatDuration = (seconds = 0) => {
     const totalSeconds = Number(seconds || 0);
 
-    const totalMinutes = Math.ceil(totalSeconds / 60); 
+    const totalMinutes = Math.ceil(totalSeconds / 60);
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
 
@@ -445,13 +452,11 @@ function Courses() {
   // Render full-page context loader while fetching enrollments
   if (enrollmentsLoading)
     return (
-      <div className="d-flex justify-content-center align-items-center" style={{ height: "100vh", width: "100vw", position: "fixed", top: 0, left: 0, background: "rgba(240, 242, 245, 0.9)", backdropFilter: "blur(8px)", zIndex: 1050 }}>
-        <div className="card shadow-lg border-0 rounded-4 p-5 text-center" style={{ width: "350px", background: "#fff" }}>
-          <i className="bi bi-journal-richtext display-3 mb-3" style={{ color: "#7b2cbf" }}></i>
-          <h5 className="fw-bold mb-3" style={{ color: "#2b2b2b" }}>Accessing Dashboard...</h5>
-          <div className="progress" style={{ height: "6px", borderRadius: "10px", background: "#f0f2f5" }}>
-            <div className="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style={{ width: "100%", background: "#ffca2c" }}></div>
-          </div>
+      <div className="d-flex justify-content-center align-items-center" style={{ height: "100vh", width: "100vw", position: "fixed", top: 0, left: 0, background: "rgba(255, 255, 255, 0.95)", backdropFilter: "blur(10px)", zIndex: 1050 }}>
+        <div className="text-center">
+          <div className="spinner-border mb-3" style={{ color: THEME_PRIMARY, width: "3rem", height: "3rem", borderWidth: "0.25em" }} role="status"></div>
+          <h5 className="fw-bolder" style={{ color: "#2b2b2b", letterSpacing: "-0.5px" }}>Synchronizing Profile...</h5>
+          <p className="text-muted small">Preparing your personalized learning space</p>
         </div>
       </div>
     );
@@ -473,25 +478,124 @@ function Courses() {
 
   // Render main UI
   return (
-    <div
-      style={{
-        fontFamily: "'Inter', sans-serif",
-        padding: "40px 20px",
-        background: "#f8f9fa",
-        minHeight: "100vh",
-        position: "relative",
-        marginTop:"-1%"
-      }}
-    >
+    <div style={{ fontFamily: "'Inter', sans-serif", minHeight: "100vh", paddingBottom: "60px" , marginTop:"1.5%"}}>
       <style>{`
-        .course-card { transition: all 0.3s ease; }
-        .course-card:hover { transform: translateY(-6px); box-shadow: 0 15px 30px rgba(123, 44, 191, 0.1) !important; }
-        .custom-check:checked { background-color: #7b2cbf; border-color: #7b2cbf; }
-        .filter-select:focus { border-color: #7b2cbf; box-shadow: 0 0 0 0.25rem rgba(123, 44, 191, 0.25); }
-        @keyframes pulse-dot { 0%, 100% { opacity: 0.4; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } }
-        .dot { animation: pulse-dot 1.2s infinite ease-in-out; background-color: #7b2cbf; width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
-        .dot:nth-child(2) { animation-delay: 0.2s; }
-        .dot:nth-child(3) { animation-delay: 0.4s; }
+        .modern-sidebar {
+          background: #ffffff;
+          border-radius: 24px;
+          padding: 32px 24px;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
+          border: 1px solid rgba(0,0,0,0.02);
+        }
+        .modern-select {
+          background-color: #f8f9fc;
+          border: 1px solid transparent;
+          color: #333;
+          font-weight: 500;
+          font-size: 0.9rem;
+          transition: all 0.2s ease;
+        }
+        .modern-select:focus {
+          background-color: #fff;
+          border-color: ${THEME_PRIMARY};
+          box-shadow: 0 0 0 4px ${THEME_PRIMARY_LIGHT};
+        }
+        .filter-title {
+          font-size: 0.75rem;
+          letter-spacing: 1.5px;
+          font-weight: 800;
+          color: #8b95a5;
+          margin-bottom: 12px;
+          text-transform: uppercase;
+        }
+        .custom-checkbox-wrap {
+          display: flex;
+          align-items: center;
+          padding: 8px 12px;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+        .custom-checkbox-wrap:hover {
+          background: ${THEME_PRIMARY_LIGHT};
+        }
+        .custom-checkbox-wrap input[type="checkbox"] {
+          accent-color: ${THEME_PRIMARY};
+          width: 18px;
+          height: 18px;
+          cursor: pointer;
+          border-color: #cbd5e1;
+        }
+        
+        .masterpiece-card {
+          background: #ffffff;
+          border-radius: 24px;
+          border: 1px solid rgba(0,0,0,0.03);
+          box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+          transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+        }
+        .masterpiece-card:hover {
+          transform: translateY(-8px);
+          box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+        }
+        .card-img-container {
+          position: relative;
+          padding: 12px;
+          padding-bottom: 0;
+        }
+        .card-img-custom {
+          border-radius: 14px;
+          height: 160px;
+          width: 100%;
+          object-fit: cover;
+          box-shadow: inset 0 0 20px rgba(0,0,0,0.05);
+        }
+        .pill-badge {
+          position: absolute;
+          padding: 6px 14px;
+          border-radius: 20px;
+          font-size: 0.75rem;
+          font-weight: 800;
+          letter-spacing: 0.5px;
+          backdrop-filter: blur(8px);
+        }
+        .pill-tl { top: 22px; left: 22px; }
+        .pill-tr { top: 22px; right: 22px; }
+        
+        .btn-theme-primary {
+          background: ${THEME_PRIMARY};
+          color: white;
+          border: none;
+          transition: all 0.3s ease;
+        }
+        .btn-theme-primary:hover {
+          background: ${THEME_PRIMARY};
+          filter: brightness(1.1);
+          color: white;
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px ${THEME_PRIMARY_LIGHT};
+        }
+        .btn-theme-outline {
+          background: transparent;
+          color: ${THEME_PRIMARY};
+          border: 2px solid ${THEME_PRIMARY};
+          transition: all 0.3s ease;
+        }
+        .btn-theme-outline:hover {
+          background: ${THEME_PRIMARY_LIGHT};
+          color: ${THEME_PRIMARY};
+        }
+
+        .page-header-banner {
+          background: linear-gradient(135deg, ${THEME_PRIMARY} 0%, #1a1a1a 100%);
+          padding: 80px 0 60px 0;
+          margin-bottom: -40px;
+          color: white;
+        }
       `}</style>
 
       {/* --- CUSTOM NOTIFICATION UI --- */}
@@ -504,9 +608,9 @@ function Courses() {
             right: "20px",
             zIndex: 9999,
             minWidth: "300px",
-            borderRadius: "12px",
-            background: notification.type === "danger" ? "#fff0f0" : "#f0fff4",
-            borderLeft: `6px solid ${notification.type === "danger" ? "#dc3545" : "#198754"}`,
+            borderRadius: "16px",
+            background: notification.type === "danger" ? "#fff0f0" : "#ffffff",
+            borderLeft: `6px solid ${notification.type === "danger" ? "#dc3545" : THEME_PRIMARY}`,
             color: "#2b2b2b",
           }}
         >
@@ -519,36 +623,28 @@ function Courses() {
       {confirmModal.show && (
         <div
           style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            background: "rgba(0,0,0,0.5)",
-            backdropFilter: "blur(4px)",
-            zIndex: 10000,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: "20px",
+            position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+            background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)",
+            zIndex: 10000, display: "flex", justifyContent: "center", alignItems: "center", padding: "20px",
           }}
         >
-          <div className="bg-white p-4 rounded-4 shadow-lg border-0" style={{ maxWidth: "420px", width: "100%" }}>
-            <div className="d-flex align-items-center mb-3">
-              <i className="bi bi-arrow-repeat fs-3 me-2" style={{ color: "#ffca2c" }}></i>
-              <h5 className="fw-bold m-0" style={{ color: "#2b2b2b" }}>{confirmModal.title}</h5>
+          <div className="bg-white p-5 rounded-4 shadow-lg border-0" style={{ maxWidth: "450px", width: "100%" }}>
+            <div className="text-center mb-4">
+              <div className="d-inline-flex align-items-center justify-content-center rounded-circle mb-3" style={{ width: '60px', height: '60px', background: THEME_PRIMARY_LIGHT, color: THEME_PRIMARY }}>
+                <i className="bi bi-arrow-repeat fs-2"></i>
+              </div>
+              <h4 className="fw-bolder m-0" style={{ color: "#1a1a1a", letterSpacing: "-0.5px" }}>{confirmModal.title}</h4>
             </div>
-            <p className="text-muted mb-4 fs-6">{confirmModal.message}</p>
-            <div className="d-flex gap-3 justify-content-end">
+            <p className="text-muted text-center mb-5 fs-6">{confirmModal.message}</p>
+            <div className="d-flex gap-3 justify-content-center">
               <button
-                className="btn btn-light rounded-pill px-4 fw-bold shadow-sm"
+                className="btn btn-light rounded-pill px-5 py-2 fw-bold"
                 onClick={() => setConfirmModal({ ...confirmModal, show: false })}
               >
                 Cancel
               </button>
               <button
-                className="btn text-white rounded-pill px-4 fw-bold shadow-sm"
-                style={{ background: "#7b2cbf", border: "none" }}
+                className="btn btn-theme-primary rounded-pill px-5 py-2 fw-bold"
                 onClick={() => confirmModal.onConfirm(confirmModal.data)}
               >
                 Confirm
@@ -563,145 +659,145 @@ function Courses() {
         <div
           onClick={() => setIsSidebarOpen(false)}
           style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            background: "rgba(0,0,0,0.5)",
-            zIndex: 1040,
-            backdropFilter: "blur(4px)",
+            position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+            background: "rgba(0,0,0,0.5)", zIndex: 1040, backdropFilter: "blur(4px)",
           }}
         />
       )}
 
-      <div className="container py-3">
+      <div className="container position-relative" style={{ zIndex: 2 }}>
         {/* Mobile Filter Toggle */}
         <div className="d-lg-none mb-4">
           <button
             onClick={() => setIsSidebarOpen(true)}
             className="btn w-100 d-flex justify-content-between align-items-center shadow-sm py-3 px-4"
-            style={{ borderRadius: "16px", border: "1px solid #e9ecef", background: "#fff" }}
+            style={{ borderRadius: "16px", border: "none", background: "#fff" }}
           >
-            <span className="fw-bold text-dark"><i className="bi bi-sliders me-2 text-muted"></i> Filters</span>
-            <span className="badge rounded-pill text-dark px-3 py-2" style={{ background: "#ffca2c" }}>
+            <span className="fw-bold text-dark"><i className="bi bi-sliders me-2" style={{ color: THEME_PRIMARY }}></i> Show Filters</span>
+            <span className="badge rounded-pill text-white px-3 py-2" style={{ background: THEME_PRIMARY }}>
               {selectedCategories.length} Active
             </span>
           </button>
         </div>
 
-        <div className="row g-5">
+        <div className="row g-4 g-xl-5">
           {/* Sidebar Filters */}
           <aside
             className={`col-lg-3 ${isSidebarOpen ? "d-block" : "d-none d-lg-block"}`}
             style={
               isSidebarOpen
                 ? {
-                  position: "fixed",
-                  top: 0,
-                  left: 0,
-                  height: "100vh",
-                  width: "300px",
-                  zIndex: 1050,
-                  background: "#fff",
-                  padding: "30px 20px",
-                  boxShadow: "15px 0 40px rgba(0,0,0,0.1)",
-                  overflowY: "auto",
-                  borderTopRightRadius: "24px",
-                  borderBottomRightRadius: "24px"
+                  position: "fixed", top: 0, left: 0, height: "100vh", width: "320px", zIndex: 1050,
+                  background: "#fff", padding: "30px 20px", boxShadow: "15px 0 40px rgba(0,0,0,0.1)",
+                  overflowY: "auto", borderTopRightRadius: "24px", borderBottomRightRadius: "24px"
                 }
                 : {}
             }
           >
-            <div className="bg-white rounded-4 shadow-sm p-4 border" style={{ position: isSidebarOpen ? "static" : "sticky", top: "100px", borderColor: "#e9ecef" }}>
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <h5 className="fw-bold m-0 text-dark"><i className="bi bi-funnel me-2" style={{ color: "#7b2cbf" }}></i> Filters</h5>
+            <div className={isSidebarOpen ? "" : "modern-sidebar sticky-top"} style={{ top: "40px" }}>
+              <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                <h5 className="fw-bolder m-0 text-dark"><i className="bi bi-funnel-fill me-2" style={{ color: THEME_PRIMARY }}></i> Filters</h5>
                 {isSidebarOpen && <button className="btn-close shadow-none" onClick={() => setIsSidebarOpen(false)}></button>}
               </div>
-              
-              <div className="d-flex flex-column gap-2">
-                <h6 className="fw-bold text-secondary text-uppercase" style={{ fontSize: "0.8rem", letterSpacing: "1px" }}>Categories</h6>
-                {categories.map((cat) => (
-                  <label key={cat._id} className="d-flex align-items-center gap-2 p-1 rounded hover-bg-light" style={{ cursor: "pointer" }}>
-                    <input
-                      type="checkbox"
-                      className="form-check-input custom-check m-0 shadow-sm"
-                      checked={selectedCategories.includes(cat._id)}
-                      onChange={() => {
-                        handleCategoryChange(cat._id);
-                        if (window.innerWidth < 992) setIsSidebarOpen(false);
-                      }}
-                    />
-                    <span className="text-dark small fw-medium">{cat.name}</span>
-                  </label>
-                ))}
-                
-                <hr className="text-muted opacity-25" />
-                <h6 className="fw-bold text-secondary text-uppercase" style={{ fontSize: "0.8rem", letterSpacing: "1px" }}>Duration</h6>
-                <select
-                  className="form-select form-select-sm filter-select rounded-3 shadow-sm border-0 bg-light py-2"
-                  value={durationFilter}
-                  onChange={(e) => setDurationFilter(e.target.value)}
-                >
-                  <option value="">Any Duration</option>
-                  <option value="lt_60">&lt; 60 min</option>
-                  <option value="60_90">1:00 – 1:30 hr</option>
-                  <option value="90_120">1:30 – 2:00 hr</option>
-                  <option value="120_180">2:00 – 3:00 hr</option>
-                  <option value="gt_180">&gt; 3 hr</option>
-                </select>
 
-                <hr className="text-muted opacity-25" />
-                <h6 className="fw-bold text-secondary text-uppercase" style={{ fontSize: "0.8rem", letterSpacing: "1px" }}>Level</h6>
-                <select
-                  className="form-select form-select-sm filter-select rounded-3 shadow-sm border-0 bg-light py-2"
-                  value={levelFilter}
-                  onChange={(e) => setLevelFilter(e.target.value)}
-                >
-                  <option value="">All Levels</option>
-                  <option value="Beginner">Beginner</option>
-                  <option value="Intermediate">Intermediate</option>
-                  <option value="Advanced">Advanced</option>
-                </select>
+              <div className="d-flex flex-column gap-4">
 
-                <hr className="text-muted opacity-25" />
-                <h6 className="fw-bold text-secondary text-uppercase" style={{ fontSize: "0.8rem", letterSpacing: "1px" }}>Price</h6>
-                <select
-                  className="form-select form-select-sm filter-select rounded-3 shadow-sm border-0 bg-light py-2"
-                  value={priceFilter}
-                  onChange={(e) => setPriceFilter(e.target.value)}
-                >
-                  <option value="">All</option>
-                  <option value="free">Free</option>
-                  <option value="paid">Paid</option>
-                </select>
+                {/* Categories */}
+                <div>
+                  <h6 className="filter-title">Categories</h6>
+                  <div className="d-flex flex-column gap-1">
+                    {categories.map((cat) => (
+                      <label key={cat._id} className="custom-checkbox-wrap">
+                        <input
+                          type="checkbox"
+                          checked={selectedCategories.includes(cat._id)}
+                          onChange={() => {
+                            handleCategoryChange(cat._id);
+                            if (window.innerWidth < 992) setIsSidebarOpen(false);
+                          }}
+                        />
+                        <span className="text-dark fw-medium ms-3">{cat.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
 
-                <hr className="text-muted opacity-25" />
-                <h6 className="fw-bold text-secondary text-uppercase" style={{ fontSize: "0.8rem", letterSpacing: "1px" }}>Rating</h6>
-                <select
-                  className="form-select form-select-sm filter-select rounded-3 shadow-sm border-0 bg-light py-2"
-                  value={ratingFilter}
-                  onChange={(e) => setRatingFilter(e.target.value)}
-                >
-                  <option value="">Any Rating</option>
-                  <option value="4">4★ & above</option>
-                  <option value="3">3★ & above</option>
-                </select>
+                {/* Duration */}
+                <div>
+                  <h6 className="filter-title">Duration</h6>
+                  <select
+                    className="form-select form-select-lg modern-select rounded-3 py-2"
+                    value={durationFilter}
+                    onChange={(e) => setDurationFilter(e.target.value)}
+                  >
+                    <option value="">Any Duration</option>
+                    <option value="lt_60">&lt; 60 mins</option>
+                    <option value="60_90">1 - 1.5 hours</option>
+                    <option value="90_120">1.5 - 2 hours</option>
+                    <option value="120_180">2 - 3 hours</option>
+                    <option value="gt_180">&gt; 3 hours</option>
+                  </select>
+                </div>
 
-                <hr className="text-muted opacity-25" />
-                <select
-                  className="form-select filter-select rounded-3 shadow-sm border-0 bg-light py-2"
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                >
-                  <option value="">Sort By</option>
-                  <option value="newest">Newest</option>
-                  <option value="price_low">Price: Low → High</option>
-                  <option value="price_high">Price: High → Low</option>
-                  <option value="rating">Top Rated</option>
-                </select>
+                {/* Level */}
+                <div>
+                  <h6 className="filter-title">Difficulty Level</h6>
+                  <select
+                    className="form-select form-select-lg modern-select rounded-3 py-2"
+                    value={levelFilter}
+                    onChange={(e) => setLevelFilter(e.target.value)}
+                  >
+                    <option value="">All Levels</option>
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                  </select>
+                </div>
 
-                <hr className="text-muted opacity-25" />
+                {/* Price */}
+                <div>
+                  <h6 className="filter-title">Pricing</h6>
+                  <select
+                    className="form-select form-select-lg modern-select rounded-3 py-2"
+                    value={priceFilter}
+                    onChange={(e) => setPriceFilter(e.target.value)}
+                  >
+                    <option value="">All Pricing</option>
+                    <option value="free">Free Only</option>
+                    <option value="paid">Premium Only</option>
+                  </select>
+                </div>
+
+                {/* Rating */}
+                <div>
+                  <h6 className="filter-title">Student Rating</h6>
+                  <select
+                    className="form-select form-select-lg modern-select rounded-3 py-2"
+                    value={ratingFilter}
+                    onChange={(e) => setRatingFilter(e.target.value)}
+                  >
+                    <option value="">Any Rating</option>
+                    <option value="4">4.0 & above</option>
+                    <option value="3">3.0 & above</option>
+                  </select>
+                </div>
+
+                {/* Sort By */}
+                <div>
+                  <h6 className="filter-title">Sort By</h6>
+                  <select
+                    className="form-select form-select-lg modern-select rounded-3 py-2"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                  >
+                    <option value="">Most Relevant</option>
+                    <option value="newest">Newest Additions</option>
+                    <option value="price_low">Price: Low to High</option>
+                    <option value="price_high">Price: High to Low</option>
+                    <option value="rating">Highest Rated</option>
+                  </select>
+                </div>
+
                 <button
                   onClick={() => {
                     setSelectedCategories([]);
@@ -717,8 +813,8 @@ function Courses() {
 
                     setIsSidebarOpen(false);
                   }}
-                  className="btn btn-link text-decoration-none p-0 text-center fw-bold w-100 py-2 rounded-3"
-                  style={{ color: "#6f42c1", background: "#f8f9fa" }}
+                  className="btn btn-light fw-bold w-100 py-3 rounded-pill mt-2 transition"
+                  style={{ color: THEME_PRIMARY, backgroundColor: THEME_PRIMARY_LIGHT }}
                 >
                   Clear All Filters
                 </button>
@@ -730,33 +826,31 @@ function Courses() {
           <main className="col-lg-9">
             {loading ? (
               // Section-level context loading effect
-              <div className="card border-0 shadow-sm rounded-4 p-5 text-center w-100 d-flex flex-column align-items-center justify-content-center" style={{ minHeight: "400px" }}>
-                <i className="bi bi-search display-3 mb-4" style={{ color: "#7b2cbf" }}></i>
-                <h4 className="fw-bold text-dark mb-4">Curating Courses...</h4>
-                <div className="d-flex justify-content-center gap-3">
-                  <div className="dot shadow-sm"></div>
-                  <div className="dot shadow-sm"></div>
-                  <div className="dot shadow-sm"></div>
-                </div>
+              <div className="card border-0 shadow-sm rounded-4 p-5 text-center w-100 d-flex flex-column align-items-center justify-content-center" style={{ minHeight: "500px", background: "#fff" }}>
+                <div className="spinner-border mb-4" style={{ width: '3rem', height: '3rem', color: THEME_PRIMARY, borderWidth: '0.25em' }} role="status"></div>
+                <h4 className="fw-bolder text-dark mb-2">Curating Courses...</h4>
+                <p className="text-muted">Applying your specific preferences</p>
               </div>
             ) : error ? (
-              <div className="alert border-0 shadow-sm rounded-4 p-4 text-center" style={{ background: "#fff0f0", color: "#dc3545" }}>
-                <i className="bi bi-exclamation-triangle-fill fs-3 d-block mb-2"></i>
-                <span className="fw-bold">{error}</span>
+              <div className="card border-0 shadow-sm rounded-4 p-5 text-center" style={{ background: "#fff0f0", color: "#dc3545" }}>
+                <i className="bi bi-exclamation-triangle-fill display-4 mb-3"></i>
+                <h5 className="fw-bolder m-0">{error}</h5>
               </div>
             ) : (
               <>
-                <div className="d-flex justify-content-between align-items-end mb-4 px-2">
-                  <h3 className="fw-bolder text-dark m-0" style={{ letterSpacing: "-0.5px" }}>
-                    Explore <span style={{ color: "#7b2cbf" }}>{approvedCourses.length}</span> Courses
-                  </h3>
+                <div className="d-flex justify-content-between align-items-center mb-4 px-2">
+                  <h4 className="fw-bolder text-dark m-0" style={{ letterSpacing: "-0.5px" }}>
+                    Showing <span style={{ color: THEME_PRIMARY }}>{approvedCourses.length}</span> Results
+                  </h4>
                 </div>
 
                 {approvedCourses.length === 0 ? (
-                  <div className="text-center py-5 bg-white rounded-4 shadow-sm border-0">
-                    <i className="bi bi-inbox fs-1 text-muted opacity-50 mb-3 d-block"></i>
-                    <h5 className="fw-bold text-dark">No courses found</h5>
-                    <p className="text-muted">Try adjusting your filters or search query.</p>
+                  <div className="text-center py-5 bg-white rounded-4 shadow-sm border-0 d-flex flex-column align-items-center justify-content-center" style={{ minHeight: "400px" }}>
+                    <div className="rounded-circle d-flex align-items-center justify-content-center mb-4" style={{ width: '80px', height: '80px', background: '#f8f9fa' }}>
+                      <i className="bi bi-search fs-1 text-muted opacity-50"></i>
+                    </div>
+                    <h4 className="fw-bolder text-dark">No matches found</h4>
+                    <p className="text-muted fs-6">Try adjusting your filters or searching for something else.</p>
                   </div>
                 ) : (
                   <div className="row g-4">
@@ -768,9 +862,10 @@ function Courses() {
                       const isExpiredOrCancelled = enrollment?.status === "cancelled" || isExpired;
 
                       return (
-                        <div key={course._id} className="col-md-6 col-xl-4">
-                          <div className="card h-100 border-0 shadow-sm course-card bg-white" style={{ borderRadius: "20px" }}>
-                            <div className="position-relative p-2 pb-0">
+                        <div key={course._id} className="col-md-6 col-lg-4 mb-2">
+                          <div className="masterpiece-card">
+
+                            <div className="card-img-container">
                               <img
                                 src={
                                   course.thumbnail
@@ -779,49 +874,44 @@ function Courses() {
                                       : `${BASE_URL}${course.thumbnail}`
                                     : "https://via.placeholder.com/400x225"
                                 }
-                                className="card-img-top"
-                                style={{
-                                  height: "180px",
-                                  objectFit: "cover",
-                                  borderRadius: "16px",
-                                }}
+                                className="card-img-custom"
                                 alt={course.title}
                               />
+
                               {isEnrolled && (
                                 <span
-                                  className="position-absolute top-0 end-0 m-3 badge rounded-pill shadow-sm px-3 py-2 fw-bold"
+                                  className="pill-badge pill-tl"
                                   style={{
-                                    background: isCompleted ? "#ffca2c" : "#7b2cbf",
+                                    background: isCompleted ? "rgba(255, 202, 44, 0.9)" : "rgba(25, 135, 84, 0.9)",
                                     color: isCompleted ? "#000" : "#fff",
-                                    fontSize: "0.7rem",
-                                    letterSpacing: "0.5px"
                                   }}
                                 >
-                                  {isCompleted ? "COMPLETED" : "ACTIVE"}
+                                  {isCompleted ? "COMPLETED" : "ENROLLED"}
                                 </span>
                               )}
+
+                              <span
+                                className="pill-badge pill-tr shadow-sm"
+                                style={{ background: "rgba(255, 255, 255, 0.95)", color: "#1a1a1a" }}
+                              >
+                                {course.level?.charAt(0).toUpperCase() + course.level?.slice(1)}
+                              </span>
                             </div>
 
-                            <div className="card-body d-flex flex-column p-4">
-                              <div className="d-flex justify-content-between align-items-center mb-3">
-                                <span className="badge rounded-pill" style={{ background: "#f3e8ff", color: "#6f42c1", padding: "6px 12px", fontWeight: "700" }}>
-                                  {course.level}
-                                </span>
+                            {/* Content Container */}
+                            <div className="card-body d-flex flex-column p-3">
 
-                                <div className="text-end d-flex gap-3 align-items-center">
-                                  {formatRating(course.averageRating) && (
-                                    <span className="text-dark small fw-bold d-flex align-items-center gap-1">
-                                      <i className="bi bi-star-fill text-warning"></i> {formatRating(course.averageRating)}
-                                    </span>
-                                  )}
-                                  <span className="text-muted small d-flex align-items-center gap-1">
-                                    <i className="bi bi-people-fill text-secondary"></i>
-                                    {course.totalEnrolled || 0}
+                              {/* B2B / Corporate Badge */}
+                              {course.isGlobal === false && loggedInUser?.companyId && (
+                                <div className="mb-3">
+                                  <span className="badge rounded-pill" style={{ background: "#fff3cd", color: "#856404", padding: "6px 12px", border: "1px solid #ffeeba", fontWeight: "700" }}>
+                                    <i className="bi bi-building me-1"></i> Corporate Access
                                   </span>
                                 </div>
-                              </div>
+                              )}
 
-                              <h5 className="fw-bolder mb-2" style={{ lineHeight: "1.4" }}>
+                              {/* Title */}
+                              <h5 className="fw-bolder mb-2" style={{ lineHeight: "1.4", fontSize: '1.15rem' }}>
                                 <Link
                                   to={`/courses/${course._id}`}
                                   className="text-dark text-decoration-none"
@@ -831,76 +921,100 @@ function Courses() {
                                 </Link>
                               </h5>
 
-                              <p className="text-muted small mb-3 fw-medium d-flex align-items-center gap-2">
-                                <i className="bi bi-person-circle fs-5" style={{ color: "#adb5bd" }}></i>
-                                {course.instructor?.name || "Expert Instructor"}
-                              </p>
+                              {/* Instructor */}
+                              <div className="text-muted small mb-3 fw-semibold d-flex align-items-center justify-content-start gap-2">
+                                <i className="bi bi-person-fill text-secondary"></i>
+                                <span>{course.instructor?.name || "Expert Instructor"}</span>
+                              </div>
 
+                              {/* Description (Clamped) */}
                               <p
-                                className="text-secondary small mb-4 flex-grow-1"
+                                className="text-secondary small mb-2 flex-grow-1"
                                 style={{
-                                  display: "-webkit-box",
-                                  WebkitLineClamp: "2",
-                                  WebkitBoxOrient: "vertical",
-                                  overflow: "hidden",
-                                  lineHeight: "1.6"
+                                  display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical",
+                                  overflow: "hidden", lineHeight: "1.6"
                                 }}
                               >
                                 {course.description}
                               </p>
 
-                              <div className="d-flex justify-content-between align-items-center mt-auto pt-3 border-top border-light">
-                                <div className="d-flex flex-column">
-                                  <span className="fw-bolder fs-5 text-dark">
-                                    {Number(course.price) === 0 ? "Free" : `₹${course.price}`}
-                                  </span>
-                                  {Number(course.totalDuration || 0) > 0 && (
-                                    <span className="text-muted" style={{ fontSize: "0.75rem" }}>
-                                      <i className="bi bi-clock me-1"></i>{formatDuration(course.totalDuration)}
+                              {/* Meta Info Row */}
+                              <div className="d-flex align-items-center gap-3 mb-3 pb-2 border-bottom border-light">
+                                {formatRating(course.averageRating) && (
+                                  <div className="d-flex align-items-center gap-1 text-dark small fw-bolder">
+                                    <i className="bi bi-star-fill text-warning"></i>
+                                    {formatRating(course.averageRating)}
+                                  </div>
+                                )}
+                                <div className="d-flex align-items-center gap-1 text-muted small fw-medium">
+                                  <i className="bi bi-people-fill"></i> {course.totalEnrolled || 0}
+                                </div>
+                                {Number(course.totalDuration || 0) > 0 && (
+                                  <div className="d-flex align-items-center gap-1 text-muted small fw-medium">
+                                    <i className="bi bi-clock-fill"></i> {formatDuration(course.totalDuration)}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Action Footer */}
+                              <div className="d-flex justify-content-between align-items-center mt-auto">
+
+                                {/* Price Section */}
+                                <div>
+                                  {course.isGlobal === false && loggedInUser?.companyId ? (
+                                    <span className="fw-bolder fs-5 text-success">Included</span>
+                                  ) : (
+                                    <span className="fw-bolder fs-5 text-dark">
+                                      {Number(course.price) === 0 ? "Free" : `₹${course.price}`}
                                     </span>
                                   )}
                                 </div>
 
-                                {isEnrolled ? (
-                                  <button
-                                    onClick={() => {
-                                      track("course_open", { courseId: course._id, source: "courses_list_learn_btn" });
-                                      navigate(`/courses/${course._id}`);
-                                    }}
-                                    className="btn btn-sm text-white rounded-pill px-4 py-2 shadow-sm fw-bold"
-                                    style={{ background: "#7b2cbf", border: "none" }}
-                                  >
-                                    Learn Now
-                                  </button>
-                                ) : (
-                                  <div className="d-flex gap-2">
+                                {/* Button Section */}
+                                <div>
+                                  {isEnrolled ? (
                                     <button
-                                      onClick={() => (isExpiredOrCancelled ? confirmReenroll(course) : handleEnroll(course))}
-                                      disabled={enrollLoadingIds.includes(course._id)}
-                                      className={`btn btn-sm rounded-pill px-4 py-2 fw-bold shadow-sm ${isExpiredOrCancelled ? "btn-warning text-dark" : "text-white"}`}
-                                      style={isExpiredOrCancelled ? {} : { background: "#2b2b2b", border: "none" }}
+                                      onClick={() => {
+                                        track("course_open", { courseId: course._id, source: "courses_list_learn_btn" });
+                                        navigate(`/courses/${course._id}`);
+                                      }}
+                                      className="btn btn-theme-primary rounded-pill px-4 py-2 fw-bold"
                                     >
-                                      {/* Button-level context loading effect */}
-                                      {enrollLoadingIds.includes(course._id) ? (
-                                        <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Enrolling...</>
-                                      ) : isExpiredOrCancelled ? "Renew" : "Enroll"}
+                                      Learn
                                     </button>
+                                  ) : (
+                                    <div className="d-flex gap-2">
+                                      {/* Subscription CTA for Paid normal courses */}
+                                      {Number(course.price || 0) > 0 && course.isGlobal !== false && (
+                                        <button
+                                          className="btn btn-light rounded-pill px-3 py-2 fw-bold shadow-sm"
+                                          onClick={() => {
+                                            track("subscribe_cta_click", { courseId: course._id, source: "courses_list" });
+                                            navigate(PLANS_ROUTE);
+                                          }}
+                                          title="Get with Subscription"
+                                        >
+                                          <i className="bi bi-gem text-warning"></i>
+                                        </button>
+                                      )}
 
-                                    {Number(course.price || 0) > 0 && (
+                                      {/* Main Enroll / Renew Button */}
                                       <button
-                                        className="btn btn-sm rounded-pill px-3 py-2 fw-bold shadow-sm"
-                                        style={{ background: "#fff3cd", color: "#856404", border: "1px solid #ffeeba" }}
-                                        onClick={() => {
-                                          track("subscribe_cta_click", { courseId: course._id, source: "courses_list" });
-                                          navigate(PLANS_ROUTE);
-                                        }}
+                                        onClick={() => (isExpiredOrCancelled ? confirmReenroll(course) : handleEnroll(course))}
+                                        disabled={enrollLoadingIds.includes(course._id)}
+                                        className={`btn rounded-pill px-4 py-2 fw-bold ${isExpiredOrCancelled ? "btn-dark" : "btn-theme-primary"}`}
                                       >
-                                        Subscribe
+                                        {enrollLoadingIds.includes(course._id) ? (
+                                          <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                        ) : isExpiredOrCancelled ? "Renew" :
+                                          (course.isGlobal === false && loggedInUser?.companyId ? "Start" : "Enroll")
+                                        }
                                       </button>
-                                    )}
-                                  </div>
-                                )}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
+
                             </div>
                           </div>
                         </div>
@@ -911,17 +1025,17 @@ function Courses() {
 
                 {/* Render pagination controls */}
                 {totalPages > 1 && (
-                  <nav className="mt-5 pt-3">
-                    <ul className="pagination justify-content-center gap-2">
+                  <nav className="mt-5 pt-4 border-top border-light d-flex justify-content-center">
+                    <ul className="pagination gap-2 m-0">
                       {[...Array(totalPages)].map((_, i) => (
                         <li key={i} className={`page-item ${currentPage === i + 1 ? "active" : ""}`}>
                           <button
-                            className="page-link rounded-circle border-0 shadow-sm fw-bold d-flex align-items-center justify-content-center"
+                            className="page-link rounded-circle border-0 fw-bolder d-flex align-items-center justify-content-center transition shadow-sm"
                             style={{
-                              width: "40px",
-                              height: "40px",
-                              background: currentPage === i + 1 ? "#7b2cbf" : "#fff",
-                              color: currentPage === i + 1 ? "#fff" : "#2b2b2b"
+                              width: "44px", height: "44px",
+                              background: currentPage === i + 1 ? THEME_PRIMARY : "#fff",
+                              color: currentPage === i + 1 ? "#fff" : "#4a5568",
+                              transform: currentPage === i + 1 ? "scale(1.05)" : "scale(1)"
                             }}
                             onClick={() => handlePageChange(i + 1)}
                           >

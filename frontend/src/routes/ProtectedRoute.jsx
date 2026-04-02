@@ -11,6 +11,7 @@ const ProtectedRoute = ({ allowedRoles }) => {
   if (!allowedRoles.includes(role)) {
     if (role === "admin") return <Navigate to="/admin-dashboard" replace />;
     if (role === "instructor") return <Navigate to="/instructor-dashboard" replace />;
+    if (role === "hr_manager") return <Navigate to="/hr-dashboard" replace />;
     if (role === "student") return <Navigate to="/" replace />;
 
     return <Navigate to="/login" replace />;

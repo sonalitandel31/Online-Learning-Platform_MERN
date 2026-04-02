@@ -15,20 +15,20 @@ function Home() {
   const [showAllTrending, setShowAllTrending] = useState(false);
   const [durationFilter, setDurationFilter] = useState("");
 
-  // --- NAYE AI RECOMMENDATION STATES ---
   const [aiData, setAiData] = useState({
     identifiedWeakSkills: [],
     skillGapFixers: [],
     nextInPath: []
   });
   const [isAiLoading, setIsAiLoading] = useState(true);
-  // -------------------------------------
 
   const navigate = useNavigate();
   const BASE_URL = import.meta.env.VITE_BASE_URL;
   const isLoggedIn = !!localStorage.getItem("token");
 
-  const BRAND_COLOR = "#8540ee";
+  // ✅ CSS Variables use kar rahe hain ab hum instead of hardcoded hex codes
+  const BRAND_COLOR = "var(--primary-color, #8540ee)";
+  const BRAND_COLOR_LIGHT = "var(--primary-color-light, rgba(111, 66, 193, 0.1))"; // Fallback light purple
   const SOFT_BG = "#f8f9ff";
 
   useEffect(() => {
@@ -41,7 +41,7 @@ function Home() {
   useEffect(() => {
     if (isLoggedIn) {
       fetchRecommended();
-      fetchAiRecommendations(); // <-- Nayi API call
+      fetchAiRecommendations();
     }
   }, [recLevel, durationFilter, isLoggedIn]);
 
@@ -68,7 +68,6 @@ function Home() {
     }
   };
 
-  // --- NAYA FUNCTION: AI Recommendations Fetch Karne Ke Liye ---
   const fetchAiRecommendations = async () => {
     try {
       const res = await api.get("/courses/recommendations/personalized", { withCredentials: true });
@@ -81,7 +80,6 @@ function Home() {
       setIsAiLoading(false);
     }
   };
-  // -------------------------------------------------------------
 
   const fetchCategories = async () => {
     try {
@@ -101,7 +99,6 @@ function Home() {
     } catch (err) { setNewCourses([]); }
   };
 
-  // Component..
   const CourseCard = ({ course, extraClass = "" }) => (
     <div className={`col-lg-3 col-md-4 col-sm-6 mb-4 ${extraClass}`}>
       <div
@@ -183,23 +180,12 @@ function Home() {
 
   const durationRangeToSeconds = (val) => {
     switch (val) {
-      case "lt_60":
-        return { minDuration: 0, maxDuration: 60 * 60 - 1 };
-
-      case "60_90":
-        return { minDuration: 60 * 60, maxDuration: 90 * 60 };
-
-      case "90_120":
-        return { minDuration: 90 * 60 + 1, maxDuration: 120 * 60 };
-
-      case "120_180":
-        return { minDuration: 120 * 60 + 1, maxDuration: 180 * 60 };
-
-      case "gt_180":
-        return { minDuration: 180 * 60 + 1, maxDuration: null };
-
-      default:
-        return { minDuration: null, maxDuration: null };
+      case "lt_60": return { minDuration: 0, maxDuration: 60 * 60 - 1 };
+      case "60_90": return { minDuration: 60 * 60, maxDuration: 90 * 60 };
+      case "90_120": return { minDuration: 90 * 60 + 1, maxDuration: 120 * 60 };
+      case "120_180": return { minDuration: 120 * 60 + 1, maxDuration: 180 * 60 };
+      case "gt_180": return { minDuration: 180 * 60 + 1, maxDuration: null };
+      default: return { minDuration: null, maxDuration: null };
     }
   };
 
@@ -224,9 +210,9 @@ function Home() {
         backgroundSize: "cover", backgroundPosition: "center", minHeight: "60vh", display: "flex", alignItems: "center"
       }}>
         <div className="container">
-          <h1 className="display-4 fw-bold mb-3">Master New Skills with <span style={{ color: "#a87ffb" }}>LearnX</span></h1>
+          <h1 className="display-4 fw-bold mb-3">Master New Skills with <span style={{ color: BRAND_COLOR }}>LearnX</span></h1>
           <p className="lead mx-auto mb-4" style={{ maxWidth: "600px" }}>Expert-led courses for your career.</p>
-          <button className="btn btn-lg px-4 py-3 shadow" style={{ background: BRAND_COLOR, color: "white", borderRadius: "12px", border: "none" }} onClick={() => navigate("/courses")}>
+          <button className="btn btn-lg px-4 py-3 shadow" style={{ backgroundColor: BRAND_COLOR, color: "white", borderRadius: "12px", border: "none" }} onClick={() => navigate("/courses")}>
             Start Learning Now
           </button>
         </div>
@@ -238,18 +224,18 @@ function Home() {
 
       {/* --- NAYA AI PERSONALIZED LEARNING SECTION --- */}
       {isLoggedIn && !isAiLoading && (aiData.identifiedWeakSkills.length > 0 || aiData.nextInPath.length > 0 || aiData.skillGapFixers.length > 0) && (
-        <section className="container py-5 mt-4" style={{ backgroundColor: "#fcfaff", borderRadius: "24px", border: `1px solid ${BRAND_COLOR}20` }}>
+        <section className="container py-5 mt-4" style={{ backgroundColor: BRAND_COLOR_LIGHT, borderRadius: "24px", border: `1px solid ${BRAND_COLOR}` }}>
           <div className="d-flex align-items-center mb-4 px-2">
-            <div className="p-3 rounded-circle me-3" style={{ background: `${BRAND_COLOR}15`, color: BRAND_COLOR }}>
+            <div className="p-3 rounded-circle me-3" style={{ background: "white", color: BRAND_COLOR }}>
               <i className="fa fa-brain fa-2x"></i>
             </div>
             <div>
-              <h2 className="fw-bold mb-0">Your Smart Learning Path</h2>
+              <h2 className="fw-bold mb-0 text-dark">Your Smart Learning Path</h2>
               <p className="text-muted mb-0">AI-driven recommendations based on your recent progress</p>
             </div>
           </div>
 
-          {/* Weak Skills Tags - Clean Inline UI without annoying alerts */}
+          {/* Weak Skills Tags */}
           {aiData.identifiedWeakSkills.length > 0 && (
             <div className="mb-4 mx-2 p-3 bg-white rounded-3 shadow-sm border-0 d-flex flex-wrap align-items-center">
               <span className="fw-bold me-3 text-dark mb-2 mb-md-0">Focus Areas to Improve:</span>
@@ -284,7 +270,6 @@ function Home() {
           )}
         </section>
       )}
-      {/* --- END AI SECTION --- */}
 
       {/* Recommended Section */}
       {isLoggedIn && recommendedCourses.length > 0 && (
@@ -413,7 +398,7 @@ function Home() {
           ].map((item, i) => (
             <div key={i} className="col-md-3">
               <div className="p-4 h-100 rounded-4" style={{ backgroundColor: "#fbfbff" }}>
-                <div className="mb-3 d-inline-block p-3 rounded-circle" style={{ background: `${BRAND_COLOR}10`, color: BRAND_COLOR }}>
+                <div className="mb-3 d-inline-block p-3 rounded-circle" style={{ background: BRAND_COLOR_LIGHT, color: BRAND_COLOR }}>
                   <i className={`fa ${item.icon} fa-2x`}></i>
                 </div>
                 <h5 className="fw-bold">{item.title}</h5>

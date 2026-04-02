@@ -14,6 +14,12 @@ function AddCourse() {
   const [thumbnail, setThumbnail] = useState(""); // stores "/uploads/thumbnails/..."
   const [uploadingThumb, setUploadingThumb] = useState(false);
 
+  // ===== NEW MODULE 7: B2B States =====
+  const [isGlobal, setIsGlobal] = useState(true);
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompany, setSelectedCompany] = useState("");
+  // =====================================
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false); // New state for inline feedback
@@ -34,6 +40,8 @@ function AddCourse() {
     text: "#1f2937",
     border: "#d1d5db",
     error: "#ef4444",
+    warningBg: "#fffbeb", // For B2B private box
+    warningBorder: "#fcd34d"
   };
 
   useEffect(() => {
@@ -50,7 +58,21 @@ function AddCourse() {
         setCategories([]);
       }
     };
+
+    // ===== NEW MODULE 7: Fetch Companies for B2B =====
+    const fetchCompanies = async () => {
+      try {
+        const res = await api.get("/companies/all", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setCompanies(res.data.data || []);
+      } catch (err) {
+        console.error("Fetch companies error:", err);
+      }
+    };
+
     fetchCategories();
+    fetchCompanies(); // Call new API
   }, [token]);
 
   // thumbnail upload handler (added)
@@ -97,9 +119,9 @@ function AddCourse() {
       console.error("Thumbnail upload error:", err);
       setError(
         err.response?.data?.message ||
-          err.response?.data?.error ||
-          err.message ||
-          "Thumbnail upload failed."
+        err.response?.data?.error ||
+        err.message ||
+        "Thumbnail upload failed."
       );
     } finally {
       setUploadingThumb(false);
@@ -113,6 +135,7 @@ function AddCourse() {
 
     if (!token) return setError("You must be logged in.");
     if (!category) return setError("Please select a category.");
+    if (!isGlobal && !selectedCompany) return setError("Please select a company for this private course."); // B2B Validation
 
     try {
       setLoading(true);
@@ -126,6 +149,10 @@ function AddCourse() {
           instructor: instructorId,
           price,
           thumbnail,
+          // ===== NEW MODULE 7: B2B Data payload =====
+          isGlobal: isGlobal,
+          allowedCompanies: isGlobal ? [] : [selectedCompany]
+          // ===========================================
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -144,9 +171,9 @@ function AddCourse() {
       console.error("Create course error:", err);
       setError(
         err.response?.data?.error ||
-          err.response?.data?.message ||
-          err.message ||
-          "Failed to create course."
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to create course."
       );
     } finally {
       setLoading(false);
@@ -344,6 +371,59 @@ function AddCourse() {
               placeholder="0 for Free"
             />
           </div>
+
+          {/* ===== NEW MODULE 7: B2B Course Visibility Settings ===== */}
+          <div style={{
+            borderTop: `1px solid ${colors.border}`,
+            paddingTop: "20px",
+            marginTop: "10px",
+            marginBottom: "25px"
+          }}>
+            <h3 style={{ fontSize: "1.1rem", color: colors.text, marginBottom: "15px", fontWeight: "600" }}>
+              Course Visibility (B2B Settings)
+            </h3>
+            
+            <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
+              <input
+                type="checkbox"
+                id="globalToggle"
+                checked={isGlobal}
+                onChange={() => setIsGlobal(!isGlobal)}
+                style={{ width: "18px", height: "18px", marginRight: "10px", cursor: "pointer" }}
+              />
+              <label htmlFor="globalToggle" style={{ fontSize: "0.95rem", color: colors.text, cursor: "pointer", fontWeight: "500", margin: 0 }}>
+                Global Course (Available to Public)
+              </label>
+            </div>
+
+            {!isGlobal && (
+              <div style={{
+                backgroundColor: colors.warningBg,
+                border: `1px solid ${colors.warningBorder}`,
+                padding: "15px",
+                borderRadius: "8px",
+              }}>
+                <label style={{ ...labelStyle, color: "#92400e" }}>Select Corporate Client</label>
+                <select
+                  value={selectedCompany}
+                  onChange={(e) => setSelectedCompany(e.target.value)}
+                  required={!isGlobal}
+                  style={{ ...inputStyle, marginBottom: "5px", borderColor: colors.warningBorder }}
+                >
+                  <option value="">-- Choose a Company --</option>
+                  {companies.map((comp) => (
+                    <option key={comp._id} value={comp._id}>
+                      {comp.companyName}
+                    </option>
+                  ))}
+                </select>
+                <div style={{ fontSize: "0.8rem", color: "#92400e" }}>
+                  Only employees of the selected company will be able to see and access this course.
+                </div>
+              </div>
+            )}
+          </div>
+          {/* ======================================================== */}
 
           <button
             type="submit"

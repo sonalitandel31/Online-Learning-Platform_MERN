@@ -8,7 +8,7 @@ export default function AllUsers() {
   const [filteredUsers, setFilteredUsers] = useState([]);
 
   const [roleFilter, setRoleFilter] = useState("all");
-  const [activityFilter, setActivityFilter] = useState("all"); // ✅ NEW
+  const [activityFilter, setActivityFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -36,7 +36,6 @@ export default function AllUsers() {
     }
   };
 
-  // ✅ Compute activity on frontend if backend doesn't provide u.activity
   const computeActivity = (u) => {
     if (u?.isBlocked) return "Blocked";
     if (!u?.lastActiveAt) return "Never";
@@ -71,7 +70,6 @@ export default function AllUsers() {
     return d.toLocaleString();
   };
 
-  // ✅ Filter logic (role + activity + search)
   useEffect(() => {
     let tempUsers = [...users];
 
@@ -104,7 +102,7 @@ export default function AllUsers() {
       let res;
       if (user.role === "student") res = await api.get(`/admin/students/${user._id}`);
       else if (user.role === "instructor") res = await api.get(`/admin/instructors/${user._id}`);
-      else res = { data: {} };
+      else res = { data: {} }; // HR or Admin won't have specialized extended profiles in the same way
       setUserDetails(res.data);
     } catch (err) {
       setUserDetails(null);
@@ -189,11 +187,12 @@ export default function AllUsers() {
                 <option value="admin">Admin</option>
                 <option value="instructor">Instructor</option>
                 <option value="student">Student</option>
+                {/* ✅ NEW: HR Manager Filter */}
+                <option value="hr_manager">HR Manager</option>
               </Form.Select>
             </div>
           </Col>
 
-          {/* ✅ NEW: Activity filter */}
           <Col xs={12} md={4}>
             <div className="d-flex align-items-center gap-2">
               <FaFilter color={colors.primary} />
@@ -222,10 +221,11 @@ export default function AllUsers() {
           return (
             <div key={u._id} className="user-card">
               <Badge
-                bg={u.role === "admin" ? "danger" : u.role === "instructor" ? "success" : "primary"}
+                // ✅ UPDATED: Add colors for HR Manager
+                bg={u.role === "admin" ? "danger" : u.role === "instructor" ? "success" : u.role === "hr_manager" ? "info" : "primary"}
                 className="role-badge"
               >
-                {u.role}
+                {u.role === "hr_manager" ? "HR Manager" : u.role}
               </Badge>
 
               <img
@@ -236,9 +236,23 @@ export default function AllUsers() {
               />
 
               <h5 style={{ fontWeight: 700, margin: "0 0 5px 0" }}>{u.name}</h5>
-              <p style={{ fontSize: "0.85rem", color: colors.textMuted, marginBottom: "10px" }}>{u.email}</p>
+              <p style={{ fontSize: "0.85rem", color: colors.textMuted, marginBottom: "5px" }}>{u.email}</p>
 
-              {/* ✅ Activity row */}
+              {/* ✅ UPDATED: Corporate Badge for both Students AND HR Managers */}
+              {(u.role === "student" || u.role === "hr_manager") && (
+                <div style={{ marginBottom: "10px", fontSize: "0.8rem", fontWeight: "600" }}>
+                  {u.companyId ? (
+                    <span style={{ color: "#d97706", backgroundColor: "#fef3c7", padding: "3px 8px", borderRadius: "4px" }}>
+                      🏢 Corporate {u.role === "hr_manager" ? "HR" : "Employee"}
+                    </span>
+                  ) : (
+                    <span style={{ color: "#059669", backgroundColor: "#d1fae5", padding: "3px 8px", borderRadius: "4px" }}>
+                      👤 Individual Student
+                    </span>
+                  )}
+                </div>
+              )}
+              
               <div className="activity-row">
                 {activityBadge(activity)}
                 <small style={{ color: colors.textMuted }}>
@@ -287,7 +301,7 @@ export default function AllUsers() {
                 />
                 <h4 className="mt-3 mb-1">{selectedUser.name}</h4>
                 <div className="d-flex justify-content-center gap-2">
-                  <Badge bg="info">{selectedUser.role}</Badge>
+                  <Badge bg="info">{selectedUser.role === "hr_manager" ? "HR Manager" : selectedUser.role}</Badge>
                   {activityBadge(getUserActivity(selectedUser))}
                 </div>
               </Col>
@@ -303,12 +317,20 @@ export default function AllUsers() {
                     <p><strong>Education:</strong> {userDetails.education || "N/A"}</p>
                     <p><strong>Enrolled:</strong> {userDetails.enrolledCourses?.length || 0} Courses</p>
                   </>
-                ) : (
+                ) : selectedUser.role === "instructor" ? (
                   <>
                     <p><strong>Expertise:</strong> {userDetails.expertise?.join(", ") || "N/A"}</p>
                     <p><strong>Experience:</strong> {userDetails.experience} Years</p>
                     <p><strong>Bio:</strong> {userDetails.bio || "No bio available"}</p>
                   </>
+                ) : selectedUser.role === "hr_manager" ? (
+                  <>
+                    {/* ✅ NEW: HR Details in Modal */}
+                    <p><strong>Role:</strong> Corporate Training Administrator</p>
+                    <p><strong>Account Type:</strong> B2B Enterprise Client</p>
+                  </>
+                ) : (
+                  <p><strong>Role:</strong> System Administrator</p>
                 )}
               </Col>
             </Row>

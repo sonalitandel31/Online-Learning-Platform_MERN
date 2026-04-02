@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import api from "../../api/api";
 import { track } from "../../utils/track";
 import "bootstrap/dist/css/bootstrap.min.css";
-import { 
-  FiUser, FiEdit, FiShield, FiMail, FiBookOpen, 
+import {
+  FiUser, FiEdit, FiShield, FiMail, FiBookOpen,
   FiCamera, FiCheckCircle, FiAlertCircle, FiTrendingUp, FiChevronRight, FiBarChart2
 } from "react-icons/fi";
 import { FaFire, FaMedal } from "react-icons/fa";
@@ -249,9 +249,9 @@ export default function Profile() {
   if (loading) return <div className="d-flex justify-content-center align-items-center vh-100"><div className="spinner-border text-primary" /></div>;
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#F5F3FF", padding: "60px 16px 40px", fontFamily: "'Inter', sans-serif", marginTop:"-1%" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "#F5F3FF", padding: "60px 16px 40px", fontFamily: "'Inter', sans-serif", marginTop: "-1%" }}>
       <div className="container px-0" style={{ maxWidth: 900 }}>
-        
+
         {status.message && (
           <div className={`alert alert-${status.type} border-0 shadow-sm mb-4 d-flex align-items-center gap-2`}>
             {status.type === "success" ? <FiCheckCircle /> : <FiAlertCircle />} {status.message}
@@ -280,12 +280,12 @@ export default function Profile() {
         </div>
 
         {/* Tabs */}
-        <div className="bg-white p-2 rounded-4 shadow-sm mb-4 d-flex gap-2">
+        <div className="bg-white p-2 rounded-2 shadow-sm mb-4">
           {["view", "edit", "password"].map((m) => (
-            <button key={m} className="btn rounded-pill px-4 py-2 fw-semibold text-capitalize border-0" 
-              style={{ background: mode === m ? "#8f58ee" : "transparent", color: mode === m ? "white" : "#6B7280" }}
+            <button key={m} className="btn px-4 py-1.7 fw-semibold text-capitalize border-0"
+              style={{ background: mode === m ? "#9b68f3" : "transparent", color: mode === m ? "white" : "#6B7280" }}
               onClick={() => setModeTracked(m)}>
-              {m === 'view' ? <FiUser className="me-1"/> : m === 'edit' ? <FiEdit className="me-1"/> : <FiShield className="me-1"/>} {m}
+              {m === 'view' ? <FiUser className="me-1" /> : m === 'edit' ? <FiEdit className="me-1" /> : <FiShield className="me-1" />} {m}
             </button>
           ))}
         </div>
@@ -298,13 +298,13 @@ export default function Profile() {
               <div className="row g-4 mb-5">
                 <div className="col-md-6">
                   <div className="p-3 rounded-4 bg-light">
-                    <small className="text-muted text-uppercase fw-bold d-block mb-1" style={{fontSize: '10px'}}>Full Name</small>
+                    <small className="text-muted text-uppercase fw-bold d-block mb-1" style={{ fontSize: '10px' }}>Full Name</small>
                     <span className="fw-bold">{user.name}</span>
                   </div>
                 </div>
                 <div className="col-md-6">
                   <div className="p-3 rounded-4 bg-light">
-                    <small className="text-muted text-uppercase fw-bold d-block mb-1" style={{fontSize: '10px'}}>Email Address</small>
+                    <small className="text-muted text-uppercase fw-bold d-block mb-1" style={{ fontSize: '10px' }}>Email Address</small>
                     <span className="fw-bold">{user.email}</span>
                   </div>
                 </div>
@@ -313,51 +313,55 @@ export default function Profile() {
                   .map(([k, v]) => (
                     <div className="col-md-6" key={k}>
                       <div className="p-3 rounded-4 bg-light">
-                        <small className="text-muted text-uppercase fw-bold d-block mb-1" style={{fontSize: '10px'}}>{formatLabel(k)}</small>
+                        <small className="text-muted text-uppercase fw-bold d-block mb-1" style={{ fontSize: '10px' }}>{formatLabel(k)}</small>
                         <span className="fw-bold">{Array.isArray(v) ? v.join(", ") : v || "Not specified"}</span>
                       </div>
                     </div>
                   ))}
               </div>
 
-              {/* Achievements Grid */}
-              <div className="row g-4">
-                <div className="col-sm-6">
-                  <div className="p-4 rounded-4 border-0 text-center" style={{ background: "#F5F3FF" }}>
-                    <FiTrendingUp size={24} className="mb-2 text-primary" />
-                    <div className="text-muted small fw-semibold">Total Learning XP</div>
-                    <div className="fw-bolder fs-3 text-primary">{profile?.xpTotal || 0}</div>
-                  </div>
-                </div>
-                <div className="col-sm-6">
-                  <div className="p-4 rounded-4 border-0 text-center" style={{ background: "#FFFBEB" }}>
-                    <FaFire size={24} className="mb-2 text-warning" />
-                    <div className="text-muted small fw-semibold">Learning Streak</div>
-                    <div className="fw-bolder fs-3 text-warning">{profile?.streakCount || 0} Days</div>
-                  </div>
-                </div>
-              </div>
-
-              {renderSkillProficiency(profile?.skillProficiency)}
-
-              {renderXpByCourse(profile?.xpByCourse)}
-              {renderBadges(profile?.badges)}
-
-              {user.role === "student" && profile?.enrolledCourses?.length > 0 && (
-                <div className="mt-5">
-                  <h5 className="fw-bold mb-4" style={{ color: "#4C1D95" }}>Ongoing Courses</h5>
-                  <div className="d-flex flex-column gap-3">
-                    {profile.enrolledCourses.map((c) => (
-                      <div key={c._id} className="p-3 rounded-4 bg-white border border-light d-flex justify-content-between align-items-center shadow-sm" style={{cursor: 'pointer'}} onClick={() => navigate(`/courses/${c._id}`)}>
-                        <div className="d-flex align-items-center gap-3">
-                          <div className="p-2 rounded-circle bg-light text-primary"><FiBookOpen /></div>
-                          <span className="fw-bold text-dark">{c.title}</span>
-                        </div>
-                        <FiChevronRight className="text-muted" />
+              {/* ✅ CORRECTED: Achievements Grid (Sirf Student ko dikhega) */}
+              {user.role === "student" && (
+                <>
+                  <div className="row g-4">
+                    <div className="col-sm-6">
+                      <div className="p-4 rounded-4 border-0 text-center" style={{ background: "#F5F3FF" }}>
+                        <FiTrendingUp size={24} className="mb-2 text-primary" />
+                        <div className="text-muted small fw-semibold">Total Learning XP</div>
+                        <div className="fw-bolder fs-3 text-primary">{profile?.xpTotal || 0}</div>
                       </div>
-                    ))}
+                    </div>
+                    <div className="col-sm-6">
+                      <div className="p-4 rounded-4 border-0 text-center" style={{ background: "#FFFBEB" }}>
+                        <FaFire size={24} className="mb-2 text-warning" />
+                        <div className="text-muted small fw-semibold">Learning Streak</div>
+                        <div className="fw-bolder fs-3 text-warning">{profile?.streakCount || 0} Days</div>
+                      </div>
+                    </div>
                   </div>
-                </div>
+
+                  {renderSkillProficiency(profile?.skillProficiency)}
+
+                  {renderXpByCourse(profile?.xpByCourse)}
+                  {renderBadges(profile?.badges)}
+
+                  {profile?.enrolledCourses?.length > 0 && (
+                    <div className="mt-5">
+                      <h5 className="fw-bold mb-4" style={{ color: "#4C1D95" }}>Ongoing Courses</h5>
+                      <div className="d-flex flex-column gap-3">
+                        {profile.enrolledCourses.map((c) => (
+                          <div key={c._id} className="p-3 rounded-4 bg-white border border-light d-flex justify-content-between align-items-center shadow-sm" style={{cursor: 'pointer'}} onClick={() => navigate(`/courses/${c._id}`)}>
+                            <div className="d-flex align-items-center gap-3">
+                              <div className="p-2 rounded-circle bg-light text-primary"><FiBookOpen /></div>
+                              <span className="fw-bold text-dark">{c.title}</span>
+                            </div>
+                            <FiChevronRight className="text-muted" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -368,7 +372,7 @@ export default function Profile() {
                 <div className="text-center mb-5">
                   <div className="position-relative d-inline-block">
                     <img src={displayPic} alt="Preview" className="rounded-circle shadow-sm" style={{ width: 120, height: 120, objectFit: "cover", border: "4px solid #F5F3FF" }} />
-                    <label className="position-absolute bottom-0 end-0 p-2 rounded-circle shadow bg-warning text-white border-white border-2 cursor-pointer" style={{cursor: 'pointer'}}>
+                    <label className="position-absolute bottom-0 end-0 p-2 rounded-circle shadow bg-warning text-white border-white border-2 cursor-pointer" style={{ cursor: 'pointer' }}>
                       <FiCamera size={18} /><input type="file" className="d-none" onChange={handleProfilePicChange} accept="image/*" />
                     </label>
                   </div>
@@ -382,9 +386,9 @@ export default function Profile() {
                   .map(([k, v]) => (
                     <div className="mb-4" key={k}>
                       <label className="form-label fw-bold text-capitalize">{formatLabel(k)}</label>
-                      <input className="form-control form-control-lg bg-light border-0" type="text" placeholder={fieldPlaceholders[k] || `Enter ${k}`} 
-                        value={Array.isArray(v) ? v.join(", ") : v || ""} 
-                        onChange={(e) => setFormData(prev => ({...prev, [k]: Array.isArray(v) ? e.target.value.split(",").map(i => i.trim()) : e.target.value}))} />
+                      <input className="form-control form-control-lg bg-light border-0" type="text" placeholder={fieldPlaceholders[k] || `Enter ${k}`}
+                        value={Array.isArray(v) ? v.join(", ") : v || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, [k]: Array.isArray(v) ? e.target.value.split(",").map(i => i.trim()) : e.target.value }))} />
                     </div>
                   ))}
                 <button className="btn btn-lg w-100 fw-bold rounded-pill text-white mt-4" style={{ background: "#8f58ee" }} onClick={handleSave}>Save Changes</button>
@@ -396,9 +400,9 @@ export default function Profile() {
             <div className="animate-fade-in row justify-content-center">
               <div className="col-lg-7">
                 <div className="text-center mb-5"><FiShield size={48} className="text-muted mb-3" /><h5 className="fw-bold">Account Security</h5></div>
-                <div className="mb-4"><label className="form-label fw-bold">Old Password</label><input className="form-control form-control-lg bg-light border-0" type="password" placeholder="••••••••" value={passwords.oldPassword} onChange={e => setPasswords({...passwords, oldPassword: e.target.value})} /></div>
-                <div className="mb-4"><label className="form-label fw-bold">New Password</label><input className="form-control form-control-lg bg-light border-0" type="password" placeholder="New Password" value={passwords.newPassword} onChange={e => setPasswords({...passwords, newPassword: e.target.value})} /></div>
-                <div className="mb-5"><label className="form-label fw-bold">Confirm Password</label><input className="form-control form-control-lg bg-light border-0" type="password" placeholder="Confirm Password" value={passwords.confirmPassword} onChange={e => setPasswords({...passwords, confirmPassword: e.target.value})} /></div>
+                <div className="mb-4"><label className="form-label fw-bold">Old Password</label><input className="form-control form-control-lg bg-light border-0" type="password" placeholder="••••••••" value={passwords.oldPassword} onChange={e => setPasswords({ ...passwords, oldPassword: e.target.value })} /></div>
+                <div className="mb-4"><label className="form-label fw-bold">New Password</label><input className="form-control form-control-lg bg-light border-0" type="password" placeholder="New Password" value={passwords.newPassword} onChange={e => setPasswords({ ...passwords, newPassword: e.target.value })} /></div>
+                <div className="mb-5"><label className="form-label fw-bold">Confirm Password</label><input className="form-control form-control-lg bg-light border-0" type="password" placeholder="Confirm Password" value={passwords.confirmPassword} onChange={e => setPasswords({ ...passwords, confirmPassword: e.target.value })} /></div>
                 <button className="btn btn-lg w-100 fw-bold rounded-pill text-white" style={{ background: "#F59E0B" }} onClick={handlePasswordChange}>Update Password</button>
               </div>
             </div>

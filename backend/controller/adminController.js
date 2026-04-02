@@ -7,10 +7,13 @@ const mongoose = require("mongoose");
 const Instructor = require("../models/instructorModel");
 const Student = require("../models/studentModel");
 const SystemSettings = require("../models/SystemSettings");
+const courseRequestModel = require("../models/courseRequestModel");
 
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+
+const sendEmail = require('../utils/sendEmail');
 
 exports.dashboard = async (req, res) => {
   try {
@@ -473,4 +476,166 @@ exports.getCoursePerformance = async (req, res) => {
     console.error("Course performance error:", err);
     res.status(500).json({ error: err.message });
   }
+};
+
+// 1. Fetch all requests with detailed population
+exports.getAllCourseRequests = async (req, res) => {
+    try {
+        const requests = await courseRequestModel.find()
+            .populate('companyId', 'companyName domain')
+            .populate('hrId', 'name email')
+            .populate('assignedInstructor', 'name email') // ✅ Show who is working on it
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({ success: true, data: requests });
+    } catch (error) {
+        console.error("Fetch B2B Requests Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /admin/instructors-list
+exports.getInstructorsList = async (req, res) => {
+    try {
+        // Hum sirf wo users nikal rahe hain jinka role 'instructor' hai
+        const instructors = await User.find({ role: 'instructor' }, 'name email profilePic')
+            .lean();
+
+        res.status(200).json({ success: true, data: instructors });
+    } catch (error) {
+        console.error("Get Instructors Error:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch instructors" });
+    }
+};
+
+exports.assignInstructorToRequest = async (req, res) => {
+    try {
+        const { requestId } = req.params;
+        const { instructorId, adminNotes } = req.body;
+
+        if (!instructorId) {
+            return res.status(400).json({ success: false, message: "Please select an instructor" });
+        }
+
+        // 1. Update the request in database
+        const updatedRequest = await courseRequestModel.findByIdAndUpdate(
+            requestId,
+            { 
+                assignedInstructor: instructorId,
+                status: 'in-development', 
+                adminNotes: adminNotes || "Assigned to instructor for development."
+            },
+            { new: true }
+        )
+        .populate('assignedInstructor', 'name email') // Instructor ki detail
+        .populate('companyId', 'companyName');        // Company ki detail
+
+        if (!updatedRequest) {
+            return res.status(404).json({ success: false, message: "Request not found" });
+        }
+
+        // 2. ✉️ NAYA CODE: Instructor ko Email Bhejna ✉️
+        if (updatedRequest.assignedInstructor && updatedRequest.assignedInstructor.email) {
+            const subject = `New Corporate Project Assigned: ${updatedRequest.topic}`;
+            const message = `
+                <h3>Hello ${updatedRequest.assignedInstructor.name},</h3>
+                <p>You have been assigned a new <b>Corporate Training Project</b> by the Admin.</p>
+                <hr/>
+                <p><b>Company:</b> ${updatedRequest.companyId?.companyName || 'Corporate Client'}</p>
+                <p><b>Topic:</b> ${updatedRequest.topic}</p>
+                <p><b>Expected Trainees:</b> ${updatedRequest.expectedEmployees} Users</p>
+                <p><b>Admin Notes:</b> ${updatedRequest.adminNotes}</p>
+                <hr/>
+                <p>Please log in to your Instructor Dashboard and go to the <b>"Corporate Projects"</b> tab to view full requirements and start creating the course content.</p>
+                <br/>
+                <p>Best Regards,<br/>LMS Admin Team</p>
+            `;
+
+            try {
+                await sendEmail({
+                    email: updatedRequest.assignedInstructor.email,
+                    subject: subject,
+                    message: message
+                });
+                console.log("Assignment email sent to instructor:", updatedRequest.assignedInstructor.email);
+            } catch (emailErr) {
+                console.error("Email bhejte time error aayi, par assignment ho gaya:", emailErr);
+            }
+        }
+
+        // 3. Send success response to frontend
+        res.status(200).json({ 
+            success: true, 
+            message: `Request assigned to ${updatedRequest.assignedInstructor.name} and email sent!`,
+            data: updatedRequest 
+        });
+    } catch (error) {
+        console.error("Assign Instructor Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.updateRequestStatus = async (req, res) => {
+    try {
+        const { requestId } = req.params;
+        const { status, adminNotes } = req.body;
+
+        // ✅ Sudhaar 1: 'courseRequestModel' use karein jo upar import kiya hai
+        const updated = await courseRequestModel.findByIdAndUpdate(
+            requestId,
+            { status, adminNotes },
+            { new: true }
+        )
+        .populate('hrId', 'email name') // ✅ Sudhaar 2: 'hrId' populate karein
+        .populate('companyId', 'companyName');
+
+        if (updated) {
+            const subject = `Update on your Course Request: ${updated.topic}`;
+            // ✅ Sudhaar 3: 'updated.hrId.name' use karein
+            const message = `
+                <h3>Hello ${updated.hrId.name},</h3>
+                <p>Your request for the course <b>"${updated.topic}"</b> has been updated to: <b>${status}</b>.</p>
+                <p><b>Admin Notes:</b> ${adminNotes || 'No additional notes.'}</p>
+                <br/>
+                <p>Regards,<br/>LMS Team</p>
+            `;
+
+            try {
+                await sendEmail({
+                    email: updated.hrId.email,
+                    subject: subject,
+                    message: message
+                });
+            } catch (err) {
+                console.error("Email send nahi ho paya.");
+            }
+        }
+
+        res.status(200).json({ success: true, message: "Status updated!", data: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.exportRequestsToCSV = async (req, res) => {
+    try {
+        // ✅ Sudhaar 4: 'hrId' aur correct model use karein
+        const requests = await courseRequestModel.find()
+            .populate('companyId', 'companyName')
+            .populate('hrId', 'name'); 
+
+        let csvContent = "Company,Topic,Category,Trainees,RequestedBy,Status,Date\n";
+
+        requests.forEach(req => {
+            const date = new Date(req.createdAt).toLocaleDateString();
+            // ✅ Sudhaar 5: 'req.hrId?.name' use karein
+            csvContent += `"${req.companyId?.companyName}","${req.topic}","${req.category}",${req.expectedEmployees},"${req.hrId?.name}","${req.status}",${date}\n`;
+        });
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=course_requests.csv');
+        res.status(200).send(csvContent);
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Export failed" });
+    }
 };

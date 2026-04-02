@@ -38,6 +38,7 @@ function Login({ setUser }) {
       localStorage.setItem("user", JSON.stringify(res.data.user));
       localStorage.setItem("role", role);
       localStorage.setItem("token", res.data.token);
+      
       setUser(res.data.user);
 
       setStatusMsg({ type: "success", text: "Login successful! Redirecting..." });
@@ -45,6 +46,7 @@ function Login({ setUser }) {
       setTimeout(() => {
         if (role === "admin") navigate("/admin-dashboard");
         else if (role === "instructor") navigate("/instructor-dashboard");
+        else if (role === "hr_manager") navigate("/hr-dashboard");
         else navigate("/");
       }, 1000);
     } catch (err) {
@@ -162,7 +164,6 @@ function Login({ setUser }) {
         <h1>Welcome Back</h1>
         <p className="subtitle">Please enter your details to sign in</p>
 
-        {/* Dynamic Inline Alert */}
         {statusMsg.text && (
           <div className={`status-alert ${statusMsg.type === "error" ? "alert-error" : "alert-success"}`}>
             {statusMsg.text}

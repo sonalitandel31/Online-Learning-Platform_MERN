@@ -239,7 +239,22 @@ export default function PendingCourses() {
                   <span style={styles.label}>Price:</span> ₹{c.price ?? 0}
                 </div>
 
-                <details style={styles.details}>
+                {/* ✅ NEW MODULE 7: B2B Visibility Badge for Admin */}
+                <div style={{ ...styles.text, marginTop: "6px" }}>
+                  <span style={styles.label}>Visibility:</span>{" "}
+                  {c.isGlobal === false ? (
+                    <span style={{ color: "#b45309", backgroundColor: "#fffbeb", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold", fontSize: "0.8rem", border: "1px solid #fde68a" }}>
+                      Private (B2B)
+                    </span>
+                  ) : (
+                    <span style={{ color: "#047857", backgroundColor: "#ecfdf5", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold", fontSize: "0.8rem", border: "1px solid #a7f3d0" }}>
+                      Global (B2C)
+                    </span>
+                  )}
+                </div>
+                {/* ===================================================== */}
+
+                <details style={{ ...styles.details, marginTop: "12px" }}>
                   <summary style={styles.summary}>Lessons ({c.lessons?.length || 0})</summary>
                   <ul style={styles.ul}>
                     {c.lessons?.slice(0, 5).map((l, index) => (
@@ -385,7 +400,6 @@ export default function PendingCourses() {
                       ? (l.fileUrl.startsWith("http") ? l.fileUrl : `${base}/${String(l.fileUrl).replace(/^\//, "")}`)
                       : "";
 
-                    // Calculate Minutes & Seconds
                     const durSec = l.duration || 0;
                     const m = Math.floor(durSec / 60);
                     const s = durSec % 60;
@@ -393,7 +407,6 @@ export default function PendingCourses() {
 
                     return (
                       <div key={l._id || `lesson-${idx}`} style={{ backgroundColor: "#fff", border: "1px solid #edf2f7", borderRadius: "12px", padding: "16px", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}>
-                        {/* ✅ UPDATED LESSON HEADER WITH DURATION */}
                         <div style={{ fontWeight: 700, fontSize: "1.05rem", color: "#2d3748", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                           <span>{idx + 1}. {l.title}</span>
                           <span style={{ color: "#6f42c1", fontWeight: 600, fontSize: "0.8rem", backgroundColor: "#f3e8ff", padding: "2px 8px", borderRadius: "12px" }}>
@@ -404,21 +417,18 @@ export default function PendingCourses() {
                           </span>
                         </div>
 
-                        {/* TEXT */}
                         {type === "text" || (!src && l.description) ? (
                           <div style={{ marginTop: "12px", whiteSpace: "pre-wrap", color: "#4a5568", backgroundColor: "#f8f9fa", padding: "12px", borderRadius: "8px" }}>
                             {l.description || "No text content provided."}
                           </div>
                         ) : null}
 
-                        {/* VIDEO */}
                         {type === "video" && src ? (
                           <div style={{ marginTop: "14px" }}>
                             <video controls style={{ width: "100%", borderRadius: "8px", border: "1px solid #edf2f7", backgroundColor: "#000" }} src={src} />
                           </div>
                         ) : null}
 
-                        {/* PDF */}
                         {type === "pdf" && src ? (
                           <div style={{ marginTop: "14px" }}>
                             <iframe
@@ -429,7 +439,6 @@ export default function PendingCourses() {
                           </div>
                         ) : null}
 
-                        {/* fallback */}
                         {!((type === "text" || (!src && l.description)) || (type === "video" && src) || (type === "pdf" && src)) ? (
                           <div style={{ marginTop: "12px", color: "#a0aec0", fontStyle: "italic" }}>
                             Content not available or format not supported.
@@ -462,7 +471,6 @@ export default function PendingCourses() {
                         </span>
                       </div>
 
-                      {/* UPDATED EXAM BADGES (Consistency with ManageExams) */}
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px", paddingBottom: "12px", borderBottom: "1px dashed #e2e8f0" }}>
                         <span style={{ fontSize: "0.75rem", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "3px 8px", borderRadius: "6px", color: "#475569", fontWeight: "600" }}>
                           Pass: {ex.settings?.passingScore ?? 60}%
@@ -529,6 +537,7 @@ export default function PendingCourses() {
           )}
         </Modal.Body>
       </Modal>
+
     </div>
   );
 }
