@@ -633,15 +633,14 @@ function MyLearnings() {
                     </button>
                   )}
 
-                  {(progressPercent >= 100 || course.enrollmentStatus === "completed") &&
-                    course.certificate && (
-                      <button
-                        onClick={() => handleDownloadCertificate(course.certificate)}
-                        style={styles.certBtn}
-                      >
-                        Certificate
-                      </button>
-                    )}
+                  {(progressPercent >= 100 || course.enrollmentStatus === "completed") && (
+                    <button
+                      onClick={() => navigate(`/certificate/${course.enrollmentId}`)}
+                      style={styles.certBtn}
+                    >
+                      View Certificate
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

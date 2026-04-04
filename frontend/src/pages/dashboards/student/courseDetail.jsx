@@ -28,6 +28,7 @@ function CourseDetail() {
   const [examProgress, setExamProgress] = useState([]);
   const [progress, setProgress] = useState(0);
   const [certificate, setCertificateUrl] = useState(null);
+  const [enrollmentId, setEnrollmentId] = useState(null);
 
   const [videoProgress, setVideoProgress] = useState(0);
   const [discussionCount, setDiscussionCount] = useState(0);
@@ -223,6 +224,8 @@ function CourseDetail() {
         setCompletedLessons(enrollData.completedLessons || []);
         setExamProgress(enrollData.examProgress || []);
         setCertificateUrl(enrollData.certificate || enrollData.certificateUrl || null);
+
+        setEnrollmentId(enrollData._id);
       }
     } catch (err) {
       console.error("refreshEnrollmentState error:", err);
@@ -1471,19 +1474,14 @@ function CourseDetail() {
                       Continue Learning <ChevronRight size={18} className="ms-1 text-black" />
                     </button>
 
-                    {progress === 100 && certificate && (
-                      <div className="row g-2">
-                        <div className="col-6">
-                          <button className="btn btn-outline-purple w-100 rounded-pill py-2" onClick={handleViewCertificate}>
-                            <Eye size={16} className="me-1" /> View
-                          </button>
-                        </div>
-                        <div className="col-6">
-                          <button className="btn btn-purple w-100 rounded-pill py-2" onClick={handleDownloadCertificate}>
-                            <Download size={16} className="me-1" /> PDF
-                          </button>
-                        </div>
-                      </div>
+                    {progress === 100 && enrollmentId && (
+                      <button
+                        className="btn btn-dark w-100 fw-bold rounded-pill py-2 shadow-sm d-flex align-items-center justify-content-center gap-2 mt-3 hover-scale"
+                        onClick={() => navigate(`/certificate/${enrollmentId}`)}
+                        style={{ background: 'var(--primary-color, #6f42c1)', color: 'white', border: 'none' }}
+                      >
+                        <Award size={18} /> View & Download Certificate
+                      </button>
                     )}
 
                     {isEnrolled && (

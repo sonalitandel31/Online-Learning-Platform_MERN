@@ -26,6 +26,7 @@ import StudentLiveClasses from "./pages/dashboards/student/liveClasses";
 import StudentLiveClassRoom from "./pages/dashboards/student/liveClassRoom";
 import SkillAnalysis from "./pages/dashboards/student/SkillAnalysis";
 import LearningPath from "./pages/dashboards/student/LearningPath";
+import CertificateViewer from "./pages/dashboards/student/CertificateViewer";
 
 //admin
 import AdminDashboard from './pages/dashboards/admin/adminDashboard';
@@ -174,6 +175,7 @@ function App() {
           <Route path="/course/:id/discussion" element={<CourseDiscussion />} />
           <Route path="/course/:courseId/lessons/:lessonId" element={<Lesson />} />
           <Route path="/course/:courseId/exam/:examId" element={<Exams />} />
+          <Route path="/certificate/:enrollmentId" element={<CertificateViewer />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/aboutus" element={<AboutUs />} />
           <Route path="/contactus" element={<ContactUs />} />

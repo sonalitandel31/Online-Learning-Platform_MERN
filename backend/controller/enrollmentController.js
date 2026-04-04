@@ -498,4 +498,35 @@ const downloadReceipt = async (req, res) => {
   }
 };
 
-module.exports = { enrollCourse, unenrollCourse, getStudentEnrollments, enrolledStudent, downloadReceipt };
+// ---------- NAYA FUNCTION: Certificate / Single Enrollment Fetch ----------
+const getEnrollmentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Certificate ke liye humein Student ka naam aur Course (with Instructor) ka naam chahiye
+    const enrollment = await Enrollment.findById(id)
+      .populate("student", "name email")
+      .populate({
+        path: "course",
+        select: "title instructor",
+        populate: { path: "instructor", select: "name" }
+      })
+      .lean();
+
+    if (!enrollment) {
+      return res.status(404).json({ success: false, message: "Enrollment not found" });
+    }
+
+    // Security check: Sirf wo student apna certificate dekh sake (ya admin/hr)
+    if (String(enrollment.student._id) !== String(req.user._id) && !["admin", "hr_manager"].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: "Unauthorized to view this certificate" });
+    }
+
+    return res.status(200).json({ success: true, enrollment });
+  } catch (err) {
+    console.error("GetEnrollmentById Error:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+module.exports = { enrollCourse, unenrollCourse, getStudentEnrollments, enrolledStudent, downloadReceipt, getEnrollmentById };

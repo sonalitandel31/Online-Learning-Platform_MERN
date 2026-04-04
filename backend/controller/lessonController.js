@@ -2,17 +2,17 @@ const lessonModel = require("../models/lessonModel");
 const courseModel = require("../models/courseModel");
 const enrollmentModel = require("../models/enrollmentModel");
 const examModel = require("../models/examModel");
+const userModel = require("../models/userModel");
+const studentModel = require("../models/studentModel");
+
 const fs = require("fs");
 const path = require("path");
 const { generateCertificate, sendCompletionEmail } = require("../utils/sendCompletionEmail");
 const { v4: uuidv4 } = require("uuid");
 
-const studentModel = require("../models/studentModel");
 const { awardXpOnce } = require("../services/gamificationService");
-
 const { getOrCreateEnrollmentForAccess } = require("../utils/getOrCreateEnrollment");
 const { checkSubscriptionForCourse } = require("../utils/subscriptionAccess");
-
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 
@@ -216,7 +216,7 @@ exports.saveLessonProgress = async (req, res) => {
   }
 };
 
-exports.markLessonAsWatched = async (req, res) => {
+/* exports.markLessonAsWatched = async (req, res) => {
   try {
     const { lessonId } = req.params;
     const { courseId } = req.params;
@@ -291,6 +291,95 @@ exports.markLessonAsWatched = async (req, res) => {
 
       enrollment.certificate = `/uploads/certificates/${certId}.pdf`;
       await sendCompletionEmail(req.user, course, certPath);
+    }
+
+    await enrollment.save();
+
+    return res.json({
+      message: "Lesson marked as watched",
+      progress: enrollment.progress,
+      status: enrollment.status,
+      xpAwards,
+    });
+  } catch (err) {
+    console.error("markLessonAsWatched error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+}; */
+
+exports.markLessonAsWatched = async (req, res) => {
+  try {
+    const { lessonId, courseId } = req.params;
+    const userId = req.user?._id;
+
+    const { enrollment } = await getOrCreateEnrollmentForAccess({ userId, courseId });
+    if (!enrollment) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // ✅ NAYA LOGIC: Student aur User alag-alag fetch karenge
+    const studentDoc = await studentModel.findOne({ user: userId });
+    if (!studentDoc) return res.status(404).json({ message: "Student profile not found" });
+
+    // User model se companyId populate karke branding nikalenge (Ensure userModel is required at top)
+    const userDoc = await userModel.findById(userId).populate({
+        path: "companyId",
+        select: "branding"
+    });
+    const companyBranding = userDoc?.companyId?.branding || null;
+
+    // ✅ check if lesson already completed
+    const alreadyCompleted = enrollment.completedLessons.some((id) => String(id) === String(lessonId));
+    if (!alreadyCompleted) enrollment.completedLessons.push(lessonId);
+
+    enrollment.lastLessonId = lessonId;
+
+    // progress calculation
+    const totalLessons = await lessonModel.countDocuments({ course: courseId });
+    const totalExams = await examModel.countDocuments({ course: courseId });
+
+    const completedLessonsCount = enrollment.completedLessons.length;
+    const completedExamsCount = (enrollment.examProgress || []).filter((e) => e.isCompleted).length;
+
+    const totalItems = totalLessons + totalExams;
+    const totalCompleted = completedLessonsCount + completedExamsCount;
+
+    enrollment.progress = totalItems === 0 ? 0 : Math.min(100, Math.round((totalCompleted / totalItems) * 100));
+
+    const wasCourseCompleted = enrollment.status === "completed";
+    const isCourseCompletedNow = enrollment.progress >= 100 && !wasCourseCompleted;
+
+    // 🎮 XP AWARDS
+    const xpAwards = [];
+
+    if (!alreadyCompleted) {
+      const xpRes = await awardXpOnce({ studentId: studentDoc._id, courseId, event: "LESSON_COMPLETE", refId: lessonId, xp: 10 });
+      if (xpRes.awarded) xpAwards.push(xpRes);
+    }
+
+    if (isCourseCompletedNow) {
+      const xpRes = await awardXpOnce({ studentId: studentDoc._id, courseId, event: "COURSE_COMPLETE", refId: courseId, xp: 100 });
+      if (xpRes.awarded) xpAwards.push(xpRes);
+
+      enrollment.status = "completed";
+
+      try {
+          const course = await courseModel.findById(courseId).populate("instructor", "name");
+          const certId = uuidv4();
+          
+          const certPath = await generateCertificate(
+            req.user?.name || "Student",
+            course.title,
+            course.instructor?.name || "Instructor",
+            certId,
+            companyBranding // ✅ Sahi branding jayegi
+          );
+
+          enrollment.certificate = `/uploads/certificates/${certId}.pdf`;
+          await sendCompletionEmail(req.user, course, certPath, companyBranding);
+      } catch (e) {
+          console.error("Certificate generation error in markLessonAsWatched:", e);
+      }
     }
 
     await enrollment.save();
