@@ -1,4 +1,4 @@
-const SubscriptionPlan = require("../models/SubscriptionPlanModel");
+const SubscriptionPlan = require("../models/subscriptionPlanModel");
 const UserSubscription = require("../models/userSubscriptionModel");
 const razorpay = require("../config/razorpay");
 

@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const SubscriptionPlan = require("../models/SubscriptionPlanModel");
+const SubscriptionPlan = require("../models/subscriptionPlanModel");
 
 // helpers
 const isValidObjectIdArray = (arr) =>

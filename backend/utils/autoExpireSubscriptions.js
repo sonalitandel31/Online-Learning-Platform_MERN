@@ -1,4 +1,4 @@
-const UserSubscription = require("../models/UserSubscriptionModel");
+const UserSubscription = require("../models/userSubscriptionModel");
 
 /**
  * Mark subscriptions expired if their access window has passed.
