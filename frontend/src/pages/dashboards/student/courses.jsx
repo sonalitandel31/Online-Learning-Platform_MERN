@@ -37,6 +37,8 @@ function Courses() {
   const [enrolledCoursesIds, setEnrolledCoursesIds] = useState({});
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(true);
 
+  const [mySubscription, setMySubscription] = useState(null);
+
   // Initialize filter states
   const [durationFilter, setDurationFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
@@ -158,6 +160,7 @@ function Courses() {
   ]);
 
   // Fetch user specific course enrollments
+  // Fetch user specific course enrollments & subscription status
   const fetchEnrollments = async () => {
     try {
       if (!studentId) return;
@@ -176,6 +179,11 @@ function Courses() {
           }
         });
         setEnrolledCoursesIds(enrollmentMap);
+
+        // NEW: Backend se aayi hui subscription details save karein
+        if (res.data.subscription) {
+          setMySubscription(res.data.subscription);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -228,12 +236,7 @@ function Courses() {
 
   // Execute course enrollment process
   const handleEnroll = async (course) => {
-    // Track enrollment intent
-    track("enroll_click", {
-      courseId: course._id,
-      price: Number(course.price || 0),
-      from: "courses_list",
-    });
+    track("enroll_click", { courseId: course._id, price: Number(course.price || 0), from: "courses_list" });
 
     try {
       setEnrollLoadingIds((prev) => [...prev, course._id]);
@@ -245,16 +248,34 @@ function Courses() {
         return;
       }
 
-      // ===== NEW MODULE 7: Bypass Razorpay for Free OR Corporate Courses =====
       const isCorporateCourse = course.isGlobal === false;
       const isCompanyEmployee = !!user?.companyId;
 
-      if (!course.price || course.price === 0 || (isCorporateCourse && isCompanyEmployee)) {
-        const { data } = await api.post("/enrollments", { courseId: course._id, amount: 0 });
+      // NEW: Check if course is covered by active subscription
+      let isCoveredBySub = false;
+      if (mySubscription?.active) {
+        if (mySubscription.accessType === "all") {
+          isCoveredBySub = true;
+        } else if (mySubscription.accessType === "selected" && mySubscription.courseIds.includes(course._id)) {
+          isCoveredBySub = true;
+        }
+      }
+
+      // ===== BYPASS RAZORPAY CONDITION =====
+      if (!course.price || course.price === 0 || (isCorporateCourse && isCompanyEmployee) || isCoveredBySub) {
+
+        // Agar subscription se hai, toh source 'subscription' bhejein taki receipt bypass ho sake
+        const payload = {
+          courseId: course._id,
+          amount: 0,
+          source: isCoveredBySub ? "subscription" : "purchase"
+        };
+
+        const { data } = await api.post("/enrollments", payload);
 
         if (data.success) {
           track("enroll_success", { courseId: course._id, price: 0 });
-          notify("Enrolled successfully!");
+          notify(isCoveredBySub ? "Enrolled via Subscription!" : "Enrolled successfully!");
           fetchEnrollments();
         } else notify(data.message || "Enrollment failed.", "danger");
         return;
@@ -478,7 +499,7 @@ function Courses() {
 
   // Render main UI
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif", minHeight: "100vh", paddingBottom: "60px" , marginTop:"1.5%"}}>
+    <div style={{ fontFamily: "'Inter', sans-serif", minHeight: "100vh", paddingBottom: "60px", marginTop: "1.5%" }}>
       <style>{`
         .modern-sidebar {
           background: #ffffff;
@@ -960,9 +981,13 @@ function Courses() {
                               <div className="d-flex justify-content-between align-items-center mt-auto">
 
                                 {/* Price Section */}
+                                {/* Price Section */}
                                 <div>
-                                  {course.isGlobal === false && loggedInUser?.companyId ? (
-                                    <span className="fw-bolder fs-5 text-success">Included</span>
+                                  {(course.isGlobal === false && loggedInUser?.companyId) ||
+                                    (mySubscription?.active && (mySubscription.accessType === "all" || mySubscription.courseIds.includes(course._id))) ? (
+                                    <span className="badge rounded-pill bg-success-subtle text-success fw-bold px-3 py-2 border border-success border-opacity-25">
+                                      <i className="bi bi-star-fill me-1"></i> Included
+                                    </span>
                                   ) : (
                                     <span className="fw-bolder fs-5 text-dark">
                                       {Number(course.price) === 0 ? "Free" : `₹${course.price}`}

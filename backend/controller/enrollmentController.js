@@ -201,7 +201,6 @@ const enrollCourse = async (req, res) => {
       .populate("user", "name email")
       .lean();
 
-    // 2. Prevent crash if studentUser is null
     const studentInfo = {
       name: studentUser?.user?.name || "Student",
       email: studentUser?.user?.email || "N/A",
@@ -210,18 +209,16 @@ const enrollCourse = async (req, res) => {
     const course = await Course.findById(courseId);
     if (!course) return res.status(404).json({ success: false, message: "Course not found" });
 
-    // ===== NEW MODULE 7 UPDATE: B2B PAYMENT BYPASS =====
+    // ===== B2B PAYMENT BYPASS =====
     let finalAmount = amount;
     let finalSource = source;
     let finalPaymentStatus = source === "subscription" ? "subscription" : "complete";
 
-    // Agar course Private/Corporate hai
     if (course.isGlobal === false) {
       const userCompanyId = req.user?.companyId?.toString() || studentUser?.companyId?.toString();
       const allowedCompanies = course.allowedCompanies?.map(c => c.toString()) || [];
 
       if (userCompanyId && allowedCompanies.includes(userCompanyId)) {
-        // Corporate employee matched! Bypass payment
         finalAmount = 0;
         finalSource = "corporate_b2b";
         finalPaymentStatus = "bypassed_corporate";
@@ -242,7 +239,6 @@ const enrollCourse = async (req, res) => {
       existing.status !== "cancelled" &&
       (!existing.expiryDate || new Date(existing.expiryDate) >= now);
 
-    // ✅ IMPORTANT: if already active, DO NOT return 400 (especially for subscription auto-enroll)
     if (isExistingActive) {
       return res.status(200).json({
         success: true,
@@ -251,12 +247,10 @@ const enrollCourse = async (req, res) => {
       });
     }
 
-    // Decide expiry:
-    // - purchase/free => 180 days
-    // - subscription => align with subscription end date (if available) else 180 fallback
+    // Decide expiry
     let expiryDate = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000);
 
-    if (source === "subscription") {
+    if (finalSource === "subscription") {
       const sub = await UserSubscription.findOne({ userId })
         .sort({ createdAt: -1 })
         .lean();
@@ -264,7 +258,6 @@ const enrollCourse = async (req, res) => {
       const paidEnd = sub?.currentPeriodEnd || sub?.endDate;
       const trialEnd = sub?.trialEndDate;
 
-      // take the future end if valid
       const pick =
         (trialEnd && new Date(trialEnd) > now ? new Date(trialEnd) : null) ||
         (paidEnd && new Date(paidEnd) > now ? new Date(paidEnd) : null);
@@ -275,21 +268,26 @@ const enrollCourse = async (req, res) => {
     // ✅ re-activate if exists but cancelled/expired
     if (existing) {
       existing.status = "active";
-      existing.paymentStatus = source === "subscription" ? "subscription" : "complete";
-      existing.amount = amount;
+      existing.paymentStatus = finalPaymentStatus;
+      // Force amount to 0 if it's a subscription enrollment
+      existing.amount = finalSource === "subscription" ? 0 : finalAmount;
       existing.paymentDate = new Date();
       existing.expiryDate = expiryDate;
-      existing.source = source;
+      existing.source = finalSource;
 
-      // receipt only for purchase/free payments (optional; keep for all if you want)
-      // Here: keep receipt generation for all, but subscription will show ₹0
-      const { publicPath, receiptNo } = await generateReceiptPDF({
-        enrollment: existing,
-        course,
-        student: studentInfo,
-      });
-      existing.receiptUrl = publicPath;
-      existing.receiptNo = receiptNo;
+      // BYPASS RECEIPT IF SUBSCRIPTION
+      if (finalSource !== "subscription") {
+        const { publicPath, receiptNo } = await generateReceiptPDF({
+          enrollment: existing,
+          course,
+          student: studentInfo,
+        });
+        existing.receiptUrl = publicPath;
+        existing.receiptNo = receiptNo;
+      } else {
+        existing.receiptUrl = null;
+        existing.receiptNo = null;
+      }
 
       await existing.save();
 
@@ -310,23 +308,26 @@ const enrollCourse = async (req, res) => {
     const enrollment = await Enrollment.create({
       student: userId,
       course: courseId,
-      amount,
-      paymentStatus: source === "subscription" ? "subscription" : "complete",
+      // Force amount to 0 if it's a subscription enrollment
+      amount: finalSource === "subscription" ? 0 : finalAmount,
+      paymentStatus: finalPaymentStatus,
       status: "active",
       paymentDate: new Date(),
       expiryDate,
-      source,
+      source: finalSource,
     });
 
-    const { publicPath, receiptNo } = await generateReceiptPDF({
-      enrollment,
-      course,
-      student: studentInfo,
-    });
-
-    enrollment.receiptUrl = publicPath;
-    enrollment.receiptNo = receiptNo;
-    await enrollment.save();
+    // BYPASS RECEIPT IF SUBSCRIPTION
+    if (finalSource !== "subscription") {
+      const { publicPath, receiptNo } = await generateReceiptPDF({
+        enrollment,
+        course,
+        student: studentInfo,
+      });
+      enrollment.receiptUrl = publicPath;
+      enrollment.receiptNo = receiptNo;
+      await enrollment.save();
+    }
 
     await Student.findOneAndUpdate(
       { user: userId },

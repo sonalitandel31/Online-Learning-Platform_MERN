@@ -152,7 +152,7 @@ function CourseDetail() {
         showAlert("Enrolled via Subscription! ✅", "success");
         await refreshEnrollmentState(id);
 
-        setTimeout(() => navigate("/me/subscription"), 1500);
+        // setTimeout(() => navigate("/me/subscription"), 1500);
       }
     } catch (err) {
       console.error("Auto-enroll failed:", err.response?.data);

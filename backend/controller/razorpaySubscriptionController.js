@@ -277,65 +277,60 @@ exports.createRazorpaySubscription = async (req, res) => {
 
 exports.verifySubscription = async (req, res) => {
   try {
-    const {
-      razorpay_payment_id,
-      razorpay_subscription_id,
-      razorpay_signature,
-    } = req.body;
+    const { razorpay_payment_id, razorpay_subscription_id, razorpay_signature } = req.body;
 
-    if (!razorpay_payment_id || !razorpay_subscription_id || !razorpay_signature) {
-      return res.status(400).json({ success: false, message: "Missing required Razorpay parameters." });
-    }
-
-    // 1. Verify the signature
-    // IMPORTANT: Subscriptions use payment_id + "|" + subscription_id for the signature payload
+    // Verify the signature
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(razorpay_payment_id + "|" + razorpay_subscription_id)
       .digest("hex");
 
     if (expectedSignature !== razorpay_signature) {
-      return res.status(400).json({ success: false, message: "Invalid payment signature." });
+      return res.status(400).json({ success: false, message: "Invalid signature" });
     }
 
-    // 2. Find the pending subscription
-    const dbSub = await UserSubscription.findOne({ razorpaySubscriptionId: razorpay_subscription_id });
+    // UPDATE 1: Add .populate("planId") so we can check if it is a monthly or yearly plan
+    const dbSub = await UserSubscription.findOne({ 
+      razorpaySubscriptionId: razorpay_subscription_id 
+    }).populate("planId");
 
-    if (!dbSub) {
-      return res.status(404).json({ success: false, message: "Subscription not found in database." });
-    }
-
-    // 3. Update the database immediately for instant UI feedback
-    if (dbSub.status === "pending") {
+    if (dbSub && dbSub.status === "pending") {
       dbSub.status = "active";
       dbSub.razorpayPaymentId = razorpay_payment_id;
       dbSub.lastPaymentAt = new Date();
-      dbSub.autoRenew = true;
-      dbSub.lastEvent = "frontend_verification_success";
       
+      // UPDATE 2: Calculate the expiry date locally
+      const billingCycle = dbSub.planId?.billingCycle || "monthly";
+      const expiryDate = new Date();
+      
+      if (billingCycle === "yearly") {
+        expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+      } else {
+        expiryDate.setMonth(expiryDate.getMonth() + 1); // Default to +1 month
+      }
+      
+      dbSub.currentPeriodEnd = expiryDate;
+
       await dbSub.save();
+
+      // Save the payment receipt
+      await SubscriptionPayment.create({
+        userId: dbSub.userId,
+        planId: dbSub.planId._id, // Updated to use the populated ID
+        userSubscriptionId: dbSub._id,
+        amount: dbSub.amount,
+        currency: dbSub.currency || "INR",
+        status: "completed",
+        paymentMethod: "Razorpay",
+        paymentId: razorpay_payment_id,
+        subscriptionId: razorpay_subscription_id,
+      });
     }
 
-    // 4. Log the payment to prevent the webhook from creating a duplicate entry later
-    const paymentExists = await SubscriptionPayment.findOne({ paymentId: razorpay_payment_id }).lean();
-    if (!paymentExists) {
-       await SubscriptionPayment.create({
-         userId: dbSub.userId,
-         planId: dbSub.planId,
-         userSubscriptionId: dbSub._id,
-         amount: dbSub.amount, // Fallback amount, webhook will update with exact captured amount if needed
-         currency: dbSub.currency || "INR",
-         status: "completed",
-         paymentMethod: "Razorpay",
-         paymentId: razorpay_payment_id,
-         subscriptionId: razorpay_subscription_id,
-       });
-    }
-
-    return res.json({ success: true, message: "Payment verified successfully." });
+    return res.json({ success: true, message: "Payment successful and verified!" });
 
   } catch (error) {
-    console.error("Verification Error:", error);
-    return res.status(500).json({ success: false, message: "Server error during verification." });
+    console.error("Verify Error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
