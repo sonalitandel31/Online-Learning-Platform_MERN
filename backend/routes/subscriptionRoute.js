@@ -14,4 +14,6 @@ router.get("/me", authMiddleware, roleMiddleware(["student"]), subCtrl.getMySubs
 // ✅ student: cancel subscription (works for Razorpay + dummy)
 router.post("/cancel", authMiddleware, roleMiddleware(["student"]), subCtrl.cancelMySubscription);
 
+router.get( "/admin/subscribers", authMiddleware, roleMiddleware(["admin"]), subCtrl.getAllSubscribersAdmin);
+
 module.exports = router;

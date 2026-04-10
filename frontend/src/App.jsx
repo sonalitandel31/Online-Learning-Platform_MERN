@@ -91,7 +91,6 @@ import CompanySettings from "./pages/dashboards/HR/CompanySettings";
 import RequestCourse from "./pages/dashboards/HR/RequestCourse";
 import RequestStatus from "./pages/dashboards/HR/RequestStatus";
 import ManagePaths from "./pages/dashboards/HR/ManagePaths";
-import HRAnalytics from "./pages/dashboards/HR/HRAnalytics";
 
 //common
 import ForgotPassword from './pages/auth/forgotPassword';
@@ -103,40 +102,61 @@ import AboutUs from './pages/aboutus';
 
 import { ThemeProvider } from "./context/ThemeContext";
 import { useTheme } from "./context/ThemeContext";
-import api from "./api/api"; 
+import api from "./api/api";
+import AdminSubscribers from "./pages/dashboards/admin/AdminSubscribers";
 
+// --- UPDATED THEME UPDATER ---
+// Yeh component app root par hai, toh ye ensure karega ki refresh hote hi correct theme lag jaye.
 function ThemeUpdater({ user }) {
   const { setPrimaryColor, setLogoUrl } = useTheme();
 
   useEffect(() => {
     if (!user) {
-        setPrimaryColor('#6f42c1');
-        setLogoUrl(null);
-        localStorage.removeItem("themeColor");
-        localStorage.removeItem("themeLogo");
-        return;
+      setPrimaryColor('#6f42c1'); // Default fallback for logged-out users
+      setLogoUrl(null);
+      localStorage.removeItem("themeColor");
+      localStorage.removeItem("themeLogo");
+      return;
     }
+
+    // App.jsx ke andar ThemeUpdater function me ye update karein:
 
     const fetchUserBranding = async () => {
       try {
         const res = await api.get('/profile');
-        const branding = res.data.user?.companyId?.branding;
+        const user = res.data.user;
+        const role = user?.role?.toLowerCase();
 
+        // Check if user belongs to a company (Employee/Intern)
+        const isCorporateUser = !!user?.companyId;
+        const branding = user?.companyId?.branding;
+
+        let selectedColor = '#6f42c1'; // Default Purple (For Admin, Instructors, and Normal Students)
+
+        // 1. Agar company ne apna custom theme color set kiya hai
         if (branding?.themeColor) {
-           setPrimaryColor(branding.themeColor);
-           localStorage.setItem("themeColor", branding.themeColor);
+          selectedColor = branding.themeColor;
         }
+        // 2. Agar user kisi company ka hissa hai (isCorporateUser) YA fir us company ka HR hai
+        else if (isCorporateUser || role === 'hr_manager') {
+          selectedColor = '#198754'; 
+        }
+        
+        setPrimaryColor(selectedColor);
+        setPrimaryColor(selectedColor);
+        localStorage.setItem("themeColor", selectedColor);
+
         if (branding?.logoUrl) {
-           setLogoUrl(branding.logoUrl);
-           localStorage.setItem("themeLogo", branding.logoUrl); 
+          setLogoUrl(branding.logoUrl);
+          localStorage.setItem("themeLogo", branding.logoUrl);
         }
       } catch (error) {
-         console.error("Theme fetch error", error);
+        console.error("Theme fetch error", error);
       }
     };
 
     fetchUserBranding();
-  }, [user]);
+  }, [user, setPrimaryColor, setLogoUrl]);
 
   return null;
 }
@@ -215,6 +235,7 @@ function App() {
               <Route path="live-classes/:liveClassId/attendance" element={<InstructorLiveClassAttendance />} />
               <Route path="companies" element={<ManageCompanies />} />
               <Route path="b2b-requests" element={<CourseRequests />} />
+              <Route path="subscribers" element={<AdminSubscribers />} />
             </Route>
           </Route>
 
@@ -254,7 +275,6 @@ function App() {
           <Route element={<ProtectedRoute allowedRoles={["hr_manager"]} />}>
             <Route path="/hr-dashboard" element={<HRDashboard />}>
               <Route path="employees" element={<EmployeeList />} />
-              <Route path="analytics" element={<HRAnalytics />} />
               <Route path="bulk-enroll" element={<BulkEnrollment />} />
               <Route path="corporate-settings" element={<CompanySettings />} />
               <Route path="manage-paths" element={<ManagePaths />} />

@@ -129,7 +129,7 @@ const getTrendingCourses = async (req, res) => {
 
     const sortedTrending = trending
       .sort((a, b) => b.enrolledCount - a.enrolledCount)
-      .slice(0, 8); 
+      .slice(0, 8);
 
     res.json({ success: true, courses: sortedTrending });
   } catch (err) {
@@ -175,7 +175,7 @@ const getRecommendedCourses = async (req, res) => {
           _id: { $nin: student.enrolledCourses || [] }
         })
           .populate("category", "name")
-          .limit(8) 
+          .limit(8)
           .lean();
       }
     }
@@ -185,7 +185,7 @@ const getRecommendedCourses = async (req, res) => {
         .find(filter)
         .populate("category", "name")
         .sort({ createdAt: -1 })
-        .limit(8) 
+        .limit(8)
         .lean();
     }
 
@@ -272,11 +272,11 @@ const getCourseById = async (req, res) => {
     if (course.isGlobal === false) {
       const userCompanyId = req.user?.companyId?.toString();
       const allowedCompanies = course.allowedCompanies?.map(c => c.toString()) || [];
-      
+
       // If the user doesn't have a company ID, or their company ID is not in the allowed list
       if (!userCompanyId || !allowedCompanies.includes(userCompanyId)) {
-        return res.status(403).json({ 
-          error: "Access Denied: This is a private corporate training course." 
+        return res.status(403).json({
+          error: "Access Denied: This is a private corporate training course."
         });
       }
     }
@@ -582,73 +582,118 @@ const rateCourse = async (req, res) => {
 
 const getPersonalizedRecommendations = async (req, res) => {
   try {
-    const studentId = req.user._id;
+    const userId = req.user._id;
 
-    const student = await studentModel.findOne({ user: studentId });
+    // 1. Student profile aur enrolled courses fetch karein
+    const student = await studentModel.findOne({ user: userId });
     if (!student) return res.status(404).json({ message: "Student profile not found" });
 
-    const enrolledCourseIds = student.enrolledCourses || [];
+    const enrolledCourseIds = (student.enrolledCourses || []).map(id => new mongoose.Types.ObjectId(id));
 
-    const recentResults = await resultModel.find({ student: studentId })
+    // 2. Weak Skills identify karein (aapka existing logic)
+    const recentResults = await resultModel.find({ student: userId })
       .sort({ createdAt: -1 })
       .limit(5)
       .select("weakSkillsIdentified");
 
-    let weakSkillsSet = new Set();
-    recentResults.forEach(result => {
-      if (result.weakSkillsIdentified) {
-        result.weakSkillsIdentified.forEach(skill => weakSkillsSet.add(skill));
-      }
+    let weakSkills = [];
+    recentResults.forEach(r => {
+      if (r.weakSkillsIdentified) weakSkills.push(...r.weakSkillsIdentified);
     });
-    const weakSkills = Array.from(weakSkillsSet);
-    const targetGoals = student.targetGoals || [];
+    weakSkills = [...new Set(weakSkills)];
 
-    // ===== NEW MODULE 7 UPDATE =====
-    // Use $and to combine B2B isolation with your AI logic
-    const recommendedCourses = await courseModel.find({
-      _id: { $nin: enrolledCourseIds }, 
-      status: "approved", 
-      $and: [
-        getVisibilityFilter(req), // Ensures user can only see allowed courses
-        {
-          $or: [
-            { skillsTaught: { $in: weakSkills } }, 
-            { category: { $in: targetGoals } }     
-          ]
+    // 3. 🔥 ADVANCED COLLABORATIVE FILTERING PIPELINE 🔥
+    const alsoBought = await Enrollment.aggregate([
+      { $match: { course: { $in: enrolledCourseIds }, student: { $ne: userId } } },
+      {
+        $lookup: {
+          from: "enrollments",
+          localField: "student",
+          foreignField: "student",
+          as: "othersEnrollments"
         }
-      ]
-    })
-    // ================================
-    .select("title thumbnail price level averageRating skillsTaught description")
-    .limit(8)
-    .lean();
+      },
+      { $unwind: "$othersEnrollments" },
+      { $match: { "othersEnrollments.course": { $nin: enrolledCourseIds } } },
+      {
+        $group: {
+          _id: "$othersEnrollments.course",
+          peerFrequency: { $sum: 1 }
+        }
+      },
+      { $sort: { peerFrequency: -1 } },
+      { $limit: 5 },
+      {
+        $lookup: {
+          from: "courses",
+          localField: "_id",
+          foreignField: "_id",
+          as: "courseInfo"
+        }
+      },
+      { $unwind: "$courseInfo" },
+      // 👇 AB HUM REAL ENROLLMENT COUNT FETCH KARENGE
+      {
+        $lookup: {
+          from: "enrollments",
+          localField: "_id",
+          foreignField: "course",
+          as: "allEnrollments"
+        }
+      }, {
+        $project: {
+          _id: "$courseInfo._id",
+          title: "$courseInfo.title",
+          thumbnail: "$courseInfo.thumbnail",
+          price: "$courseInfo.price",
+          averageRating: "$courseInfo.averageRating",
+          description: "$courseInfo.description",
 
-    const skillGapFixers = [];
-    const nextInPath = [];
-
-    recommendedCourses.forEach(course => {
-      const isSkillGapFixer = course.skillsTaught?.some(skill => weakSkills.includes(skill));
-      
-      if (isSkillGapFixer) {
-        skillGapFixers.push(course);
-      } else {
-        nextInPath.push(course);
+          enrolledCount: {
+            $size: {
+              $filter: {
+                input: "$allEnrollments",
+                as: "e",
+                cond: { $in: ["$$e.status", ["active", "completed"]] }
+              }
+            }
+          },
+          totalEnrolled: {
+            $size: {
+              $filter: {
+                input: "$allEnrollments",
+                as: "e",
+                cond: { $in: ["$$e.status", ["active", "completed"]] }
+              }
+            }
+          }
+        }
       }
-    });
+    ]);
+    
+    // 4. Content-Based Recommendations (Skills gap fix karne ke liye)
+    const skillGapFixers = await courseModel.find({
+      status: "approved",
+      _id: { $nin: enrolledCourseIds },
+      skillsTaught: { $in: weakSkills },
+      ...getVisibilityFilter(req)
+    })
+      .select("title thumbnail price averageRating skillsTaught")
+      .limit(4).lean();
 
     return res.json({
       success: true,
-      message: "Personalized recommendations generated successfully.",
       data: {
         identifiedWeakSkills: weakSkills,
-        skillGapFixers: skillGapFixers,
-        nextInPath: nextInPath
+        skillGapFixers: skillGapFixers, // Based on exam performance
+        studentsAlsoBought: alsoBought, // Based on Peer behavior (AI logic)
+        nextSteps: student.targetGoals || [] // Based on interests
       }
     });
 
   } catch (error) {
-    console.error("Recommendation Engine Error:", error);
-    return res.status(500).json({ message: "Internal server error while fetching recommendations." });
+    console.error("Advanced Recommendation Error:", error);
+    return res.status(500).json({ message: "Error generating AI recommendations." });
   }
 };
 

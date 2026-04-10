@@ -4,39 +4,53 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend,
   PieChart, Pie, Cell, ResponsiveContainer,
 } from "recharts";
-import { FaChartBar, FaChartPie, FaTable, FaGraduationCap } from "react-icons/fa";
+import { FaChartBar, FaChartPie, FaTable, FaRobot, FaUserShield, FaExclamationTriangle } from "react-icons/fa";
 
 function CourseAnalytics() {
   const [analytics, setAnalytics] = useState([]);
+  const [aiScore, setAiScore] = useState(null); // AI Score state add ki hai
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const token = localStorage.getItem("token");
 
   const colors = {
     primary: "#6f42c1",
+    primaryLight: "#f3e8ff",
     bg: "#f8fafc",
     border: "#e2e8f0",
     textMain: "#1e293b",
     textMuted: "#64748b",
     chartColors: ["#6f42c1", "#10b981", "#f59e0b", "#3b82f6", "#ef4444"],
+    warning: "#eab308",
+    danger: "#ef4444",
   };
 
   useEffect(() => {
-    const fetchAnalytics = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
-        const res = await api.get("/instructor/course-analytics", {
+        // 1. Fetch Basic Course Analytics (Aapka purana API)
+        const resAnalytics = await api.get("/instructor/course-analytics", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setAnalytics(res.data.analytics || []);
+        setAnalytics(resAnalytics.data.analytics || []);
+
+        // 2. Fetch AI Instructor Score & Engagement (Naya API jo humne backend mein banaya tha)
+        const resScore = await api.get("/analytics/instructor/score/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (resScore.data && resScore.data.success) {
+          setAiScore(resScore.data.data);
+        }
+
       } catch (err) {
         console.error(err);
-        setError("Failed to fetch course analytics");
+        setError("Failed to fetch comprehensive analytics. Some data might be missing.");
       } finally {
         setLoading(false);
       }
     };
-    fetchAnalytics();
+    fetchData();
   }, [token]);
 
   // Format chart data
@@ -54,10 +68,10 @@ function CourseAnalytics() {
     return (
       <div className="loader-container">
         <div className="spinner" />
-        <p style={{ color: colors.primary, marginTop: "10px", fontWeight: "500" }}>Loading Analytics...</p>
+        <p style={{ color: colors.primary, marginTop: "15px", fontWeight: "600" }}>Analyzing Instructor Performance...</p>
         <style>{`
-          .loader-container { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 60vh; }
-          .spinner { border: 4px solid ${colors.border}; border-top: 4px solid ${colors.primary}; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+          .loader-container { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 70vh; }
+          .spinner { border: 4px solid ${colors.border}; border-top: 4px solid ${colors.primary}; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
           @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         `}</style>
       </div>
@@ -67,19 +81,34 @@ function CourseAnalytics() {
   return (
     <div className="analytics-container">
       <style>{`
-        .analytics-container { padding: 16px; background: ${colors.bg}; min-height: 100vh; font-family: 'Inter', sans-serif; }
+        .analytics-container { padding: 20px; background: ${colors.bg}; min-height: 100vh; font-family: 'Inter', sans-serif; }
         .page-header { margin-bottom: 24px; }
-        .page-title { margin: 0; font-size: 1.4rem; font-weight: 800; color: ${colors.textMain}; }
+        .page-title { margin: 0; font-size: 1.6rem; font-weight: 800; color: ${colors.textMain}; letter-spacing: -0.5px; }
+        .page-subtitle { color: ${colors.textMuted}; font-size: 0.95rem; margin-top: 5px; }
         
+        /* 🔥 AI Banner Styles */
+        .ai-banner { background: linear-gradient(135deg, #6f42c1 0%, #4a148c 100%); color: white; border-radius: 16px; padding: 24px; margin-bottom: 30px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 10px 25px rgba(111, 66, 193, 0.2); }
+        .ai-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 15px; }
+        .ai-score-box { text-align: right; }
+        .ai-score-val { font-size: 2.5rem; font-weight: 800; color: #facc15; line-height: 1; }
+        .ai-metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .ai-metric-card { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 12px; backdrop-filter: blur(5px); }
+        .ai-metric-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.8; margin-bottom: 5px; }
+        .ai-metric-val { font-size: 1.4rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+
         .charts-grid { display: flex; flex-direction: column; gap: 20px; margin-bottom: 30px; }
-        .chart-card { background: white; padding: 20px; border-radius: 12px; border: 1px solid ${colors.border}; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .chart-title { font-size: 1rem; font-weight: 700; color: ${colors.textMain}; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        .chart-card { background: white; padding: 24px; border-radius: 16px; border: 1px solid ${colors.border}; box-shadow: 0 4px 15px rgba(0,0,0,0.02); }
+        .chart-title { font-size: 1.1rem; font-weight: 700; color: ${colors.textMain}; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
         
-        /* Desktop Table View */
-        .data-table-wrapper { background: white; border-radius: 12px; border: 1px solid ${colors.border}; overflow: hidden; display: none; }
+        /* Table View */
+        .data-table-wrapper { background: white; border-radius: 16px; border: 1px solid ${colors.border}; overflow: hidden; display: none; box-shadow: 0 4px 15px rgba(0,0,0,0.02); }
         .data-table { width: 100%; border-collapse: collapse; }
-        .data-table th { background: #f8fafc; padding: 14px; text-align: left; font-size: 0.75rem; color: ${colors.textMuted}; text-transform: uppercase; border-bottom: 1px solid ${colors.border}; }
-        .data-table td { padding: 14px; border-bottom: 1px solid ${colors.border}; font-size: 0.9rem; color: ${colors.textMain}; }
+        .data-table th { background: #f8fafc; padding: 16px; text-align: left; font-size: 0.8rem; color: ${colors.textMuted}; text-transform: uppercase; border-bottom: 1px solid ${colors.border}; font-weight: 700; }
+        .data-table td { padding: 16px; border-bottom: 1px solid ${colors.border}; font-size: 0.95rem; color: ${colors.textMain}; vertical-align: middle; }
+
+        /* Progress Bar */
+        .progress-bg { background: #e2e8f0; height: 8px; border-radius: 10px; width: 100%; overflow: hidden; margin-top: 5px; }
+        .progress-fill { height: 100%; background: ${colors.primary}; border-radius: 10px; transition: width 0.5s ease; }
 
         /* Mobile Stat Cards */
         .mobile-data-list { display: flex; flex-direction: column; gap: 12px; }
@@ -92,17 +121,59 @@ function CourseAnalytics() {
         @media (min-width: 992px) {
           .analytics-container { padding: 30px; }
           .charts-grid { flex-direction: row; }
-          .chart-card { flex: 1; }
+          .chart-card { flex: 1; width: 50%; }
           .data-table-wrapper { display: block; }
           .mobile-data-list { display: none; }
+          .ai-header { flex-direction: row; }
+        }
+        @media (max-width: 991px) {
+          .ai-header { flex-direction: column; align-items: flex-start; gap: 15px; }
+          .ai-score-box { text-align: left; }
         }
       `}</style>
 
       <div className="page-header">
-        <h1 className="page-title">Course Analytics</h1>
+        <h1 className="page-title">Course Analytics & Progress</h1>
+        <p className="page-subtitle">Track your platform performance, engagement, and student growth.</p>
       </div>
 
-      {error && <p style={{ color: "red", textAlign: "center" }}>{error}</p>}
+      {error && <div className="alert alert-danger" style={{ borderRadius: '12px' }}>{error}</div>}
+
+      {/* 🔥 AI INSTRUCTOR SCORE BANNER (Merged Feature) */}
+      {aiScore && (
+        <div className="ai-banner">
+          <div className="ai-header">
+            <div>
+              <h2 style={{ fontSize: '1.3rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                <FaRobot color="#facc15" /> AI Performance Report
+              </h2>
+              <p style={{ opacity: 0.8, margin: '5px 0 0 0', fontSize: '0.9rem' }}>
+                Your teaching effectiveness based on platform engagement models.
+              </p>
+            </div>
+            <div className="ai-score-box">
+              <div style={{ fontSize: '0.85rem', textTransform: 'uppercase', opacity: 0.8, letterSpacing: '1px' }}>Global Rank Score</div>
+              <div className="ai-score-val">{aiScore.score}<span style={{ fontSize: '1.2rem', color: 'white', opacity: 0.8 }}>/100</span></div>
+            </div>
+          </div>
+          <div className="ai-metrics-grid">
+            <div className="ai-metric-card">
+              <div className="ai-metric-label">Avg Engagement</div>
+              <div className="ai-metric-val"><FaUserShield size={18} opacity={0.8}/> {aiScore.avgEngagement}%</div>
+            </div>
+            <div className="ai-metric-card">
+              <div className="ai-metric-label">High Risk Students</div>
+              <div className="ai-metric-val" style={{ color: aiScore.highRiskRate > 20 ? '#fca5a5' : 'white' }}>
+                <FaExclamationTriangle size={18} opacity={0.8}/> {aiScore.highRiskRate}%
+              </div>
+            </div>
+            <div className="ai-metric-card">
+              <div className="ai-metric-label">Avg Drop Rate</div>
+              <div className="ai-metric-val">{aiScore.avgDropRate}%</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {analytics.length === 0 ? (
         <div style={emptyStateStyle}>No analytics data available for your courses yet.</div>
@@ -110,14 +181,14 @@ function CourseAnalytics() {
         <>
           <div className="charts-grid">
             <div className="chart-card">
-              <div className="chart-title"><FaChartBar color={colors.primary}/> Enrollments</div>
+              <div className="chart-title"><FaChartBar color={colors.primary}/> Total Enrollments</div>
               <div style={{ width: "100%", height: 280 }}>
                 <ResponsiveContainer>
-                  <BarChart data={enrollmentData}>
-                    <XAxis dataKey="course" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip cursor={{ fill: '#f1f5f9' }} />
-                    <Bar dataKey="enrollments" fill={colors.primary} radius={[4, 4, 0, 0]} />
+                  <BarChart data={enrollmentData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="course" tick={{ fontSize: 11, fill: colors.textMuted }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: colors.textMuted }} axisLine={false} tickLine={false} />
+                    <Tooltip cursor={{ fill: colors.bg }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                    <Bar dataKey="enrollments" fill={colors.primary} radius={[6, 6, 0, 0]} barSize={40} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -132,43 +203,51 @@ function CourseAnalytics() {
                       data={revenueData} 
                       dataKey="value" 
                       nameKey="name" 
-                      innerRadius={60}
-                      outerRadius={80} 
+                      innerRadius={70}
+                      outerRadius={90} 
                       paddingAngle={5}
                     >
                       {revenueData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={colors.chartColors[index % colors.chartColors.length]} />
                       ))}
                     </Pie>
-                    <Tooltip />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '13px', paddingTop: '20px' }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             </div>
           </div>
 
-          <div className="chart-title" style={{ marginBottom: '15px' }}><FaTable color={colors.primary}/> Performance Details</div>
+          <div className="chart-title" style={{ marginBottom: '15px' }}><FaTable color={colors.primary}/> Student Progress Details</div>
           
           {/* Desktop Table View */}
           <div className="data-table-wrapper">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Course Title</th>
-                  <th>Students</th>
-                  <th>Completed</th>
-                  <th>Completion %</th>
-                  <th>Revenue (₹)</th>
+                  <th width="35%">Course Title</th>
+                  <th width="15%">Students</th>
+                  <th width="15%">Completed</th>
+                  <th width="20%">Progress & Completion</th>
+                  <th width="15%">Revenue (₹)</th>
                 </tr>
               </thead>
               <tbody>
                 {analytics.map((a, i) => (
-                  <tr key={i}>
+                  <tr key={i} style={{ transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                     <td style={{ fontWeight: "600" }}>{a.courseTitle}</td>
                     <td>{a.totalStudents}</td>
                     <td>{a.completedStudents}</td>
-                    <td style={{ color: colors.primary, fontWeight: "700" }}>{a.completionRate}%</td>
+                    <td>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: '600', marginBottom: '2px' }}>
+                        <span>Progress</span>
+                        <span style={{ color: colors.primary }}>{a.completionRate}%</span>
+                      </div>
+                      <div className="progress-bg">
+                        <div className="progress-flex progress-fill" style={{ width: `${a.completionRate}%` }}></div>
+                      </div>
+                    </td>
                     <td style={{ fontWeight: "700" }}>₹{a.revenue.toLocaleString()}</td>
                   </tr>
                 ))}
@@ -186,10 +265,19 @@ function CourseAnalytics() {
                     <span className="stat-val">{a.totalStudents}</span>
                 </div>
                 <div className="stat-row">
-                    <span className="stat-label">Completion Rate</span>
-                    <span className="stat-val" style={{ color: colors.primary }}>{a.completionRate}%</span>
+                    <span className="stat-label">Completed</span>
+                    <span className="stat-val">{a.completedStudents}</span>
                 </div>
-                <div className="stat-row">
+                <div style={{ marginTop: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: '600' }}>
+                    <span className="stat-label">Completion Progress</span>
+                    <span style={{ color: colors.primary }}>{a.completionRate}%</span>
+                  </div>
+                  <div className="progress-bg">
+                    <div className="progress-fill" style={{ width: `${a.completionRate}%` }}></div>
+                  </div>
+                </div>
+                <div className="stat-row" style={{ marginTop: '12px', borderTop: `1px solid ${colors.border}`, paddingTop: '8px' }}>
                     <span className="stat-label">Revenue</span>
                     <span className="stat-val">₹{a.revenue.toLocaleString()}</span>
                 </div>
@@ -207,8 +295,8 @@ const emptyStateStyle = {
   padding: "60px 20px", 
   color: "#94a3b8", 
   background: "white", 
-  borderRadius: "12px", 
-  border: "1px solid #e2e8f0" 
+  borderRadius: "16px", 
+  border: "1px dashed #cbd5e1" 
 };
 
 export default CourseAnalytics;

@@ -24,6 +24,10 @@ router.get("/revenue", admin.getRevenueSummary);
 router.get("/payouts", admin.getPayouts);
 router.get("/transactions", admin.getTransactions);
 
+// Payout Routes
+router.get("/payouts/pending", authMiddleware, roleMiddleware(["admin"]), admin.getPendingPayouts);
+router.post("/payouts/process", authMiddleware, roleMiddleware(["admin"]), admin.processPayout);
+
 router.get("/enrollment-stats", admin.getEnrollmentStats);
 router.get("/course-performance", admin.getCoursePerformance);
 

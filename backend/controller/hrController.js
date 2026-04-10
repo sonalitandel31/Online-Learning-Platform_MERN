@@ -3,6 +3,7 @@ const CompanyModel = require("../models/CompanyModel");
 const userModel = require("../models/userModel");
 const CourseRequest = require('../models/courseRequestModel');
 const Enrollment = require('../models/enrollmentModel');
+const Category = require('../models/categoryModel');
 
 const bcrypt = require('bcryptjs');
 
@@ -123,8 +124,47 @@ exports.addSingleEmployee = async (req, res) => {
             companyId: hrCompanyId
         });
 
+        await CompanyModel.findByIdAndUpdate(
+            hrCompanyId,
+            { $inc: { 'subscription.usedLicenses': 1 } }
+        );
+
         res.status(201).json({ success: true, message: "Employee added successfully!", data: newEmployee });
     } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.deleteEmployee = async (req, res) => {
+    try {
+        // SECURITY CHECK
+        if (req.user.role !== 'hr_manager') {
+            return res.status(403).json({ success: false, message: "Access Denied: Only HR Managers can delete employees." });
+        }
+
+        const employeeId = req.params.id; // URL se ID aayegi (e.g., /hr/employee/:id)
+        const hrCompanyId = req.user.companyId;
+
+        // Step 1: Employee ko delete karo (Make sure wo usi company ka student ho)
+        const deletedUser = await userModel.findOneAndDelete({
+            _id: employeeId,
+            companyId: hrCompanyId,
+            role: 'student'
+        });
+
+        if (!deletedUser) {
+            return res.status(404).json({ success: false, message: "Employee not found." });
+        }
+
+        // Step 2: Company table mein usedLicenses ko -1 kar do
+        await CompanyModel.findByIdAndUpdate(
+            hrCompanyId,
+            { $inc: { 'subscription.usedLicenses': -1 } }
+        );
+
+        res.status(200).json({ success: true, message: "Employee removed successfully. 1 License restored." });
+    } catch (error) {
+        console.error("Delete Employee Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -133,35 +173,74 @@ exports.createCourseRequest = async (req, res) => {
     try {
         const { topic, category, customCategory, targetAudience, expectedEmployees, requirements } = req.body;
         
+        let finalCategoryId = category;
+
+        // ✅ LOGIC: Agar HR ne "Other" select kiya hai
+        if (category === 'other' && customCategory) {
+            const cleanName = customCategory.trim();
+            
+            // Database mein check karo (Case-insensitive)
+            let existingCat = await Category.findOne({ 
+                name: { $regex: new RegExp(`^${cleanName}$`, 'i') } 
+            });
+
+            if (!existingCat) {
+                // Agar nahi milti, toh Admin ke liye "pending" entry banao
+                existingCat = await Category.create({
+                    name: cleanName,
+                    status: 'pending',
+                    suggestedBy: req.user._id
+                });
+            }
+            finalCategoryId = existingCat._id;
+        }
+
         const newRequest = await CourseRequest.create({
             companyId: req.companyId,
-            // Schema 'hrId' expect kar raha hai, isliye humein yahi key use karni hogi
-            hrId: req.user.id || req.user._id, 
+            hrId: req.user._id, 
             topic,
-            // Agar dropdown se category aayi hai aur wo 'other' nahi hai, toh use save karo
-            category: category !== 'other' ? category : null, 
-            customCategory,
+            category: finalCategoryId, // Store the Object ID
+            customCategory: category === 'other' ? customCategory : null,
             targetAudience,
             expectedEmployees,
-            requirements
+            requirements,
+            status: 'pending' 
         });
 
-        res.status(201).json({ success: true, message: "Request sent!", data: newRequest });
+        res.status(201).json({ success: true, message: "Custom request sent!", data: newRequest });
     } catch (error) {
-        console.error("Course Request Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
 exports.getMyCourseRequests = async (req, res) => {
     try {
-        // tenantAuth se req.companyId mil jayega
         const requests = await CourseRequest.find({ companyId: req.companyId })
-            .sort({ createdAt: -1 });
+            .populate('category', 'name') 
+            .sort({ createdAt: -1 })
+            .lean();
 
-        res.status(200).json({ success: true, data: requests });
+        const formattedRequests = requests.map(reqObj => {
+            let finalName = "General Training";
+
+            // Case 1: Agar category successfully populate ho gayi (Object mila)
+            if (reqObj.category && typeof reqObj.category === 'object' && reqObj.category.name) {
+                finalName = reqObj.category.name;
+            } 
+            // Case 2: Agar category null hai ya "other" string hai, toh customCategory uthao
+            else if (reqObj.customCategory) {
+                finalName = reqObj.customCategory;
+            }
+
+            return {
+                ...reqObj,
+                categoryName: finalName
+            };
+        });
+
+        res.status(200).json({ success: true, data: formattedRequests });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Requests fetch nahi ho payi." });
+        res.status(500).json({ success: false, message: "History fetch fail ho gayi." });
     }
 };
 

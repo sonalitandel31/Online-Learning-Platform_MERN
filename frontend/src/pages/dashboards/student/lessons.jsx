@@ -142,6 +142,67 @@ function Lesson() {
     return () => video.removeEventListener("timeupdate", handleTimeUpdate);
   }, [currentLesson]);
 
+  // ====== NAYA CODE: SMART WATCH TIME TRACKER (With Debugging) ======
+  useEffect(() => {
+    const video = videoRef.current;
+    
+    // 🔍 DEBUG 1: Page load hote hi ye print hona chahiye
+    console.log("👀 Checking Lesson:", currentLesson?.title, "| Type:", currentLesson?.contentType);
+
+    if (!video || String(currentLesson?.contentType || "").toLowerCase() !== "video") {
+      console.log("⚠️ Tracker Stopped: Ya toh video player nahi mila, ya contentType 'video' nahi hai.");
+      return;
+    }
+
+    console.log("🚀 Tracker is ACTIVE! Bacha video play karega toh timer chalega...");
+
+    let heartbeatInterval;
+
+    const sendHeartbeat = async () => {
+      try {
+        await api.post(
+          "/analytics/track",
+          {
+            event: "video_watch_30s", 
+            payload: { courseId: courseId, lessonId: currentLesson._id }
+          },
+          { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+        );
+        console.log("✅ Watch time recorded (Score +1)");
+      } catch (err) {
+        console.error("❌ Heartbeat failed", err);
+      }
+    };
+
+    heartbeatInterval = setInterval(() => {
+      if (!video.paused && !video.ended) {
+        sendHeartbeat();
+      }
+    }, 30000);
+
+    const handleVideoEnd = () => {
+      if (video.duration > 0 && video.duration < 30) {
+        sendHeartbeat();
+        console.log("✅ Short video completed, watch time recorded!");
+      }
+    };
+
+    const handleTimeUpdate = () => {
+      if (!video.duration || Number.isNaN(video.duration)) return;
+      setVideoProgress((video.currentTime / video.duration) * 100);
+    };
+
+    video.addEventListener("timeupdate", handleTimeUpdate);
+    video.addEventListener("ended", handleVideoEnd);
+
+    return () => {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      video.removeEventListener("timeupdate", handleTimeUpdate);
+      video.removeEventListener("ended", handleVideoEnd);
+    };
+  }, [currentLesson, courseId, isEnrolled]);
+  // ====== NAYA CODE KHATAM ======
+
   useEffect(() => {
     // progress endpoints depend on enrollment record
     if (!currentLesson || !isEnrolled || !course?._id) return;

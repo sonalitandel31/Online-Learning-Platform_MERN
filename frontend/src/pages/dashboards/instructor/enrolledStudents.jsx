@@ -77,6 +77,21 @@ function EnrolledStudents() {
     return <span style={{ ...badgeStyle, backgroundColor: bg, color }}>{status || "N/A"}</span>;
   };
 
+  // ===== NEW: Source Badge Helper =====
+  const getSourceBadge = (source) => {
+    switch (source?.toLowerCase()) {
+      case "subscription":
+        return <span style={{ ...badgeStyle, backgroundColor: "#ede9fe", color: "#6366f1", border: "1px solid #c4b5fd" }}>Subscription</span>;
+      case "corporate_b2b":
+        return <span style={{ ...badgeStyle, backgroundColor: "#fef3c7", color: "#d97706", border: "1px solid #fde68a" }}>Corporate</span>;
+      case "free":
+        return <span style={{ ...badgeStyle, backgroundColor: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0" }}>Free</span>;
+      case "purchase":
+      default:
+        return <span style={{ ...badgeStyle, backgroundColor: "#dcfce7", color: "#10b981", border: "1px solid #a7f3d0" }}>Direct Purchase</span>;
+    }
+  };
+
   if (loading) {
     return (
       <div style={loaderWrapperStyle}>
@@ -112,7 +127,7 @@ function EnrolledStudents() {
         /* Table Design */
         .student-table-wrapper { background: white; border-radius: 12px; border: 1px solid ${colors.border}; overflow: hidden; }
         .student-table { width: 100%; border-collapse: collapse; }
-        .student-table th { background: #f8fafc; padding: 15px; text-align: left; font-size: 0.75rem; color: ${colors.textMuted}; border-bottom: 1px solid ${colors.border}; }
+        .student-table th { background: #f8fafc; padding: 15px; text-align: left; font-size: 0.75rem; color: ${colors.textMuted}; border-bottom: 1px solid ${colors.border}; text-transform: uppercase; letter-spacing: 0.5px; }
         .student-table td { padding: 15px; border-bottom: 1px solid ${colors.border}; font-size: 0.9rem; }
 
         /* Progress Bar */
@@ -146,7 +161,7 @@ function EnrolledStudents() {
       `}</style>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ margin: 0, fontWeight: "800", color: colors.textMain }}>Students</h2>
+        <h2 style={{ margin: 0, fontWeight: "800", color: colors.textMain }}>Enrolled Students</h2>
         <div style={{ fontSize: "0.8rem", fontWeight: "600", color: colors.primary, background: colors.primary + '15', padding: "4px 12px", borderRadius: "12px" }}>
           {filtered.length} Enrolled
         </div>
@@ -199,6 +214,7 @@ function EnrolledStudents() {
                 <tr>
                   <th>Student Info</th>
                   <th>Course Title</th>
+                  <th>Enrollment Type</th> {/* NEW COLUMN */}
                   <th>Progress</th>
                   <th>Status</th>
                   <th>Cert</th>
@@ -212,7 +228,11 @@ function EnrolledStudents() {
                       <div style={{ fontWeight: "600" }}>{s.student?.name}</div>
                       <div style={{ fontSize: "0.75rem", color: colors.textMuted }}>{s.student?.email}</div>
                     </td>
-                    <td style={{ maxWidth: "180px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.course?.title}</td>
+                    <td style={{ maxWidth: "180px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: "500", color: colors.textMain }}>{s.course?.title}</td>
+                    
+                    {/* NEW: Source Badge */}
+                    <td>{getSourceBadge(s.source)}</td> 
+
                     <td>
                       <div style={{ fontSize: "0.75rem", fontWeight: "700" }}>{s.progress}%</div>
                       <div className="pg-bg"><div className="pg-fill" style={{ width: `${s.progress}%` }} /></div>
@@ -238,13 +258,19 @@ function EnrolledStudents() {
                   <div style={{ fontWeight: "700", color: colors.textMain }}>{s.student?.name}</div>
                   {getStatusBadge(s.status)}
                 </div>
-                <div style={{ fontSize: "0.8rem", color: colors.textMuted, marginBottom: "10px" }}>{s.course?.title}</div>
+                
+                {/* NEW: Mobile Source Badge */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                   <div style={{ fontSize: "0.8rem", color: colors.textMuted }}>{s.course?.title}</div>
+                   {getSourceBadge(s.source)}
+                </div>
+
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px", borderTop: `1px solid ${colors.border}` }}>
                    <div style={{ fontSize: "0.75rem", color: colors.textMuted }}>
                      Progress: <span style={{ color: colors.primary, fontWeight: "700" }}>{s.progress}%</span>
                    </div>
                    {s.certificate && (
-                      <a href={`${import.meta.env.VITE_BASE_URL}${s.certificate}`} target="_blank" style={certLinkStyle}>
+                      <a href={`${import.meta.env.VITE_BASE_URL}${s.certificate}`} target="_blank" rel="noopener noreferrer" style={certLinkStyle}>
                         View Cert <FaChevronRight size={10} />
                       </a>
                    )}

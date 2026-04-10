@@ -1,13 +1,13 @@
 const fs = require('fs');
 const csv = require('csv-parser');
 const userModel = require('../models/userModel');
-const Company = require('../models/CompanyModel'); 
+const Company = require('../models/CompanyModel');
 const bcrypt = require('bcryptjs');
 
 exports.bulkEnrollEmployees = async (req, res) => {
     try {
-        const companyId = req.companyId; 
-        
+        const companyId = req.companyId;
+
         if (!req.file) {
             return res.status(400).json({ success: false, message: "Please upload a CSV file." });
         }
@@ -24,9 +24,9 @@ exports.bulkEnrollEmployees = async (req, res) => {
 
         if (availableLicenses <= 0) {
             fs.unlinkSync(req.file.path);
-            return res.status(400).json({ 
-                success: false, 
-                message: "License limit reached! Please upgrade your plan to add more employees." 
+            return res.status(400).json({
+                success: false,
+                message: "License limit reached! Please upgrade your plan to add more employees."
             });
         }
 
@@ -39,13 +39,13 @@ exports.bulkEnrollEmployees = async (req, res) => {
             .pipe(csv())
             .on('data', (data) => {
                 rowCount++;
-                
+
                 // --- UPDATE: Validate Name, Email AND Password from CSV ---
                 if (!data.name || !data.email || !data.password) {
-                    errors.push({ 
-                        row: rowCount, 
-                        issue: "Missing name, email, or password", 
-                        data 
+                    errors.push({
+                        row: rowCount,
+                        issue: "Missing name, email, or password",
+                        data
                     });
                 } else {
                     results.push({ ...data, row: rowCount });
@@ -67,7 +67,7 @@ exports.bulkEnrollEmployees = async (req, res) => {
                             message: `Cannot upload. You are trying to add ${results.length} users, but only have ${availableLicenses} licenses left.`
                         });
                     }
-                    
+
                     // Process valid rows
                     for (const student of results) {
                         const emailLower = student.email.toLowerCase().trim();
@@ -78,10 +78,10 @@ exports.bulkEnrollEmployees = async (req, res) => {
                             errors.push({ row: student.row, issue: "Email already exists", email: student.email });
                             continue;
                         }
-                        
+
                         // --- UPDATE: Hash the specific password from the CSV ---
                         const hashedPassword = await bcrypt.hash(student.password.trim(), 10);
-                        
+
                         // Create new user
                         await userModel.create({
                             name: student.name.trim(),
@@ -91,10 +91,16 @@ exports.bulkEnrollEmployees = async (req, res) => {
                             companyId: companyId,
                             employeeId: student.employeeId ? student.employeeId.trim() : null
                         });
-                        
+
                         successCount++;
                     }
-
+                    if (successCount > 0) {
+                        await Company.findByIdAndUpdate(
+                            companyId,
+                            { $inc: { 'subscription.usedLicenses': successCount } }
+                        );
+                    }
+                    
                     // Successfully processed, delete the temp file
                     if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
 
@@ -104,7 +110,7 @@ exports.bulkEnrollEmployees = async (req, res) => {
                             totalProcessed: rowCount - 1,
                             successCount,
                             errorCount: errors.length,
-                            errors 
+                            errors
                         }
                     });
 

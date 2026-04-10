@@ -27,7 +27,6 @@ export default function PayoutHistory() {
     const fetchPayouts = async () => {
       try {
         setLoading(true);
-        // Pagination params (page/limit) remove kar diye hain taaki saara data ek saath aaye
         const res = await api.get(`/instructor/payouts?year=${filterYear}`);
         setPayouts(res.data.payouts || []);
       } catch (err) {
@@ -78,35 +77,25 @@ export default function PayoutHistory() {
     <div className="payout-container">
       <style>{`
         .payout-container { padding: 16px; background: ${colors.bg}; min-height: 100vh; font-family: 'Inter', sans-serif; }
-        
         .header-section { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .page-title { margin: 0; font-size: 1.4rem; font-weight: 800; color: ${colors.textMain}; }
-        
         .year-selector { position: relative; display: flex; align-items: center; background: white; border: 1px solid ${colors.border}; border-radius: 8px; padding: 6px 12px; }
         .year-selector select { appearance: none; -webkit-appearance: none; border: none; background: transparent; padding-right: 20px; font-weight: 600; font-size: 0.9rem; outline: none; cursor: pointer; color: ${colors.textMain}; }
         .select-icon { position: absolute; right: 10px; font-size: 0.7rem; color: ${colors.textMuted}; pointer-events: none; }
-
-        /* Desktop Table */
         .table-wrapper { background: white; border-radius: 12px; border: 1px solid ${colors.border}; overflow: hidden; display: none; }
         .payout-table { width: 100%; border-collapse: collapse; }
         .payout-table th { background: #f8fafc; padding: 14px; text-align: left; font-size: 0.75rem; color: ${colors.textMuted}; text-transform: uppercase; border-bottom: 1px solid ${colors.border}; }
         .payout-table td { padding: 14px; border-bottom: 1px solid ${colors.border}; font-size: 0.9rem; color: ${colors.textMain}; }
-
-        /* Mobile List */
         .mobile-list { display: flex; flex-direction: column; gap: 12px; }
         .payout-card { background: white; padding: 16px; border-radius: 12px; border: 1px solid ${colors.border}; }
         .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
         .amount-text { font-size: 1.1rem; font-weight: 800; color: ${colors.textMain}; }
-
-        @media (min-width: 768px) {
-          .payout-container { padding: 30px; }
-          .table-wrapper { display: block; }
-          .mobile-list { display: none; }
-        }
+        .royalty-badge { background: #fef3c7; color: #d97706; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; margin-left: 8px; }
+        @media (min-width: 768px) { .payout-container { padding: 30px; } .table-wrapper { display: block; } .mobile-list { display: none; } }
       `}</style>
 
       <div className="header-section">
-        <h1 className="page-title">Payouts</h1>
+        <h1 className="page-title">Payouts History</h1>
         <div className="year-selector">
           <FaCalendarAlt style={{ marginRight: "8px", color: colors.primary, fontSize: "0.8rem" }} />
           <select value={filterYear} onChange={(e) => setFilterYear(Number(e.target.value))}>
@@ -120,7 +109,6 @@ export default function PayoutHistory() {
         <div style={emptyStateStyle}>No records found for {filterYear}.</div>
       ) : (
         <>
-          {/* Desktop Table View */}
           <div className="table-wrapper">
             <table className="payout-table">
               <thead>
@@ -135,10 +123,13 @@ export default function PayoutHistory() {
                 {payouts.map((p) => (
                   <tr key={p._id}>
                     <td style={{ fontWeight: "500" }}>
-                        {new Date(p.paymentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {new Date(p.paymentDate || p.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
-                    <td style={{ fontWeight: "700" }}>₹{p.instructorEarning.toLocaleString()}</td>
-                    <td>{p.paymentMethod || "Bank Transfer"}</td>
+                    <td style={{ fontWeight: "700" }}>₹{Number(p.instructorEarning || p.amount).toLocaleString()}</td>
+                    <td>
+                      {p.paymentMethod || "Bank Transfer"}
+                      {p.paymentMethod === "Subscription Bounty" && <span className="royalty-badge">ROYALTY</span>}
+                    </td>
                     <td>{getStatusBadge(p.status)}</td>
                   </tr>
                 ))}
@@ -146,22 +137,24 @@ export default function PayoutHistory() {
             </table>
           </div>
 
-          {/* Mobile Card View */}
           <div className="mobile-list">
             {payouts.map((p) => (
               <div key={p._id} className="payout-card">
                 <div className="card-header">
                   <div>
-                    <div className="amount-text">₹{p.instructorEarning.toLocaleString()}</div>
+                    <div className="amount-text">₹{Number(p.instructorEarning || p.amount).toLocaleString()}</div>
                     <div style={{ fontSize: "0.75rem", color: colors.textMuted }}>
-                        {new Date(p.paymentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {new Date(p.paymentDate || p.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </div>
                   </div>
                   {getStatusBadge(p.status)}
                 </div>
                 <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: "10px", display: "flex", justifyContent: "space-between", fontSize: "0.85rem" }}>
                   <span style={{ color: colors.textMuted }}>Method</span>
-                  <span style={{ fontWeight: "600", color: colors.textMain }}>{p.paymentMethod || "Bank Transfer"}</span>
+                  <span style={{ fontWeight: "600", color: colors.textMain }}>
+                    {p.paymentMethod || "Bank Transfer"}
+                    {p.paymentMethod === "Subscription Bounty" && <span className="royalty-badge">ROYALTY</span>}
+                  </span>
                 </div>
               </div>
             ))}
@@ -172,23 +165,5 @@ export default function PayoutHistory() {
   );
 }
 
-const statusBadgeStyle = {
-  padding: "4px 10px",
-  borderRadius: "20px",
-  fontSize: "0.7rem",
-  fontWeight: "700",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "5px",
-  textTransform: "uppercase"
-};
-
-const emptyStateStyle = {
-  textAlign: "center",
-  padding: "60px 20px",
-  color: "#94a3b8",
-  background: "white",
-  borderRadius: "12px",
-  border: "1px solid #e2e8f0",
-  marginTop: "20px"
-};
+const statusBadgeStyle = { padding: "4px 10px", borderRadius: "20px", fontSize: "0.7rem", fontWeight: "700", display: "inline-flex", alignItems: "center", gap: "5px", textTransform: "uppercase" };
+const emptyStateStyle = { textAlign: "center", padding: "60px 20px", color: "#94a3b8", background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", marginTop: "20px" };

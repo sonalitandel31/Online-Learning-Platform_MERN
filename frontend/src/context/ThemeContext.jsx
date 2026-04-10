@@ -10,6 +10,7 @@ export const ThemeProvider = ({ children }) => {
     const [primaryColor, setPrimaryColor] = useState(savedColor);
     const [logoUrl, setLogoUrl] = useState(savedLogo);
 
+    // Is layout effect se screen paint hone se pehle color apply ho jayega
     useEffect(() => {
         document.documentElement.style.setProperty('--bs-primary', primaryColor);
         document.documentElement.style.setProperty('--primary-color', primaryColor);

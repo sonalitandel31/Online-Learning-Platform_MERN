@@ -18,7 +18,9 @@ function Home() {
   const [aiData, setAiData] = useState({
     identifiedWeakSkills: [],
     skillGapFixers: [],
-    nextInPath: []
+    nextInPath: [],
+    studentsAlsoBought: [],
+    nextSteps: []
   });
   const [isAiLoading, setIsAiLoading] = useState(true);
 
@@ -72,7 +74,14 @@ function Home() {
     try {
       const res = await api.get("/courses/recommendations/personalized", { withCredentials: true });
       if (res.data && res.data.success) {
-        setAiData(res.data.data);
+        // ✅ Spread operator use karein taaki agar koi key missing ho toh crash na ho
+        // Aur backend ki 'nextSteps' ko frontend ki 'nextInPath' se map karein
+        setAiData({
+          identifiedWeakSkills: res.data.data.identifiedWeakSkills || [],
+          skillGapFixers: res.data.data.skillGapFixers || [],
+          studentsAlsoBought: res.data.data.studentsAlsoBought || [],
+          nextInPath: res.data.data.nextSteps || res.data.data.nextInPath || []
+        });
       }
     } catch (err) {
       console.error("Error fetching AI recommendations", err);
@@ -223,53 +232,69 @@ function Home() {
       </div>
 
       {/* --- NAYA AI PERSONALIZED LEARNING SECTION --- */}
-      {isLoggedIn && !isAiLoading && (aiData.identifiedWeakSkills.length > 0 || aiData.nextInPath.length > 0 || aiData.skillGapFixers.length > 0) && (
-        <section className="container py-5 mt-4" style={{ backgroundColor: BRAND_COLOR_LIGHT, borderRadius: "24px", border: `1px solid ${BRAND_COLOR}` }}>
-          <div className="d-flex align-items-center mb-4 px-2">
-            <div className="p-3 rounded-circle me-3" style={{ background: "white", color: BRAND_COLOR }}>
-              <i className="fa fa-brain fa-2x"></i>
-            </div>
-            <div>
-              <h2 className="fw-bold mb-0 text-dark">Your Smart Learning Path</h2>
-              <p className="text-muted mb-0">AI-driven recommendations based on your recent progress</p>
-            </div>
-          </div>
-
-          {/* Weak Skills Tags */}
-          {aiData.identifiedWeakSkills.length > 0 && (
-            <div className="mb-4 mx-2 p-3 bg-white rounded-3 shadow-sm border-0 d-flex flex-wrap align-items-center">
-              <span className="fw-bold me-3 text-dark mb-2 mb-md-0">Focus Areas to Improve:</span>
+      {isLoggedIn && !isAiLoading && (
+        (aiData?.identifiedWeakSkills?.length > 0) ||
+        (aiData?.skillGapFixers?.length > 0) ||
+        (aiData?.studentsAlsoBought?.length > 0)
+      ) && (
+          <section className="container py-5 mt-4" style={{ backgroundColor: BRAND_COLOR_LIGHT, borderRadius: "24px", border: `1px solid ${BRAND_COLOR}` }}>
+            <div className="d-flex align-items-center mb-4 px-2">
+              <div className="p-3 rounded-circle me-3" style={{ background: "white", color: BRAND_COLOR }}>
+                <i className="fa fa-brain fa-2x"></i>
+              </div>
               <div>
-                {aiData.identifiedWeakSkills.map((skill, index) => (
-                  <span key={index} className="badge rounded-pill me-2 mb-2 px-3 py-2" style={{ backgroundColor: "#ffebee", color: "#d32f2f", border: "1px solid #ffcdd2", fontWeight: "600" }}>
-                    <i className="fa fa-arrow-trend-up me-1"></i> {skill}
-                  </span>
-                ))}
+                <h2 className="fw-bold mb-0 text-dark">Your Smart Learning Path</h2>
+                <p className="text-muted mb-0">AI-driven recommendations based on your recent progress</p>
               </div>
             </div>
-          )}
 
-          {/* Skill Gap Fixers Courses */}
-          {aiData.skillGapFixers.length > 0 && (
-            <div className="mb-5 px-2">
-              <h5 className="fw-bold mb-3" style={{ color: "#444" }}>Recommended to strengthen your weak skills</h5>
-              <div className="row">
-                {aiData.skillGapFixers.map(course => <CourseCard key={`gap-${course._id}`} course={course} />)}
+            {aiData?.identifiedWeakSkills?.length > 0 && (
+              <div className="mb-4 mx-2 p-3 bg-white rounded-3 shadow-sm border-0 d-flex flex-wrap align-items-center">
+                <span className="fw-bold me-3 text-dark mb-2 mb-md-0">Focus Areas to Improve:</span>
+                <div>
+                  {/* ✅ Add || [] before .map */}
+                  {(aiData.identifiedWeakSkills || []).map((skill, index) => (
+                    <span key={index} className="badge rounded-pill me-2 mb-2 px-3 py-2" style={{ backgroundColor: "#ffebee", color: "#d32f2f", border: "1px solid #ffcdd2", fontWeight: "600" }}>
+                      <i className="fa fa-arrow-trend-up me-1"></i> {skill}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Next in Path Courses */}
-          {aiData.nextInPath.length > 0 && (
-            <div className="px-2">
-              <h5 className="fw-bold mb-3" style={{ color: "#444" }}>Next steps for your career goals</h5>
-              <div className="row">
-                {aiData.nextInPath.map(course => <CourseCard key={`path-${course._id}`} course={course} />)}
+            {/* Skill Gap Fixers */}
+            {aiData?.skillGapFixers?.length > 0 && (
+              <div className="mb-5 px-2">
+                <h5 className="fw-bold mb-3" style={{ color: "#444" }}>Recommended to strengthen your weak skills</h5>
+                <div className="row">
+                  {(aiData.skillGapFixers || []).map(course => <CourseCard key={`gap-${course._id}`} course={course} />)}
+                </div>
               </div>
-            </div>
-          )}
-        </section>
-      )}
+            )}
+
+            {/* Next in Path */}
+            {aiData?.nextInPath?.length > 0 && (
+              <div className="px-2 mb-5">
+                <h5 className="fw-bold mb-3" style={{ color: "#444" }}>Next steps for your career goals</h5>
+                <div className="row">
+                  {(aiData.nextInPath || []).map(course => <CourseCard key={`path-${course._id}`} course={course} />)}
+                </div>
+              </div>
+            )}
+
+            {/* Students Also Bought */}
+            {aiData?.studentsAlsoBought?.length > 0 && (
+              <div className="mb-5 px-2">
+                <h5 className="fw-bold mb-3" style={{ color: "#444" }}>Trending Among Your Peers 👥</h5>
+                <div className="row">
+                  {(aiData.studentsAlsoBought || []).map(course => (
+                    <CourseCard key={`peer-${course._id}`} course={course} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
 
       {/* Recommended Section */}
       {isLoggedIn && recommendedCourses.length > 0 && (

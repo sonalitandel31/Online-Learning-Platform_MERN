@@ -499,7 +499,6 @@ const downloadReceipt = async (req, res) => {
   }
 };
 
-// ---------- NAYA FUNCTION: Certificate / Single Enrollment Fetch ----------
 const getEnrollmentById = async (req, res) => {
   try {
     const { id } = req.params;

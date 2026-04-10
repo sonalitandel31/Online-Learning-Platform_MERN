@@ -8,6 +8,8 @@ const Instructor = require("../models/instructorModel");
 const Student = require("../models/studentModel");
 const SystemSettings = require("../models/SystemSettings");
 const courseRequestModel = require("../models/courseRequestModel");
+const Payout = require("../models/payoutModel");
+const AnalyticsEvent = require("../models/AnalyticsEventModel");
 
 const multer = require("multer");
 const path = require("path");
@@ -46,7 +48,7 @@ exports.dashboard = async (req, res) => {
         totalStudents,
         totalCourses,
         pendingApprovals,
-        revenue, 
+        revenue,
       },
       chartData: { monthlyUsers, monthlyEnrollments },
       user,
@@ -84,7 +86,7 @@ exports.addAdmin = [
       const newAdmin = new User({
         name,
         email,
-        password, 
+        password,
         role: "admin",
         profilePic: req.file ? "/" + req.file.path : "/uploads/default.png",
       });
@@ -156,15 +158,15 @@ exports.getStudentById = async (req, res) => {
 exports.getAllCourses = async (req, res) => {
   try {
     const courses = await Course.find()
-      .populate("instructor", "name email")       
-      .populate("category", "name")              
+      .populate("instructor", "name email")
+      .populate("category", "name")
       .populate({
         path: "lessons",
         select: "title contentType fileUrl description isPreviewFree",
       })
       .populate({
         path: "exams",
-        select: "title duration questions attempts", 
+        select: "title duration questions attempts",
       })
       .sort({ createdAt: -1 });
 
@@ -179,8 +181,8 @@ exports.getPendingCourses = async (req, res) => {
     const courses = await Course.find({ status: "pendingApproval" })
       .populate("instructor", "name email")
       .populate("category", "name")
-      .populate("lessons", "title contentType") 
-      .populate("exams", "title duration");   
+      .populate("lessons", "title contentType")
+      .populate("exams", "title duration");
 
     res.json(courses);
   } catch (err) {
@@ -224,7 +226,7 @@ exports.getRejectedCourses = async (req, res) => {
       .populate("category", "name")
       .populate("lessons", "title contentType")
       .populate("exams", "title duration");
-      
+
     res.json(courses);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -290,19 +292,70 @@ exports.rejectCourse = async (req, res) => {
 
 exports.getRevenueSummary = async (req, res) => {
   try {
-    const payments = await Payment.find({ status: "completed" }).sort({ paymentDate: -1 });
+    // 1. Sort ascending (1) to ensure months are processed in chronological order
+    const payments = await Payment.find({ status: "completed" }).sort({ paymentDate: 1 });
 
     const totalRevenue = payments.reduce((s, p) => s + (p.amount || 0), 0);
     const totalInstructorEarning = payments.reduce((s, p) => s + (p.instructorEarning || 0), 0);
     const platformCommission = totalRevenue - totalInstructorEarning;
 
-    const monthlyData = {};
+    // 2. Map data chronologically
+    const monthlyMap = new Map();
     payments.forEach(p => {
-      const month = p.paymentDate ? p.paymentDate.toLocaleString("default", { month: "short", year: "numeric" }) : "Unknown";
-      monthlyData[month] = (monthlyData[month] || 0) + (p.amount || 0);
+      if (!p.paymentDate) return;
+      const dateStr = p.paymentDate.toLocaleString("default", { month: "short", year: "numeric" });
+      monthlyMap.set(dateStr, (monthlyMap.get(dateStr) || 0) + (p.amount || 0));
     });
 
-    res.json({ totalRevenue, totalInstructorEarning, platformCommission, monthlyData });
+    const monthlyData = Object.fromEntries(monthlyMap);
+    const monthsArray = Array.from(monthlyMap.keys());
+    const revenueArray = Array.from(monthlyMap.values());
+
+    // ==========================================
+    // 🤖 AI PREDICTION LOGIC (Linear Regression)
+    // ==========================================
+    const recentRevenues = revenueArray.slice(-6); // Analyze up to last 6 months
+    let forecastedRevenue = 0;
+    let forecastedMonth = "N/A";
+
+    if (recentRevenues.length >= 2) {
+      const n = recentRevenues.length;
+      let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+
+      // Calculate slopes and trends
+      for (let i = 0; i < n; i++) {
+        const x = i + 1;
+        const y = recentRevenues[i];
+        sumX += x;
+        sumY += y;
+        sumXY += x * y;
+        sumXX += x * x;
+      }
+
+      const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+      const intercept = (sumY - slope * sumX) / n;
+
+      // Predict for the NEXT month (x = n + 1)
+      forecastedRevenue = Math.max(0, slope * (n + 1) + intercept); // Avoid negative predictions
+    } else if (recentRevenues.length === 1) {
+      forecastedRevenue = recentRevenues[0]; // Not enough data, assume same as this month
+    }
+
+    // Determine the name of the next month (Always based on current real-world date)
+    const currentDate = new Date(); // Aaj ki date (April) uthayega
+    currentDate.setMonth(currentDate.getMonth() + 1); // Usme 1 mahina add karega
+    forecastedMonth = currentDate.toLocaleString("default", { month: "short", year: "numeric" }); // May 2026 banayega
+
+    res.json({
+      totalRevenue,
+      totalInstructorEarning,
+      platformCommission,
+      monthlyData,
+      forecast: {
+        expectedRevenue: forecastedRevenue,
+        month: forecastedMonth
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -351,17 +404,29 @@ exports.getPayouts = async (req, res) => {
   }
 };
 
+// Is function ko replace karein (Line 389 ke aas paas)
 exports.getTransactions = async (req, res) => {
   try {
-    const txns = await Payment.find()
-      .populate("student", "name email")
-      .populate("instructor", "name email")
-      .populate("course", "title")
-      .sort({ paymentDate: -1 });
+    const txns = await Payment.find({
+      $or: [
+        // 1. Jo direct sale hain (Jisme student ne pay kiya) wo hamesha dikhao
+        { paymentMethod: { $nin: ["Subscription Bounty", "Subscription Pool"] } },
+        
+        // 2. Jo completion rewards (Bounty) hain, unhe tabhi dikhao jab Admin 'Pay' kar de
+        { 
+          paymentMethod: { $in: ["Subscription Bounty", "Subscription Pool"] }, 
+          payoutStatus: "processed" 
+        }
+      ]
+    })
+    .populate("student", "name email")
+    .populate("instructor", "name email")
+    .populate("course", "title")
+    .sort({ paymentDate: -1 });
 
     res.json(txns);
   } catch (err) {
-    console.error(err);
+    console.error("Transaction Fetch Error:", err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -391,7 +456,7 @@ exports.getEnrollmentStats = async (req, res) => {
 
     const labels = monthlyAgg.map(m => m._id);
     const values = monthlyAgg.map(m => m.count);
-    
+
     const totalEnrollments = await Enrollment.countDocuments(matchQuery);
 
     const now = new Date();
@@ -478,66 +543,64 @@ exports.getCoursePerformance = async (req, res) => {
   }
 };
 
-// 1. Fetch all requests with detailed population
 exports.getAllCourseRequests = async (req, res) => {
-    try {
-        const requests = await courseRequestModel.find()
-            .populate('companyId', 'companyName domain')
-            .populate('hrId', 'name email')
-            .populate('assignedInstructor', 'name email') // ✅ Show who is working on it
-            .sort({ createdAt: -1 });
+  try {
+    const requests = await courseRequestModel.find()
+      .populate('companyId', 'companyName domain')
+      .populate('hrId', 'name email')
+      .populate('assignedInstructor', 'name email') // ✅ Show who is working on it
+      .sort({ createdAt: -1 });
 
-        res.status(200).json({ success: true, data: requests });
-    } catch (error) {
-        console.error("Fetch B2B Requests Error:", error);
-        res.status(500).json({ success: false, message: error.message });
-    }
+    res.status(200).json({ success: true, data: requests });
+  } catch (error) {
+    console.error("Fetch B2B Requests Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
-// GET /admin/instructors-list
 exports.getInstructorsList = async (req, res) => {
-    try {
-        // Hum sirf wo users nikal rahe hain jinka role 'instructor' hai
-        const instructors = await User.find({ role: 'instructor' }, 'name email profilePic')
-            .lean();
+  try {
+    // Hum sirf wo users nikal rahe hain jinka role 'instructor' hai
+    const instructors = await User.find({ role: 'instructor' }, 'name email profilePic')
+      .lean();
 
-        res.status(200).json({ success: true, data: instructors });
-    } catch (error) {
-        console.error("Get Instructors Error:", error);
-        res.status(500).json({ success: false, message: "Failed to fetch instructors" });
-    }
+    res.status(200).json({ success: true, data: instructors });
+  } catch (error) {
+    console.error("Get Instructors Error:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch instructors" });
+  }
 };
 
 exports.assignInstructorToRequest = async (req, res) => {
-    try {
-        const { requestId } = req.params;
-        const { instructorId, adminNotes } = req.body;
+  try {
+    const { requestId } = req.params;
+    const { instructorId, adminNotes } = req.body;
 
-        if (!instructorId) {
-            return res.status(400).json({ success: false, message: "Please select an instructor" });
-        }
+    if (!instructorId) {
+      return res.status(400).json({ success: false, message: "Please select an instructor" });
+    }
 
-        // 1. Update the request in database
-        const updatedRequest = await courseRequestModel.findByIdAndUpdate(
-            requestId,
-            { 
-                assignedInstructor: instructorId,
-                status: 'in-development', 
-                adminNotes: adminNotes || "Assigned to instructor for development."
-            },
-            { new: true }
-        )
-        .populate('assignedInstructor', 'name email') // Instructor ki detail
-        .populate('companyId', 'companyName');        // Company ki detail
+    // 1. Update the request in database
+    const updatedRequest = await courseRequestModel.findByIdAndUpdate(
+      requestId,
+      {
+        assignedInstructor: instructorId,
+        status: 'in-development',
+        adminNotes: adminNotes || "Assigned to instructor for development."
+      },
+      { new: true }
+    )
+      .populate('assignedInstructor', 'name email') // Instructor ki detail
+      .populate('companyId', 'companyName');        // Company ki detail
 
-        if (!updatedRequest) {
-            return res.status(404).json({ success: false, message: "Request not found" });
-        }
+    if (!updatedRequest) {
+      return res.status(404).json({ success: false, message: "Request not found" });
+    }
 
-        // 2. ✉️ NAYA CODE: Instructor ko Email Bhejna ✉️
-        if (updatedRequest.assignedInstructor && updatedRequest.assignedInstructor.email) {
-            const subject = `New Corporate Project Assigned: ${updatedRequest.topic}`;
-            const message = `
+    // 2. ✉️ NAYA CODE: Instructor ko Email Bhejna ✉️
+    if (updatedRequest.assignedInstructor && updatedRequest.assignedInstructor.email) {
+      const subject = `New Corporate Project Assigned: ${updatedRequest.topic}`;
+      const message = `
                 <h3>Hello ${updatedRequest.assignedInstructor.name},</h3>
                 <p>You have been assigned a new <b>Corporate Training Project</b> by the Admin.</p>
                 <hr/>
@@ -551,48 +614,48 @@ exports.assignInstructorToRequest = async (req, res) => {
                 <p>Best Regards,<br/>LMS Admin Team</p>
             `;
 
-            try {
-                await sendEmail({
-                    email: updatedRequest.assignedInstructor.email,
-                    subject: subject,
-                    message: message
-                });
-                console.log("Assignment email sent to instructor:", updatedRequest.assignedInstructor.email);
-            } catch (emailErr) {
-                console.error("Email bhejte time error aayi, par assignment ho gaya:", emailErr);
-            }
-        }
-
-        // 3. Send success response to frontend
-        res.status(200).json({ 
-            success: true, 
-            message: `Request assigned to ${updatedRequest.assignedInstructor.name} and email sent!`,
-            data: updatedRequest 
+      try {
+        await sendEmail({
+          email: updatedRequest.assignedInstructor.email,
+          subject: subject,
+          message: message
         });
-    } catch (error) {
-        console.error("Assign Instructor Error:", error);
-        res.status(500).json({ success: false, message: error.message });
+        console.log("Assignment email sent to instructor:", updatedRequest.assignedInstructor.email);
+      } catch (emailErr) {
+        console.error("Email bhejte time error aayi, par assignment ho gaya:", emailErr);
+      }
     }
+
+    // 3. Send success response to frontend
+    res.status(200).json({
+      success: true,
+      message: `Request assigned to ${updatedRequest.assignedInstructor.name} and email sent!`,
+      data: updatedRequest
+    });
+  } catch (error) {
+    console.error("Assign Instructor Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 exports.updateRequestStatus = async (req, res) => {
-    try {
-        const { requestId } = req.params;
-        const { status, adminNotes } = req.body;
+  try {
+    const { requestId } = req.params;
+    const { status, adminNotes } = req.body;
 
-        // ✅ Sudhaar 1: 'courseRequestModel' use karein jo upar import kiya hai
-        const updated = await courseRequestModel.findByIdAndUpdate(
-            requestId,
-            { status, adminNotes },
-            { new: true }
-        )
-        .populate('hrId', 'email name') // ✅ Sudhaar 2: 'hrId' populate karein
-        .populate('companyId', 'companyName');
+    // ✅ Sudhaar 1: 'courseRequestModel' use karein jo upar import kiya hai
+    const updated = await courseRequestModel.findByIdAndUpdate(
+      requestId,
+      { status, adminNotes },
+      { new: true }
+    )
+      .populate('hrId', 'email name') // ✅ Sudhaar 2: 'hrId' populate karein
+      .populate('companyId', 'companyName');
 
-        if (updated) {
-            const subject = `Update on your Course Request: ${updated.topic}`;
-            // ✅ Sudhaar 3: 'updated.hrId.name' use karein
-            const message = `
+    if (updated) {
+      const subject = `Update on your Course Request: ${updated.topic}`;
+      // ✅ Sudhaar 3: 'updated.hrId.name' use karein
+      const message = `
                 <h3>Hello ${updated.hrId.name},</h3>
                 <p>Your request for the course <b>"${updated.topic}"</b> has been updated to: <b>${status}</b>.</p>
                 <p><b>Admin Notes:</b> ${adminNotes || 'No additional notes.'}</p>
@@ -600,42 +663,121 @@ exports.updateRequestStatus = async (req, res) => {
                 <p>Regards,<br/>LMS Team</p>
             `;
 
-            try {
-                await sendEmail({
-                    email: updated.hrId.email,
-                    subject: subject,
-                    message: message
-                });
-            } catch (err) {
-                console.error("Email send nahi ho paya.");
-            }
-        }
-
-        res.status(200).json({ success: true, message: "Status updated!", data: updated });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+      try {
+        await sendEmail({
+          email: updated.hrId.email,
+          subject: subject,
+          message: message
+        });
+      } catch (err) {
+        console.error("Email send nahi ho paya.");
+      }
     }
+
+    res.status(200).json({ success: true, message: "Status updated!", data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 exports.exportRequestsToCSV = async (req, res) => {
-    try {
-        // ✅ Sudhaar 4: 'hrId' aur correct model use karein
-        const requests = await courseRequestModel.find()
-            .populate('companyId', 'companyName')
-            .populate('hrId', 'name'); 
+  try {
+    // ✅ Sudhaar 4: 'hrId' aur correct model use karein
+    const requests = await courseRequestModel.find()
+      .populate('companyId', 'companyName')
+      .populate('hrId', 'name');
 
-        let csvContent = "Company,Topic,Category,Trainees,RequestedBy,Status,Date\n";
+    let csvContent = "Company,Topic,Category,Trainees,RequestedBy,Status,Date\n";
 
-        requests.forEach(req => {
-            const date = new Date(req.createdAt).toLocaleDateString();
-            // ✅ Sudhaar 5: 'req.hrId?.name' use karein
-            csvContent += `"${req.companyId?.companyName}","${req.topic}","${req.category}",${req.expectedEmployees},"${req.hrId?.name}","${req.status}",${date}\n`;
-        });
+    requests.forEach(req => {
+      const date = new Date(req.createdAt).toLocaleDateString();
+      // ✅ Sudhaar 5: 'req.hrId?.name' use karein
+      csvContent += `"${req.companyId?.companyName}","${req.topic}","${req.category}",${req.expectedEmployees},"${req.hrId?.name}","${req.status}",${date}\n`;
+    });
 
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename=course_requests.csv');
-        res.status(200).send(csvContent);
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Export failed" });
-    }
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=course_requests.csv');
+    res.status(200).send(csvContent);
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Export failed" });
+  }
+};
+
+exports.getPendingPayouts = async (req, res) => {
+  try {
+    const pendingPayments = await Payment.aggregate([
+      // 🔥 UPDATE: Sirf wahi dikhao jo abhi tak pay (processed) nahi hue hain
+      { $match: { status: "completed", payoutStatus: { $ne: "processed" } } },
+      {
+        $group: {
+          _id: "$instructor",
+          totalAmount: { $sum: { 
+            $cond: [
+              { $in: ["$paymentMethod", ["Subscription Bounty", "Subscription Pool"]] },
+              "$amount",
+              "$instructorEarning"
+            ] 
+          }},
+          paymentIds: { $push: "$_id" },
+          // Pata chal sake ki isme subscription ka paisa hai ya nahi
+          hasBounty: { 
+            $max: { 
+              $cond: [{ $eq: ["$paymentMethod", "Subscription Bounty"] }, 1, 0] 
+            } 
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "instructorDetails"
+        }
+      },
+      { $unwind: "$instructorDetails" }
+    ]);
+
+    const formattedPayouts = pendingPayments.map(p => ({
+      instructorId: p._id,
+      name: p.instructorDetails.name,
+      email: p.instructorDetails.email,
+      amount: p.totalAmount,
+      paymentIds: p.paymentIds,
+      // Frontend ke liye flag
+      paymentMethod: p.hasBounty ? "Subscription Bounty" : "Direct Sale"
+    }));
+
+    res.json({ success: true, payouts: formattedPayouts });
+  } catch (error) {
+    console.error("Error fetching pending payouts:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+exports.processPayout = async (req, res) => {
+  try {
+    const { instructorId, amount, transactionId, paymentIds } = req.body;
+
+    // 1. Ek naya receipt record (Payout) create karo
+    const newPayout = await Payout.create({
+      instructor: instructorId,
+      amount: amount,
+      month: new Date().getMonth() + 1,
+      year: new Date().getFullYear(),
+      transactionId: transactionId,
+      status: "completed"
+    });
+
+    // 2. Un saari Payments ka status "processed" kar do taaki dobara na dikhe
+    await Payment.updateMany(
+      { _id: { $in: paymentIds } },
+      { $set: { payoutStatus: "processed" } }
+    );
+
+    res.json({ success: true, message: "Payout successful!", payout: newPayout });
+  } catch (error) {
+    console.error("Error processing payout:", error);
+    res.status(500).json({ success: false, message: "Failed to process payout" });
+  }
 };

@@ -1,270 +1,251 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-    FaChalkboardTeacher, FaChartLine, FaSyncAlt,
-    FaLightbulb, FaArrowDown, FaRegClock, FaLayerGroup, FaInfoCircle
+import { useEffect, useState } from "react";
+import { 
+  FaChalkboardTeacher, FaExclamationCircle, FaSyncAlt, 
+  FaCheckCircle, FaLightbulb, FaRobot, FaPlayCircle, FaFilePdf, FaArrowDown 
 } from "react-icons/fa";
 import api from "../../../../api/api";
 import { motion, AnimatePresence } from "framer-motion";
 
+// --- Beautiful Circular Progress Component ---
+const CircularProgress = ({ percentage, color, size = 60 }) => {
+  const strokeWidth = 6;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  // Ensure percentage is capped between 0 and 100 for visual accuracy
+  const displayPercent = Math.min(100, Math.max(0, percentage));
+  const offset = circumference - (displayPercent / 100) * circumference;
+
+  return (
+    <div style={{ position: "relative", width: size, height: size, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size/2} cy={size/2} r={radius} fill="transparent" stroke="#f1f5f9" strokeWidth={strokeWidth} />
+        <circle cx={size/2} cy={size/2} r={radius} fill="transparent" stroke={color} strokeWidth={strokeWidth} 
+          strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" 
+          style={{ transition: "stroke-dashoffset 1s ease-in-out" }} 
+        />
+      </svg>
+      <span style={{ position: "absolute", fontSize: "0.8rem", fontWeight: "800", color: "#1e293b" }}>
+        {displayPercent}%
+      </span>
+    </div>
+  );
+};
+
 export default function LessonDropoffAnalytics() {
-    const [courses, setCourses] = useState([]);
-    const [selectedCourseId, setSelectedCourseId] = useState("");
-    const [rows, setRows] = useState([]);
-    const [suggestions, setSuggestions] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [loadingData, setLoadingData] = useState(false);
-    const [err, setErr] = useState("");
+  const [courses, setCourses] = useState([]);
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [insights, setInsights] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingData, setLoadingData] = useState(false);
+  const [err, setErr] = useState("");
 
-    const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token");
 
-    const colors = {
-        primary: "#6f42c1",
-        primaryLight: "#f3e8ff",
-        bg: "#f8fafc",
-        border: "#e2e8f0",
-        textMain: "#1e293b",
-        textMuted: "#64748b",
-        card: "#ffffff",
-        danger: "#ef4444",
-        warning: "#f59e0b",
-        success: "#10b981"
+  const colors = {
+    primary: "#6f42c1",
+    bg: "#f4f7fb",
+    border: "#e2e8f0",
+    textMain: "#0f172a",
+    textMuted: "#64748b",
+    card: "#ffffff",
+    danger: "#ef4444",
+    warning: "#f59e0b",
+    success: "#10b981"
+  };
+
+  const fetchInstructorCourses = async () => {
+    const candidates = [
+      "/instructor/courses", "/instructor/courses?status=approved",
+      "/instructor-dashboard/instructor_courses", "/instructor/instructor_courses", "/instructor/my-courses",
+    ];
+    for (const url of candidates) {
+      try {
+        const res = await api.get(url, { headers: { Authorization: `Bearer ${token}` } });
+        const list = res.data?.courses || res.data?.myCourses || (Array.isArray(res.data) ? res.data : null);
+        if (Array.isArray(list)) return list;
+      } catch {}
+    }
+    throw new Error("No instructor courses endpoint matched.");
+  };
+
+  const fetchDropoffData = async (courseId) => {
+    if (!courseId) return;
+    try {
+      setLoadingData(true);
+      setErr("");
+      const res = await api.get(`/analytics/dropoff/course/${courseId}`, { headers: { Authorization: `Bearer ${token}` } });
+      setInsights(res.data?.insights || []);
+    } catch (e) {
+      setErr("Failed to load insights. Ensure backend is running.");
+      setInsights([]);
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        setLoading(true);
+        const list = await fetchInstructorCourses();
+        const normalized = list.map((c) => ({ _id: c._id, title: c.title || c.courseTitle || "Untitled" })).filter((c) => c._id);
+        setCourses(normalized);
+        const firstId = normalized[0]?._id || "";
+        setSelectedCourseId(firstId);
+        if (firstId) await fetchDropoffData(firstId);
+      } catch (e) {
+        setErr("Could not load courses.");
+      } finally {
+        setLoading(false);
+      }
     };
+    init();
+  }, [token]);
 
-    // --- Core Logic remains unchanged ---
-    const fetchInstructorCourses = async () => {
-        const candidates = [
-            "/instructor/courses",
-            "/instructor/courses?status=approved",
-            "/instructor-dashboard/instructor_courses",
-            "/instructor/instructor_courses",
-            "/instructor/my-courses",
-        ];
+  useEffect(() => {
+    if (selectedCourseId) fetchDropoffData(selectedCourseId);
+  }, [selectedCourseId]);
 
-        for (const url of candidates) {
-            try {
-                const res = await api.get(url, { headers: { Authorization: `Bearer ${token}` } });
-                const list = res.data?.courses || res.data?.myCourses || (Array.isArray(res.data) ? res.data : null);
-                if (Array.isArray(list)) return list;
-            } catch { }
-        }
-        throw new Error("No instructor courses endpoint matched.");
-    };
+  const getTheme = (status) => {
+    switch (status) {
+      case "CRITICAL": return { color: colors.danger, bg: "#fef2f2", light: "#fee2e2", icon: <FaExclamationCircle />, label: "Immediate Action" };
+      case "WARNING": return { color: colors.warning, bg: "#fffbeb", light: "#fef3c7", icon: <FaExclamationCircle />, label: "Needs Improvement" };
+      case "HEALTHY": return { color: colors.success, bg: "#ecfdf5", light: "#d1fae5", icon: <FaCheckCircle />, label: "Excellent Retention" };
+      default: return { color: colors.textMuted, bg: "#f8fafc", light: "#f1f5f9", icon: <FaLightbulb />, label: "Gathering Data" };
+    }
+  };
 
-    const fetchDropoff = async (courseId) => {
-        if (!courseId) return;
-        try {
-            setLoadingData(true);
-            setErr("");
-            const res = await api.get(`/analytics/insights/course/${courseId}/lesson-dropoff?days=30`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            setRows(Array.isArray(res.data?.rows) ? res.data.rows : []);
-            setSuggestions(Array.isArray(res.data?.suggestions) ? res.data.suggestions : []);
-        } catch (e) {
-            setErr("Failed to load lesson drop-off analytics.");
-        } finally {
-            setLoadingData(false);
-        }
-    };
+  if (loading) return (
+    <div className="d-flex justify-content-center align-items-center vh-100" style={{ background: colors.bg }}>
+      <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}></div>
+    </div>
+  );
 
-    useEffect(() => {
-        const init = async () => {
-            try {
-                setLoading(true);
-                const list = await fetchInstructorCourses();
-                const normalized = list
-                    .map((c) => ({ _id: c._id, title: c.title || c.courseTitle || "Untitled" }))
-                    .filter((c) => c._id);
-                setCourses(normalized);
-                const firstId = normalized[0]?._id || "";
-                setSelectedCourseId(firstId);
-                if (firstId) await fetchDropoff(firstId);
-            } catch (e) {
-                setErr("Could not load instructor courses.");
-            } finally {
-                setLoading(false);
-            }
-        };
-        init();
-    }, [token]);
-
-    useEffect(() => {
-        if (selectedCourseId) fetchDropoff(selectedCourseId);
-    }, [selectedCourseId]);
-
-    const worst = useMemo(() => rows.filter((r) => r.opens >= 1).slice(0, 50), [rows]);
-
-    if (loading) return (
-        <div className="d-flex justify-content-center align-items-center vh-100 bg-white">
-            <div className="spinner-grow text-primary" role="status"></div>
-        </div>
-    );
-
-    return (
-        <div style={{ padding: "clamp(16px, 4vw, 32px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-            <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
-
-                {/* Header Section */}
-                <header style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem", gap: "1.5rem" }}>
-                    <div className="text-start">
-                        <h2 style={{ margin: 0, color: colors.textMain, fontWeight: 900, letterSpacing: "-1px" }}>
-                            Lesson Drop-Off
-                        </h2>
-                        <p style={{ margin: "4px 0 0", color: colors.textMuted, fontWeight: 500 }}>
-                            Track content friction: Lesson opens vs completions (last 30 days)
-                        </p>
-                    </div>
-                    <div>
-                        <button
-                            onClick={() => fetchDropoff(selectedCourseId)}
-                            disabled={loadingData || !selectedCourseId}
-                            style={{
-                                background: "linear-gradient(135deg, #6f42c1 0%, #8553e8 100%)",
-                                color: "#fff",
-                                borderRadius: "14px",
-                                padding: "12px 28px",
-                                fontWeight: "700",
-                                border: "none",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "10px",
-                                boxShadow: "0 10px 20px -5px rgba(111, 66, 193, 0.4)",
-                                transition: "all 0.3s ease"
-                            }}
-                        >
-                            <FaSyncAlt className={loadingData ? "fa-spin" : ""} />
-                            {loadingData ? "Updating..." : "Refresh Analytics"}
-                        </button>
-                    </div>
-                </header>
-
-                {/* Filter Section */}
-                <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: "24px", padding: "24px", marginBottom: "24px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02)" }}>
-                    <div className="row g-3 align-items-center">
-                        <div className="col-auto">
-                            <div style={{ width: "56px", height: "56px", borderRadius: "16px", background: colors.primaryLight, display: "flex", alignItems: "center", justifyContent: "center", color: colors.primary, fontSize: "24px" }}>
-                                <FaChalkboardTeacher />
-                            </div>
-                        </div>
-                        <div className="col text-start">
-                            <h6 className="m-0 fw-bold text-dark">Analytics Context</h6>
-                            <p className="m-0 text-muted small">Viewing drop-off data for course content</p>
-                        </div>
-                        <div className="col-12 col-lg-5">
-                            <select className="form-select border-0 bg-light fw-bold py-3" value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)} style={{ borderRadius: "14px", cursor: "pointer" }}>
-                                {courses.map((c) => <option key={c._id} value={c._id}>{c.title}</option>)}
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="row g-4">
-                    {/* Optimization Tips - Strictly Left Aligned */}
-                    <div className="col-12 col-lg-4">
-                        <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: "24px", padding: "24px", height: "100%", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.04)" }}>
-                            <div style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start", // Left Aligned
-                                gap: "12px",
-                                marginBottom: "1.5rem"
-                            }}>
-                                <div style={{ color: colors.primary, background: colors.primaryLight, padding: "8px", borderRadius: "10px", display: "flex" }}>
-                                    <FaLightbulb />
-                                </div>
-                                <h5 className="m-0 fw-bold text-dark" style={{ letterSpacing: "-0.5px" }}>Optimization Tips</h5>
-                            </div>
-
-                            {suggestions.length === 0 ? (
-                                <div className="text-start py-4">
-                                    <p className="text-muted small">Insufficient data to generate optimization strategies at this time.</p>
-                                </div>
-                            ) : (
-                                <div className="d-flex flex-column gap-3">
-                                    {suggestions.map((s, i) => (
-                                        <div key={s.lessonId + i} className="text-start" style={{ padding: "16px", background: "#f8fafc", borderRadius: "16px", borderLeft: `4px solid ${colors.primary}` }}>
-                                            <div className="fw-bold text-dark mb-1 small">{s.lessonTitle}</div>
-                                            <div className="text-muted" style={{ fontSize: "12px", lineHeight: "1.5" }}>{s.message}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Table Section */}
-                    <div className="col-12 col-lg-8">
-                        <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: "24px", overflow: "hidden", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.05)" }}>
-                            <div style={{
-                                padding: "24px",
-                                borderBottom: `1px solid ${colors.border}`,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start",
-                                gap: "12px"
-                            }}>
-                                <FaChartLine className="text-primary" />
-                                <h5 className="m-0 fw-bold text-dark">Lesson Performance</h5>
-
-                                <div className="badge bg-light text-muted fw-bold small rounded-pill px-3 py-2 border ms-auto">
-                                    Last 30 Days
-                                </div>
-                            </div>
-
-                            <div className="table-responsive">
-                                <table className="table table-hover align-middle mb-0">
-                                    <thead style={{ background: "#fcfcfd" }}>
-                                        <tr style={{ color: colors.textMuted, fontSize: "11px", textTransform: "uppercase", fontWeight: "800" }}>
-                                            <th className="ps-4 py-4 text-start">Content</th>
-                                            <th className="text-center">Opens</th>
-                                            <th className="text-center">Drops</th>
-                                            <th className="text-center" style={{ minWidth: "120px" }}>Health</th>
-                                            <th className="pe-4 text-end">Last Event</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {worst.map((r) => (
-                                            <tr key={r.lessonId}>
-                                                <td className="ps-4 text-start">
-                                                    <div className="fw-bold text-dark mb-0">{r.lessonTitle || "Untitled"}</div>
-                                                    <div style={{ fontSize: "10px" }} className="text-muted">{r.lessonId}</div>
-                                                </td>
-                                                <td className="text-center">
-                                                    <span className="badge bg-light text-dark border rounded-pill px-3">{r.opens}</span>
-                                                </td>
-                                                <td className="text-center">
-                                                    <span style={{ fontWeight: "800", color: (r.dropRate || 0) > 0.4 ? colors.danger : colors.textMain }}>
-                                                        {Math.round((r.dropRate || 0) * 100)}%
-                                                    </span>
-                                                </td>
-                                                <td className="text-center">
-                                                    <div className="progress" style={{ height: "6px", borderRadius: "10px" }}>
-                                                        <div className="progress-bar" style={{
-                                                            width: `${Math.round((r.completionRate || 0) * 100)}%`,
-                                                            background: (r.completionRate || 0) > 0.7 ? colors.success : colors.warning
-                                                        }} />
-                                                    </div>
-                                                </td>
-                                                <td className="pe-4 text-end text-muted small">
-                                                    {r.lastOpenAt ? new Date(r.lastOpenAt).toLocaleDateString() : "—"}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            {/* Info Section - Left Aligned */}
-                            <div style={{ padding: "20px 24px", background: "#f8f9fa", borderTop: `1px solid ${colors.border}` }}>
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: "10px", color: colors.textMuted, fontSize: "12px" }}>
-                                    <FaInfoCircle />
-                                    <span className="text-start">Pro Tip: System identifies "Opens" via <b>lesson_select</b> events. Refresh to sync latest student interactions.</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+  return (
+    <div style={{ padding: "clamp(20px, 5vw, 40px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Inter', sans-serif" }}>
+      <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
+        
+        {/* PREMIUM HEADER */}
+        <header style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", marginBottom: "2.5rem", gap: "1.5rem" }}>
+          <div>
+            <div className="d-flex align-items-center gap-3 mb-2">
+              <h2 style={{ margin: 0, color: colors.textMain, fontWeight: 900, letterSpacing: "-1px", fontSize: "clamp(1.8rem, 4vw, 2.5rem)" }}>
+                Content Optimizer AI
+              </h2>
+              <div style={{ background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)", color: "#fff", padding: "6px 16px", borderRadius: "100px", fontSize: "12px", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px", boxShadow: "0 4px 12px rgba(37,99,235,0.3)" }}>
+                <FaRobot size={14}/> Active
+              </div>
             </div>
+            <p style={{ margin: 0, color: colors.textMuted, fontSize: "1rem", fontWeight: 500 }}>Identify and fix lessons where students lose interest.</p>
+          </div>
+          
+          <button
+            onClick={() => fetchDropoffData(selectedCourseId)}
+            disabled={loadingData || !selectedCourseId}
+            style={{
+              background: colors.card, color: "#2563eb", borderRadius: "16px", padding: "14px 32px", fontWeight: "700", border: "1px solid #bfdbfe", transition: "all 0.3s ease", boxShadow: "0 8px 20px rgba(0,0,0,0.04)", display: "inline-flex", alignItems: "center", gap: "10px"
+            }}
+          >
+            <FaSyncAlt className={loadingData ? "fa-spin" : ""} />
+            {loadingData ? "Analyzing..." : "Run AI Scan"}
+          </button>
+        </header>
+
+        {err && <div className="alert alert-danger rounded-4 border-0 mb-4">{err}</div>}
+
+        {/* SELECTOR */}
+        <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: "24px", padding: "20px 28px", marginBottom: "30px", boxShadow: "0 10px 30px -10px rgba(0,0,0,0.03)" }}>
+          <div className="row g-4 align-items-center text-start">
+            <div className="col-auto d-none d-md-block">
+              <div style={{ width: "60px", height: "60px", borderRadius: "18px", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", color: "#475569", fontSize: "24px" }}>
+                <FaChalkboardTeacher />
+              </div>
+            </div>
+            <div className="col">
+              <h6 className="m-0 fw-bold text-dark">Target Course</h6>
+              <p className="m-0 text-muted small mt-1">Select course to view its retention heat-map</p>
+            </div>
+            <div className="col-12 col-lg-5">
+              <select className="form-select border-0 bg-light fw-bold py-3 px-4" value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)} style={{ borderRadius: "16px" }}>
+                {courses.map((c) => <option key={c._id} value={c._id}>{c.title}</option>)}
+              </select>
+            </div>
+          </div>
         </div>
-    );
+
+        {/* ANALYTICS GRID */}
+        <div className="row g-4">
+          <AnimatePresence>
+            {insights.length === 0 && !loadingData ? (
+              <div className="col-12 text-center py-5 bg-white rounded-4 border">
+                <FaLightbulb size={32} className="text-muted opacity-50 mb-3" />
+                <h5 className="text-dark fw-bold">No Activity Data Found</h5>
+              </div>
+            ) : (
+              insights.map((lesson, index) => {
+                const theme = getTheme(lesson.status);
+                // --- THE FIX: Capping the Drop-off rate between 0 and 100 ---
+                const safeDropoff = Math.min(100, Math.max(0, lesson.dropoffRate));
+                
+                return (
+                  <motion.div 
+                    key={lesson.lessonId} className="col-12 col-lg-6"
+                    initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}
+                  >
+                    <div style={{ 
+                      background: colors.card, borderRadius: "24px", overflow: "hidden", border: `1px solid ${lesson.status === "CRITICAL" ? '#fca5a5' : colors.border}`, height: "100%", display: "flex", flexDirection: "column", position: "relative"
+                    }}>
+                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "4px", background: theme.color }} />
+
+                      <div className="p-4 text-start" style={{ flexGrow: 1 }}>
+                        <div className="d-flex justify-content-between align-items-start mb-4">
+                          <div>
+                            <div className="d-flex align-items-center gap-2 mb-3">
+                              <span style={{ padding: "6px 12px", background: "#f1f5f9", borderRadius: "8px", fontSize: "0.75rem", fontWeight: "700", color: "#475569" }}>
+                                {lesson.contentType?.toUpperCase() || 'LESSON'}
+                              </span>
+                              <span className="small text-muted fw-bold">• {lesson.duration || 0} SEC</span>
+                            </div>
+                            <h4 className="fw-bold m-0 text-dark" style={{ lineHeight: '1.3', fontSize: "1.15rem" }}>{lesson.title}</h4>
+                          </div>
+                          <div className="text-center">
+                            <CircularProgress percentage={safeDropoff} color={theme.color} />
+                            <div className="tiny-label text-muted fw-bold mt-1" style={{ fontSize: '10px' }}>DROP-OFF</div>
+                          </div>
+                        </div>
+
+                        <div className="d-flex gap-3 mb-4">
+                          <div className="flex-grow-1 bg-light p-3 rounded-4 border">
+                            <div className="small text-muted fw-bold text-uppercase">Started</div>
+                            <div className="h4 fw-bold m-0">{lesson.views}</div>
+                          </div>
+                          <div className="flex-grow-1 bg-light p-3 rounded-4 border">
+                            <div className="small text-muted fw-bold text-uppercase">Completed</div>
+                            <div className="h4 fw-bold m-0">{lesson.completions}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-4 text-start" style={{ background: theme.bg, borderTop: `1px solid ${theme.light}` }}>
+                        <div className="d-flex align-items-start gap-3">
+                          <div style={{ color: theme.color, marginTop: '4px' }}>{theme.icon}</div>
+                          <div>
+                            <div className="d-flex align-items-center gap-2 mb-1">
+                              <h6 className="fw-bold m-0" style={{ color: theme.color }}>{theme.label}</h6>
+                              {lesson.status === "CRITICAL" && <FaArrowDown color={theme.color} size={12}/>}
+                            </div>
+                            <p className="m-0 small fw-medium" style={{ color: "#475569" }}>{lesson.aiSuggestion}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </div>
+  );
 }

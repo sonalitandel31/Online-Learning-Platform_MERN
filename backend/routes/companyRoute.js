@@ -12,5 +12,7 @@ router.get('/all', companyController.getAllCompanies);
 // Corporate Admin Routes (Protected by token & tenantAuth)
 router.get('/settings', authMiddleware, tenantAuth, companyController.getCompanySettings);
 router.put('/branding', authMiddleware, tenantAuth, companyController.updateBranding);
+router.put('/:id/licenses', authMiddleware, tenantAuth, companyController.updateLicenses);
+router.post('/request-upgrade', authMiddleware, tenantAuth, companyController.requestLicenseUpgrade);
 
 module.exports = router;

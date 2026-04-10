@@ -4,6 +4,8 @@ const enrollmentModel = require("../models/enrollmentModel");
 const examModel = require("../models/examModel");
 const userModel = require("../models/userModel");
 const studentModel = require("../models/studentModel");
+const Payment = require("../models/paymentModel");
+const AnalyticsEvent = require("../models/AnalyticsEventModel");
 
 const fs = require("fs");
 const path = require("path");
@@ -323,8 +325,8 @@ exports.markLessonAsWatched = async (req, res) => {
 
     // User model se companyId populate karke branding nikalenge (Ensure userModel is required at top)
     const userDoc = await userModel.findById(userId).populate({
-        path: "companyId",
-        select: "branding"
+      path: "companyId",
+      select: "branding"
     });
     const companyBranding = userDoc?.companyId?.branding || null;
 
@@ -353,8 +355,26 @@ exports.markLessonAsWatched = async (req, res) => {
     const xpAwards = [];
 
     if (!alreadyCompleted) {
+      // 1. XP Award logic (Jo pehle se hai)
       const xpRes = await awardXpOnce({ studentId: studentDoc._id, courseId, event: "LESSON_COMPLETE", refId: lessonId, xp: 10 });
       if (xpRes.awarded) xpAwards.push(xpRes);
+
+      // Ye line aapke dashboard par "Completed" count ko 0 se 1 kar degi
+      try {
+        await AnalyticsEvent.create({
+          event: "lesson_complete", // 🎯 Dashboard yahi dhoondh raha hai
+          userId: userId,
+          role: req.user?.role || "student",
+          payload: { 
+            courseId: courseId, 
+            lessonId: lessonId 
+          },
+          ts: new Date()
+        });
+        console.log("🎯 AI Analytics: Lesson completion logged in database!");
+      } catch (logErr) {
+        console.error("❌ Analytics Logging Failed:", logErr);
+      }
     }
 
     if (isCourseCompletedNow) {
@@ -364,21 +384,50 @@ exports.markLessonAsWatched = async (req, res) => {
       enrollment.status = "completed";
 
       try {
-          const course = await courseModel.findById(courseId).populate("instructor", "name");
-          const certId = uuidv4();
-          
-          const certPath = await generateCertificate(
-            req.user?.name || "Student",
-            course.title,
-            course.instructor?.name || "Instructor",
-            certId,
-            companyBranding // ✅ Sahi branding jayegi
-          );
+        const course = await courseModel.findById(courseId); // Course ki details lao (Price chahiye)
 
-          enrollment.certificate = `/uploads/certificates/${certId}.pdf`;
-          await sendCompletionEmail(req.user, course, certPath, companyBranding);
+        // Sirf tab paisa do jab:
+        // 1. Course free nahi hai
+        // 2. Baccha Subscription ya Corporate ke through aaya hai (isliye usne direct pay nahi kiya)
+        // Note: Hum source ko "subscription" maan kar chal rahe hain (agar aapke enrollment model me source hai toh yahan check kar lena)
+
+        if (course.price > 0 && enrollment.source !== "free") {
+          const royaltyAmount = Math.round(course.price * 0.10); // 10% nikalo
+
+          await Payment.create({
+            student: userId,
+            instructor: course.instructor,
+            course: courseId,
+            amount: royaltyAmount,
+            platformCommission: 0,
+            instructorEarning: royaltyAmount,
+            status: "completed",
+            payoutStatus: "pending",
+            paymentMethod: "Subscription Bounty", // Ya 'Corporate Bounty'
+            paymentDate: new Date()
+          });
+          console.log(`✅ Royalties sent! ₹${royaltyAmount} credited to Instructor.`);
+        }
+      } catch (err) {
+        console.error("❌ Failed to process Royalty Payment:", err);
+      }
+
+      try {
+        const course = await courseModel.findById(courseId).populate("instructor", "name");
+        const certId = uuidv4();
+
+        const certPath = await generateCertificate(
+          req.user?.name || "Student",
+          course.title,
+          course.instructor?.name || "Instructor",
+          certId,
+          companyBranding // ✅ Sahi branding jayegi
+        );
+
+        enrollment.certificate = `/uploads/certificates/${certId}.pdf`;
+        await sendCompletionEmail(req.user, course, certPath, companyBranding);
       } catch (e) {
-          console.error("Certificate generation error in markLessonAsWatched:", e);
+        console.error("Certificate generation error in markLessonAsWatched:", e);
       }
     }
 

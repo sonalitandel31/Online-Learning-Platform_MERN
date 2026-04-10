@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../../api/api'; 
-import { 
-    FaBuilding, 
-    FaPlus, 
-    FaCheckCircle, 
-    FaExclamationCircle, 
-    FaUsers, 
-    FaEye, 
-    FaEnvelope, 
-    FaCalendarAlt, 
-    FaUserTie 
+import api from '../../../api/api';
+import {
+    FaBuilding,
+    FaPlus,
+    FaCheckCircle,
+    FaExclamationCircle,
+    FaUsers,
+    FaEye,
+    FaEnvelope,
+    FaCalendarAlt,
+    FaUserTie,
+    FaEdit // ✅ NEW: Icon for allocating
 } from 'react-icons/fa';
 
 const ManageCompanies = () => {
@@ -19,9 +20,14 @@ const ManageCompanies = () => {
     const [fetchLoading, setFetchLoading] = useState(true);
     const [status, setStatus] = useState({ type: '', message: '' });
 
-    // ✅ NEW: Modal States for View Details
+    // Modal States for View Details
     const [selectedCompany, setSelectedCompany] = useState(null);
     const [showModal, setShowModal] = useState(false);
+
+    // ✅ NEW: States for License Allocation
+    const [editingLicenseCompany, setEditingLicenseCompany] = useState(null);
+    const [newLicenseCount, setNewLicenseCount] = useState(0);
+    const [updateLoading, setUpdateLoading] = useState(false);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -60,23 +66,44 @@ const ManageCompanies = () => {
 
         try {
             await api.post('/companies/register', formData);
-            
+
             setStatus({ type: 'success', message: `Successfully registered ${formData.companyName}! HR account created.` });
             setFormData({ companyName: '', domain: '', purchasedLicenses: 100, hrName: '', hrEmail: '', hrPassword: '' });
             setShowForm(false);
-            
-            fetchCompanies(); 
+
+            fetchCompanies();
         } catch (error) {
-            setStatus({ 
-                type: 'error', 
-                message: error.response?.data?.message || error.response?.data?.warning || "Failed to register company." 
+            setStatus({
+                type: 'error',
+                message: error.response?.data?.message || error.response?.data?.warning || "Failed to register company."
             });
         } finally {
             setLoading(false);
         }
     };
 
-    // ✅ NEW: Helper to open details modal
+    // ✅ NEW: Function to handle License Update
+    const handleUpdateLicense = async (e) => {
+        e.preventDefault();
+        setUpdateLoading(true);
+        setStatus({ type: '', message: '' });
+
+        try {
+            // Note: Make sure to create this PUT route in your backend
+            await api.put(`/companies/${editingLicenseCompany._id}/licenses`, {
+                purchasedLicenses: newLicenseCount
+            });
+
+            setStatus({ type: 'success', message: `Successfully updated licenses for ${editingLicenseCompany.companyName} to ${newLicenseCount}!` });
+            setEditingLicenseCompany(null);
+            fetchCompanies(); // Refresh the table to show new counts
+        } catch (error) {
+            setStatus({ type: 'error', message: "Failed to allocate licenses. Try again." });
+        } finally {
+            setUpdateLoading(false);
+        }
+    };
+
     const openDetailsModal = (company) => {
         setSelectedCompany(company);
         setShowModal(true);
@@ -89,11 +116,11 @@ const ManageCompanies = () => {
                     <h2 className="fw-bold mb-1"><FaBuilding className="me-2 text-primary" /> Manage B2B Clients</h2>
                     <p className="text-muted">Onboard new corporate clients and view their enterprise details.</p>
                 </div>
-                <button 
+                <button
                     className="btn btn-primary px-4 py-2 fw-bold shadow-sm"
                     onClick={() => {
                         setShowForm(!showForm);
-                        setStatus({ type: '', message: '' }); 
+                        setStatus({ type: '', message: '' });
                     }}
                 >
                     {showForm ? 'Cancel Registration' : <><FaPlus className="me-2" /> Onboard New Company</>}
@@ -107,9 +134,10 @@ const ManageCompanies = () => {
                 </div>
             )}
 
-            {/* Registration Form */}
+            {/* Registration Form (Same as before) */}
             {showForm && (
                 <div className="card shadow-sm border-0 rounded-4 p-4 mb-5">
+                    {/* ... (Your existing registration form code goes here) ... */}
                     <h4 className="fw-bold mb-4 text-dark">Client Registration Details</h4>
                     <form onSubmit={handleRegisterCompany}>
                         <div className="row g-4">
@@ -127,7 +155,7 @@ const ManageCompanies = () => {
                             </div>
 
                             <div className="col-12"><hr className="my-2 opacity-25" /></div>
-                            <h5 className="fw-bold mb-0 mt-3 text-primary"><FaUserTie className="me-2"/>Initial HR Manager Account</h5>
+                            <h5 className="fw-bold mb-0 mt-3 text-primary"><FaUserTie className="me-2" />Initial HR Manager Account</h5>
 
                             <div className="col-md-4">
                                 <label className="form-label fw-semibold">HR Full Name</label>
@@ -188,7 +216,7 @@ const ManageCompanies = () => {
                                             </td>
                                             <td className="py-3 text-center">
                                                 <span className="badge bg-primary-subtle text-primary border border-primary px-3 py-2 rounded-pill fs-6">
-                                                    <FaUsers className="me-1" /> {company.subscription?.activeLicenses || 0}
+                                                    <FaUsers className="me-1" /> {company.subscription?.activeLicenses || company.subscription?.purchasedLicenses || 0}
                                                 </span>
                                             </td>
                                             <td className="py-3 text-center">
@@ -197,11 +225,23 @@ const ManageCompanies = () => {
                                                 </span>
                                             </td>
                                             <td className="py-3 text-end px-4">
-                                                <button 
+                                                {/* ✅ NEW: Allocate Button */}
+                                                <button
+                                                    className="btn btn-sm btn-outline-primary border shadow-sm fw-bold px-3 py-2 d-inline-flex align-items-center gap-2 me-2"
+                                                    onClick={() => {
+                                                        setEditingLicenseCompany(company);
+                                                        setNewLicenseCount(company.subscription?.purchasedLicenses || company.subscription?.activeLicenses || 0);
+                                                        setStatus({ type: '', message: '' });
+                                                    }}
+                                                >
+                                                    <FaEdit /> Allocate
+                                                </button>
+
+                                                <button
                                                     className="btn btn-sm btn-light border shadow-sm text-secondary fw-bold px-3 py-2 d-inline-flex align-items-center gap-2"
                                                     onClick={() => openDetailsModal(company)}
                                                 >
-                                                    <FaEye /> View Details
+                                                    <FaEye /> View
                                                 </button>
                                             </td>
                                         </tr>
@@ -213,92 +253,124 @@ const ManageCompanies = () => {
                 </div>
             )}
 
-            {/* ========================================= */}
-            {/* ✅ NEW: FULL COMPANY DETAILS MODAL */}
-            {/* ========================================= */}
+            {/* ✅ NEW: ALLOCATE LICENSES INLINE PANEL */}
+            {editingLicenseCompany && (
+                <div className="card mt-4 border-primary shadow-lg rounded-4 p-4 position-relative animate-fade-in">
+                    <button
+                        className="btn-close position-absolute top-0 end-0 m-3"
+                        onClick={() => setEditingLicenseCompany(null)}
+                    ></button>
+                    <h5 className="fw-bold mb-3 text-primary">Allocate Licenses: {editingLicenseCompany.companyName}</h5>
+
+                    <form onSubmit={handleUpdateLicense} className="row g-3 align-items-end">
+                        <div className="col-md-4">
+                            <label className="form-label fw-bold text-muted small">Current Total Licenses</label>
+                            <input
+                                type="text"
+                                className="form-control bg-light fw-bold"
+                                value={editingLicenseCompany.subscription?.purchasedLicenses || editingLicenseCompany.subscription?.activeLicenses || 0}
+                                disabled
+                            />
+                        </div>
+                        <div className="col-md-4">
+                            <label className="form-label fw-bold text-dark small">New Total Licenses</label>
+                            <input
+                                type="number"
+                                className="form-control border-primary fw-bold"
+                                value={newLicenseCount}
+                                onChange={(e) => setNewLicenseCount(Number(e.target.value))}
+                                min={editingLicenseCompany.subscription?.usedLicenses || 1}
+                                required
+                            />
+                        </div>
+                        <div className="col-md-4">
+                            <button type="submit" className="btn btn-primary w-100 fw-bold rounded-3 py-2" disabled={updateLoading}>
+                                {updateLoading ? 'Saving...' : <><FaCheckCircle className="me-2" /> Save Changes</>}
+                            </button>
+                        </div>
+                    </form>
+                    <div className="form-text text-muted mt-3 small">
+                        <FaBuilding className="me-1" /> Update this value after receiving the offline invoice payment for the extra seats.
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ EXISTING: FULL COMPANY DETAILS MODAL */}
             {showModal && selectedCompany && (
+                // ... (Aapka existing Details Modal wala code waise ka waisa hi rahega) ...
                 <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}>
+                    {/* Appending placeholder for your existing modal code so the snippet isn't overwhelmingly long, but you just keep your exact modal code here */}
                     <div className="modal-dialog modal-dialog-centered modal-lg">
                         <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '15px' }}>
-                            
-                            {/* Modal Header */}
                             <div className="modal-header bg-dark text-white p-4" style={{ borderRadius: '15px 15px 0 0' }}>
-                                <div className="d-flex align-items-center gap-3">
-                                    <div className="bg-white text-dark rounded-circle d-flex align-items-center justify-content-center" style={{ width: '50px', height: '50px' }}>
-                                        <FaBuilding size={24} className="text-primary"/>
-                                    </div>
-                                    <div>
-                                        <h4 className="modal-title fw-bold mb-0">{selectedCompany.companyName}</h4>
-                                        <div className="small text-light opacity-75">{selectedCompany.domain}</div>
-                                    </div>
-                                </div>
+                                <h4 className="modal-title fw-bold mb-0">{selectedCompany.companyName} Details</h4>
                                 <button type="button" className="btn-close btn-close-white" onClick={() => setShowModal(false)}></button>
                             </div>
-                            
-                            {/* Modal Body */}
                             <div className="modal-body p-4 bg-light">
-                                <div className="row g-4">
-                                    
-                                    {/* Subscription Block */}
-                                    <div className="col-md-6">
-                                        <div className="card h-100 border-0 shadow-sm rounded-4">
-                                            <div className="card-body p-4">
-                                                <h6 className="text-uppercase text-muted fw-bold mb-3 d-flex align-items-center gap-2">
-                                                    <FaCheckCircle className="text-success"/> Subscription Status
-                                                </h6>
-                                                
-                                                <div className="d-flex justify-content-between align-items-center mb-3">
-                                                    <span className="text-secondary fw-medium">Total Licenses</span>
-                                                    <span className="badge bg-primary fs-6 rounded-pill px-3">{selectedCompany.subscription?.activeLicenses || 0}</span>
-                                                </div>
-                                                
-                                                <div className="d-flex justify-content-between align-items-center mb-3">
-                                                    <span className="text-secondary fw-medium">Onboarding Date</span>
-                                                    <span className="text-dark fw-bold d-flex align-items-center gap-1">
-                                                        <FaCalendarAlt className="text-muted"/> {new Date(selectedCompany.createdAt).toLocaleDateString('en-GB')}
-                                                    </span>
-                                                </div>
+                                <p className="text-muted">Total Licenses: {selectedCompany.subscription?.purchasedLicenses || selectedCompany.subscription?.activeLicenses || 0}</p>
+                                {/* Modal Body */}
+                                <div className="modal-body p-4 bg-light">
+                                    <div className="row g-4">
 
-                                                <div className="d-flex justify-content-between align-items-center">
-                                                    <span className="text-secondary fw-medium">Account Status</span>
-                                                    <span className={`fw-bold ${selectedCompany.isActive !== false ? 'text-success' : 'text-danger'}`}>
-                                                        {selectedCompany.isActive !== false ? '● Active' : '● Inactive'}
-                                                    </span>
+                                        {/* Subscription Block */}
+                                        <div className="col-md-6">
+                                            <div className="card h-100 border-0 shadow-sm rounded-4">
+                                                <div className="card-body p-4">
+                                                    <h6 className="text-uppercase text-muted fw-bold mb-3 d-flex align-items-center gap-2">
+                                                        <FaCheckCircle className="text-success" /> Subscription Status
+                                                    </h6>
+
+                                                    <div className="d-flex justify-content-between align-items-center mb-3">
+                                                        <span className="text-secondary fw-medium">Total Licenses</span>
+                                                        <span className="badge bg-primary fs-6 rounded-pill px-3">{selectedCompany.subscription?.activeLicenses || 0}</span>
+                                                    </div>
+
+                                                    <div className="d-flex justify-content-between align-items-center mb-3">
+                                                        <span className="text-secondary fw-medium">Onboarding Date</span>
+                                                        <span className="text-dark fw-bold d-flex align-items-center gap-1">
+                                                            <FaCalendarAlt className="text-muted" /> {new Date(selectedCompany.createdAt).toLocaleDateString('en-GB')}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="d-flex justify-content-between align-items-center">
+                                                        <span className="text-secondary fw-medium">Account Status</span>
+                                                        <span className={`fw-bold ${selectedCompany.isActive !== false ? 'text-success' : 'text-danger'}`}>
+                                                            {selectedCompany.isActive !== false ? '● Active' : '● Inactive'}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    {/* HR Info Block */}
-                                    <div className="col-md-6">
-                                        <div className="card h-100 border-0 shadow-sm rounded-4">
-                                            <div className="card-body p-4">
-                                                <h6 className="text-uppercase text-muted fw-bold mb-3 d-flex align-items-center gap-2">
-                                                    <FaUserTie className="text-info"/> Admin / HR Info
-                                                </h6>
-                                                
-                                                <div className="alert alert-info bg-info-subtle border-0 rounded-3 mb-0">
-                                                    <p className="mb-2 text-dark fw-medium">
-                                                        The HR Manager accounts for this company are managed securely in the <strong>Users Table</strong>.
-                                                    </p>
-                                                    <p className="mb-0 text-muted small">
-                                                        To view or reset passwords for the HR representatives of <strong>{selectedCompany.companyName}</strong>, please navigate to the <a href="/admin-dashboard/users" className="fw-bold text-decoration-none">All Users</a> section and filter by the "HR" role or their domain (<em>@{selectedCompany.domain}</em>).
-                                                    </p>
+                                        {/* HR Info Block */}
+                                        <div className="col-md-6">
+                                            <div className="card h-100 border-0 shadow-sm rounded-4">
+                                                <div className="card-body p-4">
+                                                    <h6 className="text-uppercase text-muted fw-bold mb-3 d-flex align-items-center gap-2">
+                                                        <FaUserTie className="text-info" /> Admin / HR Info
+                                                    </h6>
+
+                                                    <div className="alert alert-info bg-info-subtle border-0 rounded-3 mb-0">
+                                                        <p className="mb-2 text-dark fw-medium">
+                                                            The HR Manager accounts for this company are managed securely in the <strong>Users Table</strong>.
+                                                        </p>
+                                                        <p className="mb-0 text-muted small">
+                                                            To view the HR representatives of <strong>{selectedCompany.companyName}</strong>, please navigate to the <a href="/admin-dashboard/users" className="fw-bold text-decoration-none">All Users</a> section and filter by the "HR" role or their domain (<em>@{selectedCompany.domain}</em>).
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
 
+                                    </div>
                                 </div>
+
                             </div>
-                            
-                            {/* Modal Footer */}
                             <div className="modal-footer border-0 p-4 pt-0 bg-light" style={{ borderRadius: '0 0 15px 15px' }}>
                                 <button type="button" className="btn btn-secondary px-5 py-2 fw-bold rounded-pill shadow-sm" onClick={() => setShowModal(false)}>
                                     Close Details
                                 </button>
                             </div>
-
                         </div>
                     </div>
                 </div>

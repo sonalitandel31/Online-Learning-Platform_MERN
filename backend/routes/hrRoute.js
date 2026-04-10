@@ -25,4 +25,6 @@ router.get('/my-learning-paths', authMiddleware, lpController.getStudentPaths);
 
 router.get('/analytics', authMiddleware, tenantAuth, hrController.getHRAnalytics);
 
+router.delete('/employee/:id', authMiddleware, tenantAuth, hrController.deleteEmployee);
+
 module.exports = router;

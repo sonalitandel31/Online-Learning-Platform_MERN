@@ -23,6 +23,7 @@ router.get("/engagement/student/me", authMiddleware, analyticsController.student
 
 router.get("/risk/course/:id", authMiddleware, analyticsController.getCourseDropoutRisk);
 router.get("/insights/course/:id/lesson-dropoff", authMiddleware, analyticsController.getLessonDropoff);
+router.get("/dropoff/course/:courseId", authMiddleware, analyticsController.getLessonDropoffInsights);
 
 router.get("/admin/instructor-scores", authMiddleware, analyticsController.adminInstructorScores);
 router.get("/admin/heatmap", authMiddleware, analyticsController.getPlatformHeatmap);

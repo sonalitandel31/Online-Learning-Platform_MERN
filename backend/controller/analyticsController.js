@@ -49,7 +49,7 @@ const normalizeEvent = (e) => {
   };
 };
 
-const trackSingle = async (req, res) => {
+/* const trackSingle = async (req, res) => {
   try {
     const doc = normalizeEvent(req.body);
     if (!doc) return res.status(400).json({ success: false, message: "Invalid event" });
@@ -66,6 +66,33 @@ const trackSingle = async (req, res) => {
     return res.json({ success: true });
   } catch (e) {
     return res.status(200).json({ success: false }); // never block UI
+  }
+}; */
+
+const trackSingle = async (req, res) => {
+  try {
+    const rawDoc = normalizeEvent(req.body);
+    if (!rawDoc) return res.status(400).json({ success: false, message: "Invalid event" });
+
+    // ✅ FIX: doc ko array mein wrap kar dijiye taaki forEach kaam kare
+    // Ya phir direct object use karein. M.Sc. logic ke liye ye best hai:
+    const doc = Array.isArray(rawDoc) ? rawDoc : [rawDoc];
+
+    if (req.user?._id) {
+      doc.forEach(d => {
+        d.userId = req.user._id;
+        d.role = req.user.role;
+      });
+    }
+
+    // AnalyticsEvent.create ab array ko handle kar lega
+    await AnalyticsEvent.create(doc);
+
+    console.log("✅ Event tracked successfully:", doc[0].event); // Debugging ke liye
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("❌ Tracking Error:", e.message);
+    return res.status(200).json({ success: false });
   }
 };
 
@@ -376,7 +403,7 @@ const studentEngagementMe = async (req, res) => {
   }
 };
 
-const getCourseDropoutRisk = async (req, res) => {
+/* const getCourseDropoutRisk = async (req, res) => {
   try {
     const courseId = String(req.params.id);
 
@@ -465,6 +492,102 @@ const getCourseDropoutRisk = async (req, res) => {
       lookbackDays,
       rules: { inactive7, inactive14 },
       count: rows.length,
+      rows,
+    });
+  } catch (e) {
+    console.error("getCourseDropoutRisk error:", e);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+}; */
+
+const getCourseDropoutRisk = async (req, res) => {
+  try {
+    const courseId = String(req.params.id);
+    const lookbackDays = Number(req.query.lookbackDays || 30);
+    const start = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
+
+    // 1. Fetch Students and their Last Activity
+    const lastActivity = await AnalyticsEvent.aggregate([
+      {
+        $match: {
+          "payload.courseId": courseId,
+          userId: { $ne: null },
+          ts: { $gte: start },
+        },
+      },
+      {
+        $group: {
+          _id: "$userId",
+          lastEventAt: { $max: "$ts" },
+          totalEvents: { $sum: 1 },
+          shortWatches: { $sum: { $cond: [{ $eq: ["$event", "video_watch_10s_drop"] }, 1, 0] } }
+        },
+      },
+    ]);
+
+    // 2. Fetch Engagement Scores
+    const scores = await EngagementScore.find({ courseId })
+      .select("userId score rawScore examAttempts examCompletes lastEventAt")
+      .populate("userId", "name email");
+
+    const scoreMap = new Map(scores.map((s) => [String(s.userId?._id || s.userId), s]));
+
+    // 🔥 NEW FIX: Directly fetch User details to prevent "Unknown"
+    const userIds = lastActivity.map(r => r._id).filter(Boolean);
+    const User = require("../models/userModel"); // Ensure User model is loaded
+    const users = await User.find({ _id: { $in: userIds } }).select("name email");
+    const userMap = new Map(users.map(u => [String(u._id), u]));
+
+    const now = Date.now();
+
+    // 3. The Predictive AI Logic
+    const rows = lastActivity
+      .map((r) => {
+        const uid = String(r._id);
+        const s = scoreMap.get(uid);
+        const realUser = userMap.get(uid); // Get name from User map
+
+        const last = r.lastEventAt ? new Date(r.lastEventAt) : null;
+        const daysInactive = last ? Math.floor((now - last.getTime()) / (1000 * 60 * 60 * 24)) : 9999;
+
+        const engScore = s?.score ?? 50;
+        const shortWatchCount = r.shortWatches || 0;
+
+        let riskPoints = 0;
+        let riskReasons = [];
+
+        if (daysInactive >= 14) { riskPoints += 40; riskReasons.push("Inactive for 14+ days"); }
+        else if (daysInactive >= 7) { riskPoints += 25; riskReasons.push("Inactive for 7+ days"); }
+
+        if (engScore < 20) { riskPoints += 40; riskReasons.push("Critically low engagement score"); }
+        else if (engScore < 40) { riskPoints += 20; riskReasons.push("Low engagement score"); }
+
+        if (shortWatchCount > 3) { riskPoints += 20; riskReasons.push("Frequently drops off videos early"); }
+
+        let riskCategory = "LOW";
+        if (riskPoints >= 60) riskCategory = "HIGH";
+        else if (riskPoints >= 30) riskCategory = "MEDIUM";
+
+        return {
+          userId: uid,
+          // 🔥 Updated: Now it will show real names instead of "Unknown"
+          student: realUser ? { _id: realUser._id, name: realUser.name, email: realUser.email } : { _id: uid, name: "Unknown", email: "" },
+          lastEventAt: last,
+          daysInactive,
+          riskCategory,
+          riskScore: riskPoints,
+          reasons: riskReasons,
+          currentEngagementScore: engScore
+        };
+      })
+      .sort((a, b) => b.riskScore - a.riskScore);
+
+    return res.json({
+      success: true,
+      courseId,
+      lookbackDays,
+      count: rows.length,
+      highRiskCount: rows.filter(r => r.riskCategory === 'HIGH').length,
       rows,
     });
   } catch (e) {
@@ -906,7 +1029,7 @@ const getPlatformRiskOverview = async (req, res) => {
       },
       {
         $lookup: {
-          from: "courses",  
+          from: "courses",
           localField: "courseObjId",
           foreignField: "_id",
           as: "courseData",
@@ -945,15 +1068,15 @@ const getAiMetrics = async (req, res) => {
   try {
     const data = [];
     const today = new Date();
-    
+
     // Last 7 days ka loop
     for (let i = 6; i >= 0; i--) {
       const targetDate = new Date(today);
       targetDate.setDate(today.getDate() - i);
-      
+
       const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
       const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
-      
+
       const dayName = startOfDay.toLocaleDateString("en-US", { weekday: 'short' });
 
       // 1. Active Users (Jinka lastActiveAt aaj ke din me hai)
@@ -972,7 +1095,7 @@ const getAiMetrics = async (req, res) => {
       const studentsWithBadges = await studentModel.find({
         "badges.earnedAt": { $gte: startOfDay, $lte: endOfDay }
       }).select("badges");
-      
+
       let badgesAwarded = 0;
       studentsWithBadges.forEach(student => {
         student.badges.forEach(badge => {
@@ -997,6 +1120,111 @@ const getAiMetrics = async (req, res) => {
   }
 };
 
+const getLessonDropoffInsights = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+
+    // 1. Fetch all lessons for this course to get their names
+    const Course = require("../models/courseModel");
+    const course = await Course.findById(courseId).populate("lessons", "title duration contentType");
+
+    if (!course) return res.status(404).json({ success: false, message: "Course not found" });
+
+    const lessonStats = await AnalyticsEvent.aggregate([
+      {
+        $match: {
+          "payload.courseId": courseId,
+          event: { $in: ["lesson_select", "lesson_page_open", "lesson_complete"] }
+        }
+      },
+      {
+        $group: {
+          _id: "$payload.lessonId",
+          studentsStarted: {
+            $addToSet: {
+              $cond: [{ $in: ["$event", ["lesson_select", "lesson_page_open"]] }, "$userId", null]
+            }
+          },
+          studentsCompleted: {
+            $addToSet: {
+              $cond: [{ $eq: ["$event", "lesson_complete"] }, "$userId", null]
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          // Null ko filter karke array ka size nikaalo
+          starts: { $size: { $filter: { input: "$studentsStarted", as: "id", cond: { $ne: ["$$id", null] } } } },
+          completes: { $size: { $filter: { input: "$studentsCompleted", as: "id", cond: { $ne: ["$$id", null] } } } }
+        }
+      }
+    ]);
+
+    const statsMap = new Map(lessonStats.map(stat => [String(stat._id), stat]));
+
+    // 3. AI Logic: Calculate Drop-off & Generate Suggestions
+    const insights = course.lessons.map(lesson => {
+      const stat = statsMap.get(String(lesson._id)) || { starts: 0, completes: 0 };
+      const starts = stat.starts || 0;
+      const completes = stat.completes || 0;
+
+      // Calculate drop-off percentage
+      let dropoffRate = 0;
+      if (starts > 0) {
+        dropoffRate = Math.round(((starts - completes) / starts) * 100);
+      } else if (completes > 0 && starts === 0) {
+        // Fallback if events were missed
+        dropoffRate = 0;
+      }
+
+      // Generate AI Actionable Suggestions based on Drop-off Severity
+      let status = "HEALTHY";
+      let aiSuggestion = "Students are engaging well with this content.";
+
+      if (starts < 3) {
+        status = "NOT_ENOUGH_DATA";
+        aiSuggestion = "Not enough student data to analyze this lesson yet.";
+      } else if (dropoffRate >= 70) {
+        status = "CRITICAL";
+        aiSuggestion = lesson.duration > 15
+          ? `High drop-off! This ${lesson.contentType} is too long (${lesson.duration} mins). Try splitting it into 2 shorter parts.`
+          : "Critical drop-off! Students are struggling here. Consider simplifying the content or adding a practical example.";
+      } else if (dropoffRate >= 40) {
+        status = "WARNING";
+        aiSuggestion = "Moderate drop-off detected. Try adding a quick pop-quiz after this lesson to boost retention.";
+      }
+
+      return {
+        lessonId: lesson._id,
+        title: lesson.title,
+        contentType: lesson.contentType,
+        duration: lesson.duration,
+        views: starts,
+        completions: completes,
+        dropoffRate,
+        status,
+        aiSuggestion
+      };
+    });
+
+    // Sort by highest drop-off first (to show problematic lessons at the top)
+    insights.sort((a, b) => b.dropoffRate - a.dropoffRate);
+
+    res.json({
+      success: true,
+      courseId,
+      insights
+    });
+
+  } catch (error) {
+    console.error("Lesson Dropoff Error:", error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
+
 module.exports = {
   trackSingle,
   trackBatch,
@@ -1015,4 +1243,5 @@ module.exports = {
   getPlatformHeatmap,
   getPlatformRiskOverview,
   getAiMetrics,
+  getLessonDropoffInsights,
 };

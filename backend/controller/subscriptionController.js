@@ -206,8 +206,26 @@ const cancelMySubscription = async (req, res) => {
   }
 };
 
+// ---------- Get All Subscribers (ADMIN ONLY) ----------
+const getAllSubscribersAdmin = async (req, res) => {
+  try {
+    // Populate user details and plan details
+    const subscriptions = await UserSubscription.find()
+      .populate("userId", "name email")
+      .populate("planId", "name billingCycle price")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.json({ success: true, subscriptions });
+  } catch (err) {
+    console.error("getAllSubscribersAdmin error:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 module.exports = {
   listActivePlans,
   getMySubscription,
   cancelMySubscription,
+  getAllSubscribersAdmin,
 };

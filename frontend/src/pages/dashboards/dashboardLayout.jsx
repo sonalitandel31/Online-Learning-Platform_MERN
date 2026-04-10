@@ -383,7 +383,7 @@ export const instructorSidebarLinks = [
       { label: "Platform Policies", path: "/instructor-dashboard/platform-rules" }
     ],
   },
-  {
+  /* {
     label: "Platform Insights",
     icon: <FaChartLine />,
     children: [
@@ -395,6 +395,16 @@ export const instructorSidebarLinks = [
       { label: "My Performance Score", path: "/instructor-dashboard/instructor-score" },
       { label: "Course Analytics", path: "/instructor-dashboard/course_analytics" },
       { label: "Student Progress", path: "/instructor-dashboard/student_progress" },
+    ],
+  }, */
+  {
+    label: "Platform Insights (AI)",
+    icon: <FaChartLine />,
+    children: [
+      { label: "My Performance Score", path: "/instructor-dashboard/instructor-score" },
+      { label: "Course Analytics & Progress", path: "/instructor-dashboard/course_analytics" },
+      { label: "Student Drop-out Risk", path: "/instructor-dashboard/dropout-risk" },
+      { label: "Lesson Drop-Off AI", path: "/instructor-dashboard/lesson-dropoff" },
     ],
   },
 ];
@@ -456,9 +466,10 @@ export const adminSidebarLinks = [
     icon: <FaRupeeSign />,
     children: [
       { label: "Manage Plans", path: "/admin-dashboard/subscription-plans" },
+      { label: "Subscribers List", path: "/admin-dashboard/subscribers" },
     ],
   },
-  {
+  /* {
     label: "Analytics & Reports",
     icon: <FaChartLine />,
     children: [
@@ -466,6 +477,24 @@ export const adminSidebarLinks = [
       { label: "Engagement Heatmap", path: "/admin-dashboard/heatmap" },
       { label: "Platform Risk", path: "/admin-dashboard/platform-risk" },
       { label: "Instructor Ranking", path: "/admin-dashboard/instructor-ranking" },
+      { label: "Enrollment Stats", path: "/admin-dashboard/reports/enrollments" },
+      { label: "Course Performance", path: "/admin-dashboard/reports/courses" },
+    ],
+  }, */
+  {
+    label: "AI Analytics & Insights",
+    icon: <FaChartLine />,
+    children: [
+      { label: "Platform Overview", path: "/admin-dashboard/analytics" },
+      { label: "Engagement Heatmap", path: "/admin-dashboard/heatmap" },
+      { label: "Platform Churn Risk", path: "/admin-dashboard/platform-risk" },
+      { label: "Instructor Ranking", path: "/admin-dashboard/instructor-ranking" },
+    ],
+  },
+  {
+    label: "Basic Reports", 
+    icon: <FaClipboardList />,
+    children: [
       { label: "Enrollment Stats", path: "/admin-dashboard/reports/enrollments" },
       { label: "Course Performance", path: "/admin-dashboard/reports/courses" },
     ],
@@ -492,13 +521,6 @@ export const adminSidebarLinks = [
 // ==========================================
 export const hrSidebarLinks = [
   {
-    label: "Dashboard & Insights",
-    icon: <FaChartLine />,
-    children: [
-      { label: "Detailed Analytics", path: "/hr-dashboard/analytics" },
-    ],
-  },
-  {
     label: "Employee Management",
     icon: <FaUsers />,
     children: [
@@ -508,7 +530,7 @@ export const hrSidebarLinks = [
   },
   {
     label: "Learning & Training",
-    icon: <FaBook />, 
+    icon: <FaBook />,
     children: [
       { label: "Learning Paths", path: "/hr-dashboard/manage-paths" },
       { label: "Request Custom Course", path: "/hr-dashboard/request-course" },
