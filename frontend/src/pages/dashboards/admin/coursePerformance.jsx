@@ -65,15 +65,6 @@ export default function CoursePerformance() {
     document.body.removeChild(link);
   };
 
-  if (loading) {
-    return (
-      <div className="loader-container">
-        <div className="spinner"></div>
-        <p>Analyzing performance data...</p>
-      </div>
-    );
-  }
-
   const chartData = {
     labels: filteredReport.slice(0, 10).map((r) => r.title), // Show top 10 in chart for clarity
     datasets: [
@@ -96,89 +87,148 @@ export default function CoursePerformance() {
     <div className="performance-wrapper">
       <h2 className="main-title">Course Performance</h2>
 
-      {/* Chart Section */}
-      <div className="chart-card">
-        <Bar 
-          data={chartData} 
-          options={{ 
-            responsive: true, 
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom' } } 
-          }} 
-        />
-      </div>
+      {/* ✅ Skeleton Layout When Loading */}
+      {loading ? (
+        <>
+          <div className="skeleton skel-chart-card"></div>
 
-      {/* Filters */}
-      <div className="filter-bar">
-        <input
-          type="text"
-          placeholder="Search course title..."
-          className="search-input"
-          value={search}
-          onChange={(e) => {setSearch(e.target.value); setPage(1);}}
-        />
-        <div className="filter-group">
-          <input
-            type="number"
-            placeholder="Min Enroll"
-            className="number-input"
-            value={minEnroll}
-            onChange={(e) => {setMinEnroll(Number(e.target.value)); setPage(1);}}
-          />
-          <button onClick={downloadCSV} className="export-btn">Export CSV</button>
-        </div>
-      </div>
+          <div className="filter-bar">
+            <div className="skeleton skel-input"></div>
+            <div className="filter-group">
+              <div className="skeleton skel-input-small"></div>
+              <div className="skeleton skel-btn"></div>
+            </div>
+          </div>
 
-      {/* Responsive Data List/Table */}
-      <div className="table-container">
-        <div className="table-header desktop-only">
-          <div onClick={() => sortData("title")} className="sort-header">Course {sortKey === "title" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}</div>
-          <div onClick={() => sortData("enrollments")} className="sort-header">Enrollments {sortKey === "enrollments" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}</div>
-          <div onClick={() => sortData("avgScore")} className="sort-header">Avg Score {sortKey === "avgScore" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}</div>
-        </div>
-
-        <div className="table-body">
-          {paginatedReport.map((r) => {
-            const scoreColor = r.avgScore >= 80 ? "#28a745" : r.avgScore >= 50 ? "#fd7e14" : "#dc3545";
-            return (
-              <div key={r._id} className="table-row">
-                <div className="cell course-cell">
-                  <span className="mobile-label">Course</span>
-                  <strong>{r.title}</strong>
-                </div>
-                <div className="cell">
-                  <span className="mobile-label">Enrollments</span>
-                  <span className="enroll-badge">{r.enrollments}</span>
-                </div>
-                <div className="cell score-cell">
-                  <span className="mobile-label">Avg Score</span>
-                  <div className="score-container">
-                    <span style={{ color: scoreColor, fontWeight: 700 }}>{r.avgScore.toFixed(1)}%</span>
-                    <div className="progress-bg">
-                      <div className="progress-fill" style={{ width: `${r.avgScore}%`, background: scoreColor }} />
-                    </div>
+          <div className="table-container">
+            <div className="table-header desktop-only">
+              <div className="skeleton skel-text" style={{ width: '40%' }}></div>
+              <div className="skeleton skel-text" style={{ width: '60%' }}></div>
+              <div className="skeleton skel-text" style={{ width: '50%' }}></div>
+            </div>
+            <div className="table-body">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="table-row">
+                  <div className="skeleton skel-text-lg"></div>
+                  <div className="skeleton skel-badge"></div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div className="skeleton skel-text" style={{ width: '30%' }}></div>
+                    <div className="skeleton skel-progress"></div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Chart Section */}
+          <div className="chart-card">
+            <Bar 
+              data={chartData} 
+              options={{ 
+                responsive: true, 
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } } 
+              }} 
+            />
+          </div>
 
-      {/* Pagination */}
-      <div className="pagination">
-        <button disabled={page === 1} onClick={() => setPage(page - 1)} className="pag-btn">Prev</button>
-        <span className="pag-info">Page {page} of {totalPages}</span>
-        <button disabled={page === totalPages} onClick={() => setPage(page + 1)} className="pag-btn">Next</button>
-      </div>
+          {/* Filters */}
+          <div className="filter-bar">
+            <input
+              type="text"
+              placeholder="Search course title..."
+              className="search-input"
+              value={search}
+              onChange={(e) => {setSearch(e.target.value); setPage(1);}}
+            />
+            <div className="filter-group">
+              <input
+                type="number"
+                placeholder="Min Enroll"
+                className="number-input"
+                value={minEnroll}
+                onChange={(e) => {setMinEnroll(Number(e.target.value)); setPage(1);}}
+              />
+              <button onClick={downloadCSV} className="export-btn">Export CSV</button>
+            </div>
+          </div>
+
+          {/* Responsive Data List/Table */}
+          <div className="table-container">
+            <div className="table-header desktop-only">
+              <div onClick={() => sortData("title")} className="sort-header">Course {sortKey === "title" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}</div>
+              <div onClick={() => sortData("enrollments")} className="sort-header">Enrollments {sortKey === "enrollments" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}</div>
+              <div onClick={() => sortData("avgScore")} className="sort-header">Avg Score {sortKey === "avgScore" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}</div>
+            </div>
+
+            <div className="table-body">
+              {paginatedReport.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>No courses match your filters.</div>
+              ) : (
+                paginatedReport.map((r) => {
+                  const scoreColor = r.avgScore >= 80 ? "#28a745" : r.avgScore >= 50 ? "#fd7e14" : "#dc3545";
+                  return (
+                    <div key={r._id} className="table-row">
+                      <div className="cell course-cell">
+                        <span className="mobile-label">Course</span>
+                        <strong>{r.title}</strong>
+                      </div>
+                      <div className="cell">
+                        <span className="mobile-label">Enrollments</span>
+                        <span className="enroll-badge">{r.enrollments}</span>
+                      </div>
+                      <div className="cell score-cell">
+                        <span className="mobile-label">Avg Score</span>
+                        <div className="score-container">
+                          <span style={{ color: scoreColor, fontWeight: 700 }}>{r.avgScore.toFixed(1)}%</span>
+                          <div className="progress-bg">
+                            <div className="progress-fill" style={{ width: `${r.avgScore}%`, background: scoreColor }} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Pagination */}
+          <div className="pagination">
+            <button disabled={page === 1} onClick={() => setPage(page - 1)} className="pag-btn">Prev</button>
+            <span className="pag-info">Page {page} of {totalPages}</span>
+            <button disabled={page === totalPages || totalPages === 0} onClick={() => setPage(page + 1)} className="pag-btn">Next</button>
+          </div>
+        </>
+      )}
 
       <style>{`
+        /* ✅ Skeleton Styles */
+        .skeleton {
+          background: #f1f5f9;
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+          border-radius: 4px;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .skel-chart-card { height: 350px; border-radius: 16px; margin-bottom: 25px; }
+        .skel-input { height: 44px; width: 300px; border-radius: 10px; }
+        .skel-input-small { height: 44px; width: 100px; border-radius: 10px; }
+        .skel-btn { height: 44px; width: 120px; border-radius: 10px; }
+        .skel-text { height: 16px; }
+        .skel-text-lg { height: 20px; width: 80%; }
+        .skel-badge { height: 28px; width: 60px; border-radius: 20px; }
+        .skel-progress { height: 6px; width: 100%; border-radius: 10px; }
+
+        /* Original Component Styles */
         .performance-wrapper { padding: 20px; max-width: 1200px; margin: auto; font-family: 'Inter', sans-serif; }
         .main-title { color: #6f42c1; font-weight: 800; margin-bottom: 25px; }
-
-        .loader-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; color: #6f42c1; }
-        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #6f42c1; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 15px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         .chart-card { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 25px; height: 350px; }
         
@@ -194,7 +244,7 @@ export default function CoursePerformance() {
         .table-row { display: grid; grid-template-columns: 2fr 1fr 1.5fr; padding: 15px; border-bottom: 1px solid #f1f5f9; transition: 0.2s; align-items: center; }
         .table-row:hover { background: #fdfbff; }
 
-        .enroll-badge { background: #f1f5f9; padding: 5px 12px; border-radius: 20px; font-weight: 600; font-size: 0.9rem; }
+        .enroll-badge { background: #f1f5f9; padding: 5px 12px; border-radius: 20px; font-weight: 600; font-size: 0.9rem; display: inline-block; }
         .score-container { display: flex; flex-direction: column; gap: 4px; }
         .progress-bg { background: #e2e8f0; height: 6px; border-radius: 10px; width: 100%; overflow: hidden; }
         .progress-fill { height: 100%; transition: width 0.4s ease; }
@@ -212,11 +262,13 @@ export default function CoursePerformance() {
           .table-row { grid-template-columns: 1fr; gap: 12px; padding: 20px; }
           .cell { display: flex; justify-content: space-between; align-items: center; }
           .course-cell { border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 5px; }
-          .mobile-label { display: block; font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; }
+          .mobile-label { display: block; font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; width: 80px; flex-shrink: 0; }
           .score-container { width: 60%; align-items: flex-end; }
           .filter-bar { flex-direction: column; }
           .filter-group { width: 100%; }
           .number-input { flex: 1; }
+          
+          .skel-input, .skel-input-small, .skel-btn { width: 100%; }
         }
       `}</style>
     </div>

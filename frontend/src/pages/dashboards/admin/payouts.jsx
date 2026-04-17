@@ -88,8 +88,6 @@ export default function Payouts() {
     }
   };
 
-  if (loading) return <div className="loading-state">Loading payout data...</div>;
-
   return (
     <div className="payouts-container">
       <h2 className="main-title">Pending Instructor Payouts</h2>
@@ -98,13 +96,21 @@ export default function Payouts() {
       <div className="summary-row">
         <div className="summary-card">
           <span className="summary-label">Instructors Waiting</span>
-          <span className="summary-value">{payouts.length}</span>
+          {loading ? (
+            <div className="skeleton skel-text-lg" style={{ marginTop: '5px', width: '60px' }}></div>
+          ) : (
+            <span className="summary-value">{payouts.length}</span>
+          )}
         </div>
         <div className="summary-card">
           <span className="summary-label">Total Pending Amount</span>
-          <span className="summary-value" style={{ color: "#dc3545" }}>
-            ₹{total(payouts, "amount").toLocaleString('en-IN')}
-          </span>
+          {loading ? (
+            <div className="skeleton skel-text-lg" style={{ marginTop: '5px', width: '140px' }}></div>
+          ) : (
+            <span className="summary-value" style={{ color: "#dc3545" }}>
+              ₹{total(payouts, "amount").toLocaleString('en-IN')}
+            </span>
+          )}
         </div>
       </div>
 
@@ -116,11 +122,13 @@ export default function Payouts() {
           placeholder="Search instructor name..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          disabled={loading}
         />
         <select
           className="month-select"
           value={monthFilter}
           onChange={(e) => setMonthFilter(e.target.value)}
+          disabled={loading}
         >
           <option value="all">All Months</option>
           {monthNames.map((name, index) => (
@@ -138,43 +146,69 @@ export default function Payouts() {
         </div>
 
         <div className="data-body">
-          {filtered.length > 0 ? filtered.map((p, i) => (
-            <div key={i} className="data-row">
-              <div className="cell instructor-cell">
-                <div className="avatar">{(p.name || "U").charAt(0).toUpperCase()}</div>
-                <div>
-                  <span className="mobile-label">Instructor</span>
-                  <strong>{p.name}</strong>
-                  <div style={{ fontSize: "0.8rem", color: "#6c757d" }}>{p.email}</div>
-                  
-                  {/* 👇 NAYA: Subscription Bounty Badge 👇 */}
-                  {p.paymentMethod === "Subscription Bounty" && (
-                    <span className="badge bg-warning bg-opacity-10 text-dark border border-warning mt-1" style={{ fontSize: "10px", display: "inline-block" }}>
-                      👑 Course Completion Bounty
-                    </span>
-                  )}
+          {loading ? (
+            /* Skeleton Loading Rows */
+            Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="data-row">
+                <div className="cell instructor-cell">
+                  <div className="skeleton skel-avatar"></div>
+                  <div style={{ flex: 1 }}>
+                    <span className="mobile-label">Instructor</span>
+                    <div className="skeleton skel-text-sm" style={{ width: '140px', marginBottom: '6px' }}></div>
+                    <div className="skeleton skel-text-xs" style={{ width: '100px' }}></div>
+                  </div>
+                </div>
+
+                <div className="cell">
+                  <span className="mobile-label">Pending Amount</span>
+                  <div className="skeleton skel-text-sm" style={{ width: '90px' }}></div>
+                </div>
+
+                <div className="cell">
+                  <span className="mobile-label">Action</span>
+                  <div className="skeleton skel-btn"></div>
                 </div>
               </div>
+            ))
+          ) : filtered.length > 0 ? (
+            filtered.map((p, i) => (
+              <div key={i} className="data-row">
+                <div className="cell instructor-cell">
+                  <div className="avatar">{(p.name || "U").charAt(0).toUpperCase()}</div>
+                  <div>
+                    <span className="mobile-label">Instructor</span>
+                    <strong>{p.name}</strong>
+                    <div style={{ fontSize: "0.8rem", color: "#6c757d" }}>{p.email}</div>
+                    
+                    {/* 👇 NAYA: Subscription Bounty Badge 👇 */}
+                    {p.paymentMethod === "Subscription Bounty" && (
+                      <span className="badge bg-warning bg-opacity-10 text-dark border border-warning mt-1" style={{ fontSize: "10px", display: "inline-block" }}>
+                        👑 Course Completion Bounty
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-              <div className="cell">
-                <span className="mobile-label">Pending Amount</span>
-                <strong style={{ color: earningColor(p.amount) }}>
-                  ₹{p.amount.toLocaleString('en-IN')}
-                </strong>
-              </div>
+                <div className="cell">
+                  <span className="mobile-label">Pending Amount</span>
+                  <strong style={{ color: earningColor(p.amount) }}>
+                    ₹{p.amount.toLocaleString('en-IN')}
+                  </strong>
+                </div>
 
-              {/* Action Button */}
-              <div className="cell">
-                <span className="mobile-label">Action</span>
-                <button
-                  className="process-btn"
-                  onClick={() => setSelectedInstructor(p)}
-                >
-                  Pay Now
-                </button>
+                {/* Action Button */}
+                <div className="cell">
+                  <span className="mobile-label">Action</span>
+                  <button
+                    className="process-btn"
+                    onClick={() => setSelectedInstructor(p)}
+                  >
+                    Pay Now
+                  </button>
+                </div>
               </div>
-            </div>
-          )) : (
+            ))
+          ) : (
             <div className="empty-msg">No pending payouts match your criteria. All caught up!</div>
           )}
         </div>
@@ -234,10 +268,12 @@ export default function Payouts() {
         .summary-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
         .summary-card { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
         .summary-label { font-size: 0.85rem; color: #6c757d; font-weight: 600; }
-        .summary-value { font-size: 1.6rem; font-weight: 800; color: #2d3436; margin-top: 5px; }
+        .summary-value { font-size: 1.6rem; font-weight: 800; color: #2d3436; margin-top: 5px; height: 32px; display: flex; align-items: center; }
         .filter-bar { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
-        .search-input { flex: 1; min-width: 250px; padding: 12px 16px; border-radius: 12px; border: 1px solid #e0e0e0; outline: none; }
-        .month-select { padding: 12px 16px; border-radius: 12px; border: 1px solid #e0e0e0; background: white; cursor: pointer; }
+        .search-input { flex: 1; min-width: 250px; padding: 12px 16px; border-radius: 12px; border: 1px solid #e0e0e0; outline: none; transition: background-color 0.2s; }
+        .search-input:disabled { background-color: #f8f9fa; cursor: not-allowed; }
+        .month-select { padding: 12px 16px; border-radius: 12px; border: 1px solid #e0e0e0; background: white; cursor: pointer; transition: background-color 0.2s; }
+        .month-select:disabled { background-color: #f8f9fa; cursor: not-allowed; }
         .data-wrapper { background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); overflow: hidden; }
         
         .data-header { display: grid; grid-template-columns: 2fr 1.5fr 1fr; background: #f8f9fa; padding: 18px; font-weight: 700; color: #6f42c1; border-bottom: 1px solid #eee; }
@@ -248,7 +284,6 @@ export default function Payouts() {
         .avatar { width: 38px; height: 38px; border-radius: 50%; background: #6f42c1; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
         .mobile-label { display: none; }
         .empty-msg { padding: 40px; text-align: center; color: #b2bec3; }
-        .loading-state { padding: 100px; text-align: center; color: #6f42c1; font-weight: 600; }
 
         .process-btn { background: #6f42c1; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; }
         .process-btn:hover { background: #5a32a3; }
@@ -264,11 +299,29 @@ export default function Payouts() {
         .confirm-btn { padding: 8px 16px; border-radius: 8px; border: none; background: #28a745; color: white; font-weight: 600; cursor: pointer; }
         .confirm-btn:disabled { opacity: 0.7; cursor: not-allowed; }
 
+        /* ✅ Skeleton Animation & Styles */
+        .skeleton {
+          background: #f1f5f9;
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+          border-radius: 4px;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .skel-text-lg { height: 32px; border-radius: 6px; }
+        .skel-text-sm { height: 18px; border-radius: 4px; }
+        .skel-text-xs { height: 14px; border-radius: 4px; }
+        .skel-avatar { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; }
+        .skel-btn { height: 36px; width: 85px; border-radius: 8px; }
+
         @media (max-width: 850px) {
           .desktop-only { display: none; }
           .data-row { grid-template-columns: 1fr; gap: 12px; padding: 20px; border-bottom: 8px solid #f8f9fa; }
           .cell { display: flex; justify-content: space-between; align-items: center; }
-          .mobile-label { display: block; font-size: 0.75rem; color: #b2bec3; text-transform: uppercase; font-weight: 700; }
+          .mobile-label { display: block; font-size: 0.75rem; color: #b2bec3; text-transform: uppercase; font-weight: 700; width: 120px; flex-shrink: 0; }
           .instructor-cell { border-bottom: 1px solid #f1f1f1; padding-bottom: 10px; margin-bottom: 5px; }
         }
       `}</style>

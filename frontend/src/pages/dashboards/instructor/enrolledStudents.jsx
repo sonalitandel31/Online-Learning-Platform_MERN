@@ -94,10 +94,99 @@ function EnrolledStudents() {
 
   if (loading) {
     return (
-      <div style={loaderWrapperStyle}>
-        <div className="spinner" />
-        <p style={{ marginTop: "15px", color: colors.primary, fontWeight: "500" }}>Syncing student data...</p>
-        <style>{`.spinner { border: 4px solid #f3f3f3; border-top: 4px solid ${colors.primary}; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+      <div className="enrolled-container">
+        <style>{`
+          .enrolled-container { padding: 20px; background: ${colors.bg}; min-height: 100vh; font-family: 'Inter', sans-serif; }
+          .filter-section-skeleton { display: flex; gap: 12px; margin-bottom: 25px; flex-wrap: wrap; background: white; padding: 15px; border-radius: 12px; border: 1px solid ${colors.border}; }
+          .student-table-wrapper { background: white; border-radius: 12px; border: 1px solid ${colors.border}; overflow: hidden; }
+          .student-table { width: 100%; border-collapse: collapse; }
+          .student-table th { background: #f8fafc; padding: 15px; text-align: left; font-size: 0.75rem; color: ${colors.textMuted}; border-bottom: 1px solid ${colors.border}; text-transform: uppercase; letter-spacing: 0.5px; }
+          .student-table td { padding: 15px; border-bottom: 1px solid ${colors.border}; }
+          
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+          }
+          .skeleton {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            background-color: #cbd5e1;
+            border-radius: 6px;
+          }
+          
+          @media (max-width: 768px) {
+            .student-table-wrapper { display: none; }
+            .filter-section-skeleton { display: none; }
+            .mobile-student-list-skeleton { display: flex; flex-direction: column; gap: 12px; }
+            .student-card-skeleton { background: white; padding: 16px; border-radius: 12px; border: 1px solid ${colors.border}; }
+          }
+          @media (min-width: 769px) { .mobile-student-list-skeleton { display: none; } }
+        `}</style>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <h2 style={{ margin: 0, fontWeight: "800", color: colors.textMain }}>Enrolled Students</h2>
+          <div className="skeleton" style={{ width: "80px", height: "24px", borderRadius: "12px" }}></div>
+        </div>
+
+        <div className="filter-section-skeleton">
+          <div className="skeleton" style={{ flex: 2, minWidth: "250px", height: "40px", borderRadius: "8px" }}></div>
+          <div className="skeleton" style={{ flex: 1, minWidth: "140px", height: "40px", borderRadius: "8px" }}></div>
+          <div className="skeleton" style={{ flex: 1, minWidth: "140px", height: "40px", borderRadius: "8px" }}></div>
+          <div className="skeleton" style={{ flex: 1, minWidth: "140px", height: "40px", borderRadius: "8px" }}></div>
+        </div>
+
+        <div className="student-table-wrapper">
+          <table className="student-table">
+            <thead>
+              <tr>
+                <th>Student Info</th>
+                <th>Course Title</th>
+                <th>Enrollment Type</th>
+                <th>Progress</th>
+                <th>Status</th>
+                <th>Cert</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[1, 2, 3, 4, 5].map((item) => (
+                <tr key={item}>
+                  <td>
+                    <div className="skeleton" style={{ height: "16px", width: "120px", marginBottom: "6px" }}></div>
+                    <div className="skeleton" style={{ height: "12px", width: "160px" }}></div>
+                  </td>
+                  <td><div className="skeleton" style={{ height: "16px", width: "140px" }}></div></td>
+                  <td><div className="skeleton" style={{ height: "24px", width: "90px", borderRadius: "6px" }}></div></td>
+                  <td>
+                    <div className="skeleton" style={{ height: "12px", width: "30px", marginBottom: "4px" }}></div>
+                    <div className="skeleton" style={{ height: "6px", width: "80px", borderRadius: "10px" }}></div>
+                  </td>
+                  <td><div className="skeleton" style={{ height: "24px", width: "70px", borderRadius: "6px" }}></div></td>
+                  <td><div className="skeleton" style={{ height: "16px", width: "40px" }}></div></td>
+                  <td><div className="skeleton" style={{ height: "14px", width: "80px" }}></div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mobile-student-list-skeleton">
+          {[1, 2, 3, 4, 5].map((item) => (
+            <div key={item} className="student-card-skeleton">
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
+                <div className="skeleton" style={{ height: "18px", width: "120px" }}></div>
+                <div className="skeleton" style={{ height: "20px", width: "60px", borderRadius: "6px" }}></div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                 <div className="skeleton" style={{ height: "14px", width: "140px" }}></div>
+                 <div className="skeleton" style={{ height: "20px", width: "80px", borderRadius: "6px" }}></div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px", borderTop: `1px solid ${colors.border}` }}>
+                 <div className="skeleton" style={{ height: "14px", width: "90px" }}></div>
+                 <div className="skeleton" style={{ height: "14px", width: "60px" }}></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

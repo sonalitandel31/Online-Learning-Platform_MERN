@@ -11,7 +11,7 @@ export default function ManageCategories() {
   // Inline UI State
   const [statusMessage, setStatusMessage] = useState({ text: "", type: "" });
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // ✅ Changed to true for initial load
 
   const showStatus = (text, type = "success") => {
     setStatusMessage({ text, type });
@@ -115,9 +115,10 @@ export default function ManageCategories() {
             placeholder="Enter new category..."
             value={newCategory}
             onChange={(e) => setNewCategory(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && addCategory()}
+            onKeyPress={(e) => e.key === "Enter" && !loading && addCategory()}
+            disabled={loading}
           />
-          <button onClick={addCategory} className="btn-primary">Add</button>
+          <button onClick={addCategory} className="btn-primary" disabled={loading}>Add</button>
         </div>
 
         <input
@@ -126,6 +127,7 @@ export default function ManageCategories() {
           className="search-input"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          disabled={loading}
         />
       </div>
 
@@ -139,65 +141,82 @@ export default function ManageCategories() {
 
         <div className="table-body">
           {loading ? (
-             <div className="empty-state">Refreshing list...</div>
-          ) : categories
-            .filter((cat) => cat.name.toLowerCase().includes(search.toLowerCase()))
-            .map((cat) => (
-              <div key={cat._id} className="table-row">
+            /* ✅ Skeleton Loading Rows */
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="table-row">
                 <div className="cell name-cell">
-                  {editingId === cat._id ? (
-                    <input
-                      type="text"
-                      className="edit-input"
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      autoFocus
-                    />
-                  ) : (
-                    <span dangerouslySetInnerHTML={{ __html: highlightText(cat.name) }} />
-                  )}
+                  <div className="skeleton skel-text"></div>
                 </div>
-
                 <div className="cell">
-                  <span className={`badge-status ${cat.status}`}>{cat.status}</span>
+                  <div className="skeleton skel-badge"></div>
                 </div>
-
                 <div className="cell meta-cell">
-                  {cat.suggestedBy ? (
-                    <span>{cat.suggestedBy.name} <small className="email-text">({cat.suggestedBy.email})</small></span>
-                  ) : "Admin"}
+                  <div className="skeleton skel-text" style={{ width: "80%" }}></div>
                 </div>
-
-                <div className="cell actions-cell">
-                  {editingId === cat._id ? (
-                    <div className="btn-group">
-                      <button onClick={() => saveEdit(cat._id)} className="btn-save">Save</button>
-                      <button onClick={() => setEditingId(null)} className="btn-cancel">Cancel</button>
-                    </div>
-                  ) : confirmDeleteId === cat._id ? (
-                    <div className="btn-group confirm-ui">
-                      <span className="confirm-text">Are you sure?</span>
-                      <button onClick={() => deleteCategory(cat._id)} className="btn-confirm-yes">Yes</button>
-                      <button onClick={() => setConfirmDeleteId(null)} className="btn-cancel">No</button>
-                    </div>
-                  ) : (
-                    <div className="btn-group">
-                      {cat.status === "pending" && (
-                        <>
-                          <button onClick={() => approveCategory(cat._id)} className="btn-approve">Approve</button>
-                          <button onClick={() => rejectCategory(cat._id)} className="btn-reject">Reject</button>
-                        </>
-                      )}
-                      <button onClick={() => { setEditingId(cat._id); setEditName(cat.name); }} className="btn-edit">Edit</button>
-                      <button onClick={() => setConfirmDeleteId(cat._id)} className="btn-delete">Delete</button>
-                    </div>
-                  )}
+                <div className="cell actions-cell" style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+                  <div className="skeleton skel-btn"></div>
+                  <div className="skeleton skel-btn"></div>
                 </div>
               </div>
-            ))}
-            
-          {!loading && categories.length === 0 && (
+            ))
+          ) : categories.filter((cat) => cat.name.toLowerCase().includes(search.toLowerCase())).length === 0 ? (
             <div className="empty-state">No categories found.</div>
+          ) : (
+            categories
+              .filter((cat) => cat.name.toLowerCase().includes(search.toLowerCase()))
+              .map((cat) => (
+                <div key={cat._id} className="table-row">
+                  <div className="cell name-cell">
+                    {editingId === cat._id ? (
+                      <input
+                        type="text"
+                        className="edit-input"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        autoFocus
+                      />
+                    ) : (
+                      <span dangerouslySetInnerHTML={{ __html: highlightText(cat.name) }} />
+                    )}
+                  </div>
+
+                  <div className="cell">
+                    <span className={`badge-status ${cat.status}`}>{cat.status}</span>
+                  </div>
+
+                  <div className="cell meta-cell">
+                    {cat.suggestedBy ? (
+                      <span>{cat.suggestedBy.name} <small className="email-text">({cat.suggestedBy.email})</small></span>
+                    ) : "Admin"}
+                  </div>
+
+                  <div className="cell actions-cell">
+                    {editingId === cat._id ? (
+                      <div className="btn-group">
+                        <button onClick={() => saveEdit(cat._id)} className="btn-save">Save</button>
+                        <button onClick={() => setEditingId(null)} className="btn-cancel">Cancel</button>
+                      </div>
+                    ) : confirmDeleteId === cat._id ? (
+                      <div className="btn-group confirm-ui">
+                        <span className="confirm-text">Are you sure?</span>
+                        <button onClick={() => deleteCategory(cat._id)} className="btn-confirm-yes">Yes</button>
+                        <button onClick={() => setConfirmDeleteId(null)} className="btn-cancel">No</button>
+                      </div>
+                    ) : (
+                      <div className="btn-group">
+                        {cat.status === "pending" && (
+                          <>
+                            <button onClick={() => approveCategory(cat._id)} className="btn-approve">Approve</button>
+                            <button onClick={() => rejectCategory(cat._id)} className="btn-reject">Reject</button>
+                          </>
+                        )}
+                        <button onClick={() => { setEditingId(cat._id); setEditName(cat.name); }} className="btn-edit">Edit</button>
+                        <button onClick={() => setConfirmDeleteId(cat._id)} className="btn-delete">Delete</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
           )}
         </div>
       </div>
@@ -215,14 +234,16 @@ export default function ManageCategories() {
 
         .action-bar { display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px; }
         .input-group { display: flex; gap: 8px; flex: 2; }
-        .main-input, .search-input, .edit-input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0; outline: none; }
-        .btn-primary { background: #6a0dad; color: white; border: none; padding: 0 24px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+        .main-input, .search-input, .edit-input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0; outline: none; transition: background-color 0.2s; }
+        .main-input:disabled, .search-input:disabled { background-color: #f8fafc; color: #94a3b8; cursor: not-allowed; }
+        .btn-primary { background: #6a0dad; color: white; border: none; padding: 0 24px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
         
         .table-wrapper { border-radius: 12px; border: 1px solid #f1f5f9; }
         .table-header { display: grid; grid-template-columns: 2fr 1fr 2fr 2.5fr; background: #f8fafc; padding: 15px; font-weight: 700; color: #64748b; font-size: 0.9rem; }
         .table-row { display: grid; grid-template-columns: 2fr 1fr 2fr 2.5fr; padding: 15px; border-bottom: 1px solid #f1f5f9; align-items: center; }
         
-        .badge-status { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: capitalize; }
+        .badge-status { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: capitalize; display: inline-block; }
         .badge-status.approved { background: #dcfce7; color: #166534; }
         .badge-status.pending { background: #fef9c3; color: #854d0e; }
         .badge-status.rejected { background: #fee2e2; color: #991b1b; }
@@ -243,13 +264,30 @@ export default function ManageCategories() {
 
         .empty-state { padding: 40px; text-align: center; color: #94a3b8; grid-column: span 4; }
 
+        /* ✅ Skeleton Animation & Styles */
+        .skeleton {
+          background: #f1f5f9;
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+          border-radius: 4px;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .skel-text { height: 18px; width: 60%; }
+        .skel-badge { height: 24px; width: 70px; border-radius: 20px; }
+        .skel-btn { height: 30px; width: 60px; border-radius: 6px; }
+
         @media (max-width: 900px) {
           .table-header.desktop-only { display: none; }
           .table-row { grid-template-columns: 1fr; gap: 12px; padding: 20px; border-bottom: 8px solid #f8fafc; }
           .cell { display: flex; align-items: center; justify-content: space-between; }
           .mobile-label { display: block; font-weight: 700; color: #94a3b8; font-size: 0.75rem; }
-          .btn-group { justify-content: flex-start; width: 100%; margin-top: 5px; }
+          .btn-group, .actions-cell { justify-content: flex-start !important; width: 100%; margin-top: 5px; }
           .email-text { display: inline; }
+          .skel-btn { flex: 1; height: 38px; }
         }
         @media (min-width: 600px) { .action-bar { flex-direction: row; } .search-input { max-width: 300px; } }
       `}</style>

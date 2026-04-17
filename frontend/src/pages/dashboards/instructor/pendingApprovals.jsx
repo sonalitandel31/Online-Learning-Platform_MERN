@@ -61,7 +61,7 @@ function PendingApprovals() {
 
   useEffect(() => {
     fetchPending();
-    
+
     const fetchCategories = async () => {
       try {
         const res = await api.get("/courses/categories");
@@ -99,8 +99,8 @@ function PendingApprovals() {
       thumbnail: course.thumbnail || "",
       // ✅ NEW MODULE 7: Bind B2B Data
       isGlobal: course.isGlobal !== false,
-      allowedCompanies: course.allowedCompanies?.length > 0 
-        ? [typeof course.allowedCompanies[0] === 'object' ? course.allowedCompanies[0]._id : course.allowedCompanies[0]] 
+      allowedCompanies: course.allowedCompanies?.length > 0
+        ? [typeof course.allowedCompanies[0] === 'object' ? course.allowedCompanies[0]._id : course.allowedCompanies[0]]
         : []
     });
     setModalOpen(true);
@@ -199,10 +199,52 @@ function PendingApprovals() {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "70vh", color: colors.primary }}>
-        <div style={{ border: "4px solid #f3f3f3", borderTop: `4px solid ${colors.primary}`, borderRadius: "50%", width: "50px", height: "50px", animation: "spin 1s linear infinite", marginBottom: "20px" }} />
-        <p style={{ fontWeight: "600" }}>Loading pending approvals...</p>
-        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+      <div style={{ padding: "30px", background: colors.bg, minHeight: "100vh" }}>
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+          }
+          .skeleton {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            background-color: #cbd5e1;
+            border-radius: 8px;
+          }
+        `}</style>
+
+        <div style={{ marginBottom: "30px" }}>
+          <div className="skeleton" style={{ height: "36px", width: "250px", marginBottom: "10px" }}></div>
+          <div className="skeleton" style={{ height: "20px", width: "350px" }}></div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "25px" }}>
+          {[1, 2, 3, 4, 5, 6].map((item) => (
+            <div key={item} style={{ background: "#fff", borderRadius: "16px", overflow: "hidden", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", border: `1px solid ${colors.border}`, display: "flex", flexDirection: "column" }}>
+              {/* Image Skeleton */}
+              <div className="skeleton" style={{ width: "100%", height: "160px", borderRadius: "0" }}></div>
+
+              {/* Body Skeleton */}
+              <div style={{ padding: "20px", flexGrow: 1 }}>
+                <div className="skeleton" style={{ height: "24px", width: "80%", marginBottom: "15px" }}></div>
+                <div className="skeleton" style={{ height: "16px", width: "60%", marginBottom: "8px" }}></div>
+                <div className="skeleton" style={{ height: "16px", width: "45%", marginBottom: "8px" }}></div>
+                <div className="skeleton" style={{ height: "16px", width: "30%", marginBottom: "15px" }}></div>
+                <div className="skeleton" style={{ height: "22px", width: "35%", borderRadius: "4px" }}></div>
+              </div>
+
+              {/* View Content Button Skeleton */}
+              <div style={{ padding: "0 20px 15px 20px" }}>
+                <div className="skeleton" style={{ height: "40px", width: "100%", borderRadius: "10px" }}></div>
+              </div>
+
+              {/* Footer Skeleton */}
+              <div style={{ padding: "15px 20px", background: "#f8fafc", borderTop: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div className="skeleton" style={{ height: "16px", width: "40%" }}></div>
+                <div className="skeleton" style={{ height: "34px", width: "110px", borderRadius: "8px" }}></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -245,7 +287,7 @@ function PendingApprovals() {
                   <div style={{ marginBottom: "5px" }}><strong>Category:</strong> {course.category?.name || "N/A"}</div>
                   <div style={{ marginBottom: "5px" }}><strong>Level:</strong> {course.level}</div>
                   <div style={{ marginBottom: "5px" }}><strong>Price:</strong> {course.price > 0 ? `₹${course.price}` : <span style={{ color: "#10b981", fontWeight: "600" }}>Free</span>}</div>
-                  
+
                   {/* ✅ NEW MODULE 7: Visibility Badge */}
                   <div style={{ marginTop: "8px" }}>
                     <strong>Visibility:</strong>{" "}
@@ -260,7 +302,9 @@ function PendingApprovals() {
               <button
                 onClick={() => openContentModal(course._id)}
                 style={{
-                  width: "100%",
+                  width: "90%",
+                  display: "block",
+                  margin: "0 auto",
                   borderRadius: "10px",
                   fontWeight: 700,
                   background: "rgba(109,40,217,0.1)",
@@ -326,7 +370,7 @@ function PendingApprovals() {
             {/* ✅ NEW MODULE 7: B2B Visibility Settings in Edit Modal */}
             <div style={{ background: "#f8fafc", padding: "15px", borderRadius: "10px", border: `1px solid ${colors.border}`, marginBottom: "15px" }}>
               <h4 style={{ margin: "0 0 10px 0", fontSize: "0.95rem", color: colors.primary }}>Course Visibility</h4>
-              
+
               <div style={{ display: "flex", alignItems: "center", marginBottom: "10px" }}>
                 <input
                   type="checkbox"
@@ -438,7 +482,7 @@ function PendingApprovals() {
                       const src = l.fileUrl
                         ? (l.fileUrl.startsWith("http") ? l.fileUrl : `${base}/${String(l.fileUrl).replace(/^\//, "")}`)
                         : "";
-                      
+
                       const durSec = l.duration || 0;
                       const m = Math.floor(durSec / 60);
                       const s = durSec % 60;
@@ -523,13 +567,13 @@ function PendingApprovals() {
                           <span style={{ fontSize: "0.75rem", background: "#fff5f5", border: "1px solid #fed7d7", padding: "3px 8px", borderRadius: "6px", color: "#991b1b", fontWeight: "700" }}>
                             Tab Limit: {ex.proctoring?.tabSwitchLimit ?? 3}
                           </span>
-                          
+
                           {ex.proctoring?.webcamRequired && (
                             <span style={{ fontSize: "0.75rem", background: "#fee2e2", color: "#991b1b", padding: "3px 8px", borderRadius: "6px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
                               📸 Webcam Req.
                             </span>
                           )}
-                          
+
                           {ex.proctoring?.fullscreenRequired && (
                             <span style={{ fontSize: "0.75rem", background: "#fee2e2", color: "#991b1b", padding: "3px 8px", borderRadius: "6px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
                               🖥️ Fullscreen Req.

@@ -66,14 +66,129 @@ function CourseAnalytics() {
 
   if (loading) {
     return (
-      <div className="loader-container">
-        <div className="spinner" />
-        <p style={{ color: colors.primary, marginTop: "15px", fontWeight: "600" }}>Analyzing Instructor Performance...</p>
+      <div className="analytics-container">
         <style>{`
-          .loader-container { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 70vh; }
-          .spinner { border: 4px solid ${colors.border}; border-top: 4px solid ${colors.primary}; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
-          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+          .analytics-container { padding: 20px; background: ${colors.bg}; min-height: 100vh; font-family: 'Inter', sans-serif; }
+          .page-header { margin-bottom: 24px; }
+          .charts-grid { display: flex; flex-direction: column; gap: 20px; margin-bottom: 30px; }
+          .chart-card { background: white; padding: 24px; border-radius: 16px; border: 1px solid ${colors.border}; box-shadow: 0 4px 15px rgba(0,0,0,0.02); }
+          .data-table-wrapper { background: white; border-radius: 16px; border: 1px solid ${colors.border}; overflow: hidden; display: none; box-shadow: 0 4px 15px rgba(0,0,0,0.02); }
+          .data-table { width: 100%; border-collapse: collapse; }
+          .data-table th { background: #f8fafc; padding: 16px; text-align: left; font-size: 0.8rem; color: ${colors.textMuted}; text-transform: uppercase; border-bottom: 1px solid ${colors.border}; font-weight: 700; }
+          .data-table td { padding: 16px; border-bottom: 1px solid ${colors.border}; }
+          .mobile-data-list { display: flex; flex-direction: column; gap: 12px; }
+          .course-stat-card { background: white; padding: 16px; border-radius: 12px; border: 1px solid ${colors.border}; }
+
+          @media (min-width: 992px) {
+            .analytics-container { padding: 30px; }
+            .charts-grid { flex-direction: row; }
+            .chart-card { flex: 1; width: 50%; }
+            .data-table-wrapper { display: block; }
+            .mobile-data-list { display: none; }
+          }
+          
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+          }
+          .skeleton {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            background-color: #cbd5e1;
+            border-radius: 8px;
+          }
         `}</style>
+
+        <div className="page-header">
+          <div className="skeleton" style={{ height: "36px", width: "300px", marginBottom: "8px" }}></div>
+          <div className="skeleton" style={{ height: "20px", width: "400px", maxWidth: "100%" }}></div>
+        </div>
+
+        {/* AI Banner Skeleton */}
+        <div style={{ background: "#e2e8f0", borderRadius: "16px", padding: "24px", marginBottom: "30px", display: "flex", flexDirection: "column", gap: "20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(0,0,0,0.05)", paddingBottom: "15px" }}>
+            <div>
+              <div className="skeleton" style={{ height: "28px", width: "200px", marginBottom: "8px" }}></div>
+              <div className="skeleton" style={{ height: "16px", width: "300px", maxWidth: "100%" }}></div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div className="skeleton" style={{ height: "14px", width: "120px", marginBottom: "8px" }}></div>
+              <div className="skeleton" style={{ height: "40px", width: "80px", marginLeft: "auto" }}></div>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "15px" }}>
+            {[1, 2, 3].map((item) => (
+              <div key={item} style={{ background: "rgba(255,255,255,0.4)", padding: "15px", borderRadius: "12px" }}>
+                <div className="skeleton" style={{ height: "14px", width: "100px", marginBottom: "12px" }}></div>
+                <div className="skeleton" style={{ height: "24px", width: "60px" }}></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Charts Grid Skeleton */}
+        <div className="charts-grid">
+          <div className="chart-card">
+            <div className="skeleton" style={{ height: "24px", width: "180px", marginBottom: "20px" }}></div>
+            <div className="skeleton" style={{ width: "100%", height: "280px", borderRadius: "12px" }}></div>
+          </div>
+          <div className="chart-card">
+            <div className="skeleton" style={{ height: "24px", width: "150px", marginBottom: "20px" }}></div>
+            <div className="skeleton" style={{ width: "100%", height: "280px", borderRadius: "12px" }}></div>
+          </div>
+        </div>
+
+        {/* Data Table Skeleton */}
+        <div className="skeleton" style={{ height: "24px", width: "220px", marginBottom: "15px" }}></div>
+        <div className="data-table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th width="35%"><div className="skeleton" style={{ height: "14px", width: "100px" }}></div></th>
+                <th width="15%"><div className="skeleton" style={{ height: "14px", width: "80px" }}></div></th>
+                <th width="15%"><div className="skeleton" style={{ height: "14px", width: "80px" }}></div></th>
+                <th width="20%"><div className="skeleton" style={{ height: "14px", width: "150px" }}></div></th>
+                <th width="15%"><div className="skeleton" style={{ height: "14px", width: "100px" }}></div></th>
+              </tr>
+            </thead>
+            <tbody>
+              {[1, 2, 3, 4].map((item) => (
+                <tr key={item}>
+                  <td><div className="skeleton" style={{ height: "20px", width: "180px" }}></div></td>
+                  <td><div className="skeleton" style={{ height: "16px", width: "40px" }}></div></td>
+                  <td><div className="skeleton" style={{ height: "16px", width: "40px" }}></div></td>
+                  <td>
+                    <div className="skeleton" style={{ height: "12px", width: "100%", marginBottom: "6px" }}></div>
+                    <div className="skeleton" style={{ height: "8px", width: "100%", borderRadius: "10px" }}></div>
+                  </td>
+                  <td><div className="skeleton" style={{ height: "20px", width: "80px" }}></div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Data List Skeleton */}
+        <div className="mobile-data-list">
+          {[1, 2, 3].map((item) => (
+            <div key={item} className="course-stat-card">
+              <div className="skeleton" style={{ height: "20px", width: "60%", marginBottom: "16px" }}></div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
+                <div className="skeleton" style={{ height: "14px", width: "80px" }}></div>
+                <div className="skeleton" style={{ height: "14px", width: "40px" }}></div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
+                <div className="skeleton" style={{ height: "14px", width: "80px" }}></div>
+                <div className="skeleton" style={{ height: "14px", width: "40px" }}></div>
+              </div>
+              <div className="skeleton" style={{ height: "14px", width: "100%", marginBottom: "6px" }}></div>
+              <div className="skeleton" style={{ height: "8px", width: "100%", borderRadius: "10px", marginBottom: "16px" }}></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <div className="skeleton" style={{ height: "14px", width: "60px" }}></div>
+                <div className="skeleton" style={{ height: "16px", width: "80px" }}></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -159,17 +274,20 @@ function CourseAnalytics() {
           <div className="ai-metrics-grid">
             <div className="ai-metric-card">
               <div className="ai-metric-label">Avg Engagement</div>
-              <div className="ai-metric-val"><FaUserShield size={18} opacity={0.8}/> {aiScore.avgEngagement}%</div>
+              <div className="ai-metric-val"><FaUserShield size={18} opacity={0.8} /> {aiScore.avgEngagement}%</div>
             </div>
             <div className="ai-metric-card">
               <div className="ai-metric-label">High Risk Students</div>
               <div className="ai-metric-val" style={{ color: aiScore.highRiskRate > 20 ? '#fca5a5' : 'white' }}>
-                <FaExclamationTriangle size={18} opacity={0.8}/> {aiScore.highRiskRate}%
+                <FaExclamationTriangle size={18} opacity={0.8} /> {aiScore.highRiskRate}%
               </div>
             </div>
             <div className="ai-metric-card">
               <div className="ai-metric-label">Avg Drop Rate</div>
-              <div className="ai-metric-val">{aiScore.avgDropRate}%</div>
+              {/* <div className="ai-metric-val">{aiScore.avgDropRate}%</div> */}
+              <div className="ai-metric-val" style={{ color: aiScore.avgDropRate < 0 ? '#10b981' : 'white' }}>
+                {aiScore.avgDropRate < 0 ? '⬇' : '⬆'} {Math.abs(aiScore.avgDropRate)}%
+              </div>
             </div>
           </div>
         </div>
@@ -181,7 +299,7 @@ function CourseAnalytics() {
         <>
           <div className="charts-grid">
             <div className="chart-card">
-              <div className="chart-title"><FaChartBar color={colors.primary}/> Total Enrollments</div>
+              <div className="chart-title"><FaChartBar color={colors.primary} /> Total Enrollments</div>
               <div style={{ width: "100%", height: 280 }}>
                 <ResponsiveContainer>
                   <BarChart data={enrollmentData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -195,16 +313,16 @@ function CourseAnalytics() {
             </div>
 
             <div className="chart-card">
-              <div className="chart-title"><FaChartPie color={colors.primary}/> Revenue Split</div>
+              <div className="chart-title"><FaChartPie color={colors.primary} /> Revenue Split</div>
               <div style={{ width: "100%", height: 280 }}>
                 <ResponsiveContainer>
                   <PieChart>
-                    <Pie 
-                      data={revenueData} 
-                      dataKey="value" 
-                      nameKey="name" 
+                    <Pie
+                      data={revenueData}
+                      dataKey="value"
+                      nameKey="name"
                       innerRadius={70}
-                      outerRadius={90} 
+                      outerRadius={90}
                       paddingAngle={5}
                     >
                       {revenueData.map((_, index) => (
@@ -219,8 +337,8 @@ function CourseAnalytics() {
             </div>
           </div>
 
-          <div className="chart-title" style={{ marginBottom: '15px' }}><FaTable color={colors.primary}/> Student Progress Details</div>
-          
+          <div className="chart-title" style={{ marginBottom: '15px' }}><FaTable color={colors.primary} /> Student Progress Details</div>
+
           {/* Desktop Table View */}
           <div className="data-table-wrapper">
             <table className="data-table">
@@ -261,12 +379,12 @@ function CourseAnalytics() {
               <div key={i} className="course-stat-card">
                 <div className="course-name">{a.courseTitle}</div>
                 <div className="stat-row">
-                    <span className="stat-label">Enrollments</span>
-                    <span className="stat-val">{a.totalStudents}</span>
+                  <span className="stat-label">Enrollments</span>
+                  <span className="stat-val">{a.totalStudents}</span>
                 </div>
                 <div className="stat-row">
-                    <span className="stat-label">Completed</span>
-                    <span className="stat-val">{a.completedStudents}</span>
+                  <span className="stat-label">Completed</span>
+                  <span className="stat-val">{a.completedStudents}</span>
                 </div>
                 <div style={{ marginTop: '10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: '600' }}>
@@ -278,8 +396,8 @@ function CourseAnalytics() {
                   </div>
                 </div>
                 <div className="stat-row" style={{ marginTop: '12px', borderTop: `1px solid ${colors.border}`, paddingTop: '8px' }}>
-                    <span className="stat-label">Revenue</span>
-                    <span className="stat-val">₹{a.revenue.toLocaleString()}</span>
+                  <span className="stat-label">Revenue</span>
+                  <span className="stat-val">₹{a.revenue.toLocaleString()}</span>
                 </div>
               </div>
             ))}
@@ -290,13 +408,13 @@ function CourseAnalytics() {
   );
 }
 
-const emptyStateStyle = { 
-  textAlign: "center", 
-  padding: "60px 20px", 
-  color: "#94a3b8", 
-  background: "white", 
-  borderRadius: "16px", 
-  border: "1px dashed #cbd5e1" 
+const emptyStateStyle = {
+  textAlign: "center",
+  padding: "60px 20px",
+  color: "#94a3b8",
+  background: "white",
+  borderRadius: "16px",
+  border: "1px dashed #cbd5e1"
 };
 
 export default CourseAnalytics;

@@ -147,8 +147,8 @@ export default function MySubscription() {
    * Cancel subscription — what it does in YOUR backend:
    *
    * Your backend supports:
-   *  - mode="period_end" (recommended): stops auto-renew, keeps access until current period end
-   *  - mode="immediate": cancels right away (and attempts provider cancel)
+   * - mode="period_end" (recommended): stops auto-renew, keeps access until current period end
+   * - mode="immediate": cancels right away (and attempts provider cancel)
    *
    * IMPORTANT: Your backend expects { mode }, not { reason }.
    */
@@ -255,8 +255,59 @@ export default function MySubscription() {
       )}
 
       {loading ? (
-        <div className="text-center py-5">
-          <div className="spinner-border text-primary" role="status" />
+        <div className="card border-0 shadow-lg overflow-hidden" style={{ borderRadius: 20 }}>
+          <style>{`
+            .skeleton {
+              background: #e2e5e7;
+              background-image: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+              background-size: 200px 100%;
+              background-repeat: no-repeat;
+              border-radius: 4px;
+              display: inline-block;
+              line-height: 1;
+              animation: skeletonShimmer 1.5s infinite linear;
+            }
+            @keyframes skeletonShimmer {
+              0% { background-position: -200px 0; }
+              100% { background-position: calc(200px + 100%) 0; }
+            }
+          `}</style>
+          
+          {/* Top Banner Skeleton */}
+          <div className="p-4 p-md-4" style={{ backgroundColor: "#e2e8f0" }}>
+            <div className="d-flex justify-content-between align-items-start">
+              <div>
+                <div className="skeleton mb-2" style={{ height: "12px", width: "100px" }}></div>
+                <div className="skeleton mb-2" style={{ height: "32px", width: "250px", borderRadius: "8px" }}></div>
+                <div className="skeleton" style={{ height: "16px", width: "180px" }}></div>
+              </div>
+              <div className="skeleton rounded-pill" style={{ height: "36px", width: "100px" }}></div>
+            </div>
+          </div>
+          
+          {/* Card Body Skeleton */}
+          <div className="card-body p-4 p-md-5 bg-white">
+             {/* 2x2 Grid */}
+             <div className="row g-4">
+               {[1, 2, 3, 4].map(i => (
+                 <div key={i} className="col-sm-6">
+                   <div className="d-flex align-items-center gap-3">
+                     <div className="skeleton rounded-4" style={{ width: "56px", height: "56px", flexShrink: 0 }}></div>
+                     <div>
+                       <div className="skeleton mb-2" style={{ height: "12px", width: "80px" }}></div>
+                       <div className="skeleton" style={{ height: "20px", width: "140px" }}></div>
+                     </div>
+                   </div>
+                 </div>
+               ))}
+             </div>
+             
+             {/* Footer Skeleton */}
+             <div className="mt-5 pt-4 border-top d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+               <div className="skeleton" style={{ height: "16px", width: "250px" }}></div>
+               <div className="skeleton" style={{ height: "20px", width: "150px" }}></div>
+             </div>
+          </div>
         </div>
       ) : !sub ? (
         <div
@@ -300,7 +351,7 @@ export default function MySubscription() {
             </div>
           </div>
 
-          <div className="card-body p-4 p-md-5">
+          <div className="card-body p-4 p-md-5 bg-white">
             {trialInfo && (
               <div
                 className={`alert border-0 rounded-4 d-flex align-items-center gap-3 mb-4 ${

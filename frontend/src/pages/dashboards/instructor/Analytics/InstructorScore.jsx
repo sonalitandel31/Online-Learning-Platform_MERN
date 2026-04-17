@@ -41,11 +41,112 @@ export default function InstructorScore() {
     run();
   }, [token]);
 
-  if (loading) return (
-    <div className="d-flex justify-content-center align-items-center vh-100 bg-white">
-      <div className="spinner-border text-primary" style={{ width: '3rem', height: '3rem' }}></div>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div style={{ padding: "clamp(16px, 4vw, 32px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+          }
+          .skeleton {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            background-color: #cbd5e1;
+            border-radius: 8px;
+          }
+        `}</style>
+        <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
+          {/* Header Skeleton */}
+          <header className="mb-5 text-start">
+            <div className="skeleton" style={{ height: "36px", width: "300px", marginBottom: "8px" }}></div>
+            <div className="skeleton" style={{ height: "20px", width: "400px", maxWidth: "100%" }}></div>
+          </header>
+
+          <div className="row g-4">
+            {/* Major Score Card Skeleton */}
+            <div className="col-12 col-lg-4">
+              <div style={{
+                background: "#e2e8f0", // Lighter gray for the gradient background placeholder
+                borderRadius: "32px",
+                padding: "40px",
+                height: "100%",
+                minHeight: "350px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                animation: "pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite"
+              }}>
+                <div style={{ width: "140px", height: "140px", borderRadius: "50%", backgroundColor: "#cbd5e1", marginBottom: "20px" }}></div>
+                <div style={{ height: "24px", width: "180px", backgroundColor: "#cbd5e1", borderRadius: "4px", marginBottom: "8px" }}></div>
+                <div style={{ height: "16px", width: "220px", backgroundColor: "#cbd5e1", borderRadius: "4px" }}></div>
+              </div>
+            </div>
+
+            {/* Secondary Stats Skeleton */}
+            <div className="col-12 col-lg-8">
+              <div className="row g-4">
+                {[1, 2, 3].map((item) => (
+                  <div key={item} className="col-12 col-md-6">
+                    <div style={{
+                      background: "#fff", border: "1px solid #e2e8f0",
+                      borderRadius: "24px", padding: "24px", height: "100%",
+                      display: "flex", alignItems: "center", gap: "20px"
+                    }}>
+                      <div className="skeleton" style={{ width: "52px", height: "52px", borderRadius: "16px", flexShrink: 0 }}></div>
+                      <div className="text-start" style={{ flexGrow: 1 }}>
+                        <div className="skeleton" style={{ height: "12px", width: "80px", marginBottom: "8px" }}></div>
+                        <div className="skeleton" style={{ height: "28px", width: "100px" }}></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {/* Drop-off Card Skeleton (slightly different structure) */}
+                <div className="col-12 col-md-6">
+                  <div style={{
+                    background: colors.card, border: `1px solid ${colors.border}`,
+                    borderRadius: "24px", padding: "24px", height: "100%"
+                  }}>
+                    <div className="d-flex justify-content-between align-items-start text-start">
+                      <div style={{ flexGrow: 1 }}>
+                        <div className="skeleton" style={{ height: "12px", width: "90px", marginBottom: "8px" }}></div>
+                        <div className="skeleton" style={{ height: "28px", width: "70px" }}></div>
+                      </div>
+                      <div className="skeleton" style={{ width: "40px", height: "40px", borderRadius: "12px" }}></div>
+                    </div>
+                    <div className="mt-4 text-start">
+                      <div className="skeleton" style={{ height: "6px", width: "100%", borderRadius: "10px", marginBottom: "12px" }}></div>
+                      <div className="skeleton" style={{ height: "12px", width: "90%" }}></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pro Tip Box Skeleton */}
+          <div style={{
+            marginTop: "2rem",
+            padding: "24px",
+            background: "#fff",
+            borderRadius: "24px",
+            border: `1px solid ${colors.border}`,
+            display: "flex",
+            alignItems: "center",
+            gap: "16px"
+          }}>
+            <div className="skeleton" style={{ width: "40px", height: "40px", borderRadius: "12px", flexShrink: 0 }}></div>
+            <div style={{ width: "100%" }}>
+              <div className="skeleton" style={{ height: "14px", width: "90%", marginBottom: "6px" }}></div>
+              <div className="skeleton" style={{ height: "14px", width: "70%" }}></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
 
   if (err) return (
     <div className="container mt-5 pt-5">
@@ -59,7 +160,7 @@ export default function InstructorScore() {
 
   return (
     <div style={{ padding: "clamp(16px, 4vw, 32px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-      <div style={{ maxWidth: "10=00px", margin: "0 auto" }}>
+      <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
 
         {/* Header */}
         <header className="mb-5 text-start">
@@ -122,28 +223,39 @@ export default function InstructorScore() {
               <div className="col-12 col-md-6">
                 <MiniStatCard icon={<FaChartPie />} label="High Risk Rate" value={`${data.highRiskRate}%`} color={colors.danger} />
               </div>
-              <div className="col-12 col-md-6">
-                <div style={{
-                  background: colors.card, border: `1px solid ${colors.border}`,
-                  borderRadius: "24px", padding: "24px", height: "100%", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02)"
-                }}>
-                  <div className="d-flex justify-content-between align-items-start text-start">
-                    <div>
-                      <div style={{ color: colors.textMuted, fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>Avg Drop-off</div>
-                      <div style={{ color: colors.textMain, fontSize: "28px", fontWeight: "900" }}>{data.avgDropRate}%</div>
-                    </div>
-                    <div style={{ padding: "10px", borderRadius: "12px", background: "#fee2e2", color: colors.danger }}>
-                      <FaChartPie />
-                    </div>
-                  </div>
-                  <div className="mt-2 text-start">
-                    <div className="progress" style={{ height: "6px", borderRadius: "10px" }}>
-                      <div className="progress-bar" style={{ width: `${data.avgDropRate}%`, background: colors.danger }} />
-                    </div>
-                    <p className="text-muted small mt-2 mb-0" style={{ fontSize: "11px" }}>Lower rates indicate higher content completion.</p>
-                  </div>
-                </div>
-              </div>
+              {/* Drop-off Card Fix */}
+<div className="col-12 col-md-6">
+  <div style={{
+    background: colors.card, border: `1px solid ${colors.border}`,
+    borderRadius: "24px", padding: "24px", height: "100%", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02)"
+  }}>
+    <div className="d-flex justify-content-between align-items-start text-start">
+      <div>
+        <div style={{ color: colors.textMuted, fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>Avg Drop-off</div>
+        {/* FIX 1: Displaying positive number */}
+        <div style={{ color: colors.textMain, fontSize: "28px", fontWeight: "900" }}>
+          {Math.abs(data.avgDropRate)}%
+        </div>
+      </div>
+      <div style={{ padding: "10px", borderRadius: "12px", background: "#fee2e2", color: colors.danger }}>
+        <FaChartPie />
+      </div>
+    </div>
+    <div className="mt-2 text-start">
+      <div className="progress" style={{ height: "6px", borderRadius: "10px" }}>
+        {/* FIX 2: Ensuring width is never negative */}
+        <div 
+          className="progress-bar" 
+          style={{ 
+            width: `${Math.max(0, data.avgDropRate)}%`, 
+            background: colors.danger 
+          }} 
+        />
+      </div>
+      <p className="text-muted small mt-2 mb-0" style={{ fontSize: "11px" }}>Lower rates indicate higher content completion.</p>
+    </div>
+  </div>
+</div>
             </div>
           </div>
         </div>

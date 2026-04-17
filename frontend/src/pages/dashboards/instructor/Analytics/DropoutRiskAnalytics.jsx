@@ -122,11 +122,126 @@ export default function DropoutRiskAnalytics() {
     );
   };
 
-  if (loading) return (
-    <div className="d-flex justify-content-center align-items-center vh-100 bg-white">
-      <div className="spinner-grow text-primary" role="status" style={{ width: '3rem', height: '3rem' }}></div>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div style={{ padding: "clamp(16px, 4vw, 32px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Inter', sans-serif" }}>
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+          }
+          .skeleton {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            background-color: #cbd5e1;
+            border-radius: 8px;
+          }
+        `}</style>
+        <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
+          
+          {/* Header Skeleton */}
+          <header style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem", gap: "1.5rem" }}>
+            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+              <div className="skeleton" style={{ height: "40px", width: "300px" }}></div>
+              <div className="skeleton" style={{ height: "24px", width: "150px", borderRadius: "100px" }}></div>
+            </div>
+            <div className="skeleton" style={{ height: "48px", width: "180px", borderRadius: "14px" }}></div>
+          </header>
+
+          {/* Course Selector Card Skeleton */}
+          <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: "24px", padding: "24px", marginBottom: "24px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02)" }}>
+            <div className="row g-3 align-items-center">
+              <div className="col-auto">
+                <div className="skeleton" style={{ width: "56px", height: "56px", borderRadius: "16px" }}></div>
+              </div>
+              <div className="col text-start">
+                <div className="skeleton" style={{ height: "16px", width: "150px", marginBottom: "8px" }}></div>
+                <div className="skeleton" style={{ height: "12px", width: "200px" }}></div>
+              </div>
+              <div className="col-12 col-lg-5">
+                <div className="skeleton" style={{ height: "56px", width: "100%", borderRadius: "14px" }}></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Data Table Card Skeleton */}
+          <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: "24px", overflow: "hidden", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.05)" }}>
+            <div style={{ padding: "24px", borderBottom: `1px solid ${colors.border}`, display: "flex", alignItems: "center", gap: "12px" }}>
+              <div className="skeleton" style={{ width: "20px", height: "20px", borderRadius: "4px" }}></div>
+              <div className="skeleton" style={{ height: "24px", width: "200px" }}></div>
+            </div>
+
+            {/* Desktop Table Skeleton */}
+            <div className="table-responsive d-none d-lg-block">
+              <table className="table align-middle mb-0">
+                <thead style={{ background: "#fcfcfd" }}>
+                  <tr>
+                    <th className="ps-4"><div className="skeleton" style={{ height: "14px", width: "80px" }}></div></th>
+                    <th><div className="skeleton" style={{ height: "14px", width: "100px" }}></div></th>
+                    <th className="text-center"><div className="skeleton mx-auto" style={{ height: "14px", width: "80px" }}></div></th>
+                    <th><div className="skeleton" style={{ height: "14px", width: "150px" }}></div></th>
+                    <th className="pe-4 text-end"><div className="skeleton ms-auto" style={{ height: "14px", width: "70px" }}></div></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[1, 2, 3, 4, 5].map((item) => (
+                    <tr key={item}>
+                      <td className="ps-4"><div className="skeleton" style={{ height: "24px", width: "80px", borderRadius: "20px" }}></div></td>
+                      <td>
+                        <div className="skeleton" style={{ height: "16px", width: "120px", marginBottom: "6px" }}></div>
+                        <div className="skeleton" style={{ height: "12px", width: "160px" }}></div>
+                      </td>
+                      <td className="text-center"><div className="skeleton mx-auto" style={{ height: "30px", width: "60px", borderRadius: "10px" }}></div></td>
+                      <td>
+                        <div className="d-flex flex-wrap gap-1">
+                          <div className="skeleton" style={{ height: "20px", width: "70px", borderRadius: "4px" }}></div>
+                          <div className="skeleton" style={{ height: "20px", width: "90px", borderRadius: "4px" }}></div>
+                        </div>
+                      </td>
+                      <td className="pe-4 text-end">
+                        <div className="skeleton ms-auto" style={{ height: "14px", width: "80px", marginBottom: "6px" }}></div>
+                        <div className="skeleton ms-auto" style={{ height: "10px", width: "60px" }}></div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile View Skeleton */}
+            <div className="d-block d-lg-none">
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="p-4 border-bottom text-start">
+                  <div className="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                      <div className="skeleton" style={{ height: "16px", width: "100px", marginBottom: "6px" }}></div>
+                      <div className="skeleton" style={{ height: "12px", width: "140px" }}></div>
+                    </div>
+                    <div className="skeleton" style={{ height: "24px", width: "80px", borderRadius: "20px" }}></div>
+                  </div>
+                  <div className="mb-3">
+                    <div className="skeleton" style={{ height: "12px", width: "100px", marginBottom: "8px" }}></div>
+                    <div className="d-flex flex-wrap gap-1">
+                      <div className="skeleton" style={{ height: "20px", width: "70px", borderRadius: "4px" }}></div>
+                      <div className="skeleton" style={{ height: "20px", width: "90px", borderRadius: "4px" }}></div>
+                    </div>
+                  </div>
+                  <div className="skeleton" style={{ height: "40px", width: "100%", borderRadius: "8px" }}></div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ padding: "20px 24px", background: "#f8f9fa", borderTop: `1px solid ${colors.border}` }}>
+              <div className="d-flex align-items-center gap-2">
+                <div className="skeleton" style={{ width: "16px", height: "16px", borderRadius: "50%", flexShrink: 0 }}></div>
+                <div className="skeleton" style={{ height: "12px", width: "100%" }}></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "clamp(16px, 4vw, 32px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Inter', sans-serif" }}>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "../../../api/api";
-import { Modal } from "react-bootstrap"; // ✅ Added import
+import { Modal } from "react-bootstrap"; 
 
 export default function AllCourses() {
   const [courses, setCourses] = useState([]);
@@ -8,21 +8,24 @@ export default function AllCourses() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [loading, setLoading] = useState(true); // ✅ Added Global Loading State
 
-  // ✅ Added Content Modal States
+  // Content Modal States
   const [showContent, setShowContent] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState("");
   const [contentCourse, setContentCourse] = useState(null);
 
   useEffect(() => {
+    setLoading(true);
     api
       .get("/admin/courses")
       .then((res) => {
         setCourses(res.data);
         setFiltered(res.data);
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setLoading(false)); // ✅ Stop loading once fetch is done
   }, []);
 
   useEffect(() => {
@@ -58,7 +61,7 @@ export default function AllCourses() {
     }
   };
 
-  // ✅ Added Content Modal Functions
+  // Content Modal Functions
   const openContentModal = async (courseId) => {
     try {
       setShowContent(true);
@@ -133,7 +136,7 @@ export default function AllCourses() {
           display: flex;
           flex-direction: column;
         }
-        .course-card:hover {
+        .course-card:not(.skel-card):hover {
           transform: translateY(-8px);
         }
         .card-img {
@@ -170,7 +173,6 @@ export default function AllCourses() {
           text-align: right;
         }
         
-        /* ✅ Added styles for View Button */
         .view-btn {
           width: 100%;
           margin: 12px 0;
@@ -192,7 +194,26 @@ export default function AllCourses() {
           background-color: rgba(111, 66, 193, 0.2);
         }
 
-        /* Mobile Adjustments */
+        /* ✅ Skeleton Animation & Styles */
+        .skeleton {
+          background: #f1f5f9;
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .skel-img { height: 160px; width: 100%; }
+        .skel-title { height: 22px; width: 80%; margin-bottom: 15px; border-radius: 4px; }
+        .skel-line { height: 14px; width: 90%; margin-bottom: 8px; border-radius: 4px; }
+        .skel-line-short { height: 14px; width: 60%; margin-bottom: 15px; border-radius: 4px; }
+        .skel-badge-box { height: 24px; width: 70px; border-radius: 4px; }
+        .skel-price-box { height: 20px; width: 50px; border-radius: 4px; }
+        .skel-btn { height: 42px; width: 100%; border-radius: 8px; margin-top: auto; }
+        .skel-footer { height: 35px; width: 100%; border-top: 1px solid #eee; }
+
         @media (max-width: 600px) {
           .header-title { font-size: 1.5rem; }
           .input-style { max-width: 100%; min-width: 100%; }
@@ -209,12 +230,14 @@ export default function AllCourses() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="input-style"
+          disabled={loading}
         />
 
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="input-style"
+          disabled={loading}
         >
           <option value="all">All Status</option>
           <option value="approved">Approved</option>
@@ -227,6 +250,7 @@ export default function AllCourses() {
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
           className="input-style"
+          disabled={loading}
         >
           <option value="all">All Categories</option>
           {categories.map((cat) => (
@@ -236,102 +260,124 @@ export default function AllCourses() {
       </div>
 
       <div className="grid-container">
-        {filtered.map((course) => (
-          <div key={course._id} className="course-card">
-            {course.thumbnail ? (
-              <img
-                src={course.thumbnail.startsWith("http") ? course.thumbnail : `${import.meta.env.VITE_BASE_URL}${course.thumbnail}`}
-                alt={course.title}
-                className="card-img"
-              />
-            ) : (
-              <div className="no-thumb">No Thumbnail Available</div>
-            )}
-
-            <div className="card-body">
-              <h5 style={{ color: "#333", margin: "0 0 10px 0", fontSize: "1.1rem" }}>{course.title}</h5>
-
-              <div style={{ fontSize: "13px", color: "#666", lineHeight: "1.8" }}>
-                <div><strong>Instructor:</strong> {course.instructor?.name || "N/A"}</div>
-                <div><strong>Category:</strong> {course.category?.name || "N/A"}</div>
-                <div><strong>Level:</strong> {course.level}</div>
-
-                {/* ===== NEW MODULE 7 UPDATE: B2B Visibility Badge ===== */}
-                <div style={{ marginTop: "4px" }}>
-                  <strong>Visibility:</strong>{" "}
-                  {course.isGlobal === false ? (
-                    <span style={{ backgroundColor: "#fffbeb", color: "#b45309", border: "1px solid #fde68a", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold", fontSize: "11px" }}>
-                      🏢 Private (B2B)
-                    </span>
-                  ) : (
-                    <span style={{ backgroundColor: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold", fontSize: "11px" }}>
-                      🌍 Global (B2C)
-                    </span>
-                  )}
+        {loading ? (
+          /* ✅ Skeleton Loaders */
+          Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="course-card skel-card">
+              <div className="skeleton skel-img"></div>
+              <div className="card-body" style={{ display: 'flex', flexDirection: 'column' }}>
+                <div className="skeleton skel-title"></div>
+                <div className="skeleton skel-line"></div>
+                <div className="skeleton skel-line"></div>
+                <div className="skeleton skel-line-short"></div>
+                
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px", marginBottom: "15px" }}>
+                  <div className="skeleton skel-badge-box"></div>
+                  <div className="skeleton skel-price-box"></div>
                 </div>
 
-                <div style={{ marginTop: '10px' }}>
-                  <span className="badge" style={{ backgroundColor: getStatusColor(course.status) }}>
-                    {course.status}
-                  </span>
-                  <span style={{ float: 'right', fontWeight: 'bold', color: '#6f42c1', fontSize: '15px' }}>
-                    ₹{course.price}
-                  </span>
+                <div className="skeleton skel-line"></div>
+                <div className="skeleton skel-line" style={{ marginBottom: "20px" }}></div>
+
+                <div className="skeleton skel-btn"></div>
+              </div>
+              <div className="skeleton skel-footer"></div>
+            </div>
+          ))
+        ) : filtered.length > 0 ? (
+          filtered.map((course) => (
+            <div key={course._id} className="course-card">
+              {course.thumbnail ? (
+                <img
+                  src={course.thumbnail.startsWith("http") ? course.thumbnail : `${import.meta.env.VITE_BASE_URL}${course.thumbnail}`}
+                  alt={course.title}
+                  className="card-img"
+                />
+              ) : (
+                <div className="no-thumb">No Thumbnail Available</div>
+              )}
+
+              <div className="card-body">
+                <h5 style={{ color: "#333", margin: "0 0 10px 0", fontSize: "1.1rem" }}>{course.title}</h5>
+
+                <div style={{ fontSize: "13px", color: "#666", lineHeight: "1.8" }}>
+                  <div><strong>Instructor:</strong> {course.instructor?.name || "N/A"}</div>
+                  <div><strong>Category:</strong> {course.category?.name || "N/A"}</div>
+                  <div><strong>Level:</strong> {course.level}</div>
+
+                  <div style={{ marginTop: "4px" }}>
+                    <strong>Visibility:</strong>{" "}
+                    {course.isGlobal === false ? (
+                      <span style={{ backgroundColor: "#fffbeb", color: "#b45309", border: "1px solid #fde68a", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold", fontSize: "11px" }}>
+                        🏢 Private (B2B)
+                      </span>
+                    ) : (
+                      <span style={{ backgroundColor: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold", fontSize: "11px" }}>
+                        🌍 Global (B2C)
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ marginTop: '10px' }}>
+                    <span className="badge" style={{ backgroundColor: getStatusColor(course.status) }}>
+                      {course.status}
+                    </span>
+                    <span style={{ float: 'right', fontWeight: 'bold', color: '#6f42c1', fontSize: '15px' }}>
+                      ₹{course.price}
+                    </span>
+                  </div>
                 </div>
+
+                <div style={{ marginTop: "15px" }}>
+                  <details style={{ marginBottom: "8px", fontSize: "13px" }}>
+                    <summary style={{ cursor: "pointer", color: "#6f42c1", fontWeight: "600" }}>
+                      Lessons ({course.lessons?.length || 0})
+                    </summary>
+                    <ul style={{ paddingLeft: "20px", marginTop: "5px", color: "#555" }}>
+                      {course.lessons?.map((l) => (
+                        <li key={l._id}>{l.title}</li>
+                      ))}
+                    </ul>
+                  </details>
+
+                  <details style={{ fontSize: "13px" }}>
+                    <summary style={{ cursor: "pointer", color: "#6f42c1", fontWeight: "600" }}>
+                      Exams ({course.exams?.length || 0})
+                    </summary>
+                    <ul style={{ paddingLeft: "20px", marginTop: "5px", color: "#555" }}>
+                      {course.exams?.map((e) => (
+                        <li key={e._id}>{e.title}</li>
+                      ))}
+                    </ul>
+                  </details>
+                </div>
+
+                <button
+                  className="view-btn"
+                  onClick={() => openContentModal(course._id)}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                  </svg>
+                  View Full Content
+                </button>
+
               </div>
 
-              <div style={{ marginTop: "15px" }}>
-                <details style={{ marginBottom: "8px", fontSize: "13px" }}>
-                  <summary style={{ cursor: "pointer", color: "#6f42c1", fontWeight: "600" }}>
-                    Lessons ({course.lessons?.length || 0})
-                  </summary>
-                  <ul style={{ paddingLeft: "20px", marginTop: "5px", color: "#555" }}>
-                    {course.lessons?.map((l) => (
-                      <li key={l._id}>{l.title}</li>
-                    ))}
-                  </ul>
-                </details>
-
-                <details style={{ fontSize: "13px" }}>
-                  <summary style={{ cursor: "pointer", color: "#6f42c1", fontWeight: "600" }}>
-                    Exams ({course.exams?.length || 0})
-                  </summary>
-                  <ul style={{ paddingLeft: "20px", marginTop: "5px", color: "#555" }}>
-                    {course.exams?.map((e) => (
-                      <li key={e._id}>{e.title}</li>
-                    ))}
-                  </ul>
-                </details>
+              <div className="footer-date">
+                Published: {new Date(course.createdAt).toLocaleDateString("en-GB")}
               </div>
-
-              {/* ✅ Added View Content Button */}
-              <button
-                className="view-btn"
-                onClick={() => openContentModal(course._id)}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                </svg>
-                View Full Content
-              </button>
-
             </div>
-
-            <div className="footer-date">
-              Published: {new Date(course.createdAt).toLocaleDateString("en-GB")}
-            </div>
+          ))
+        ) : (
+          <div style={{ textAlign: 'center', marginTop: '50px', color: '#999', gridColumn: '1 / -1' }}>
+            <h4>No courses found matching your criteria.</h4>
           </div>
-        ))}
+        )}
       </div>
 
-      {filtered.length === 0 && (
-        <div style={{ textAlign: 'center', marginTop: '50px', color: '#999' }}>
-          <h4>No courses found matching your criteria.</h4>
-        </div>
-      )}
-
-      {/* ✅ Added Content Modal */}
+      {/* Content Modal */}
       <Modal show={showContent} onHide={closeContentModal} centered size="lg">
         <Modal.Header closeButton style={{ borderBottom: "1px solid #edf2f7" }}>
           <Modal.Title style={{ color: "#2d3748", fontWeight: 700 }}>Course Content Review</Modal.Title>
@@ -506,7 +552,6 @@ export default function AllCourses() {
           )}
         </Modal.Body>
       </Modal>
-
     </div>
   );
 }

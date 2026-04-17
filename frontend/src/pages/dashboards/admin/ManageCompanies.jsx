@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../../api/api';
+import { Row, Col, Modal, Form, Button, Badge, Spinner } from 'react-bootstrap';
 import {
     FaBuilding,
     FaPlus,
@@ -10,8 +11,20 @@ import {
     FaEnvelope,
     FaCalendarAlt,
     FaUserTie,
-    FaEdit // ✅ NEW: Icon for allocating
+    FaEdit,
+    FaTimes,
+    FaGlobe
 } from 'react-icons/fa';
+
+// --- Skeleton Component for Table Loading ---
+const TableSkeleton = () => (
+    <div className="skeleton-row">
+        <div className="skeleton-item" style={{ width: '35%' }}></div>
+        <div className="skeleton-item" style={{ width: '15%' }}></div>
+        <div className="skeleton-item" style={{ width: '15%' }}></div>
+        <div className="skeleton-item" style={{ width: '25%' }}></div>
+    </div>
+);
 
 const ManageCompanies = () => {
     const [companies, setCompanies] = useState([]);
@@ -20,16 +33,13 @@ const ManageCompanies = () => {
     const [fetchLoading, setFetchLoading] = useState(true);
     const [status, setStatus] = useState({ type: '', message: '' });
 
-    // Modal States for View Details
     const [selectedCompany, setSelectedCompany] = useState(null);
     const [showModal, setShowModal] = useState(false);
 
-    // ✅ NEW: States for License Allocation
     const [editingLicenseCompany, setEditingLicenseCompany] = useState(null);
     const [newLicenseCount, setNewLicenseCount] = useState(0);
     const [updateLoading, setUpdateLoading] = useState(false);
 
-    // Form State
     const [formData, setFormData] = useState({
         companyName: '',
         domain: '',
@@ -38,6 +48,16 @@ const ManageCompanies = () => {
         hrEmail: '',
         hrPassword: ''
     });
+
+    // Theme Colors
+    const colors = {
+        primary: "#6c5ce7",     // Purple
+        secondary: "#fd9644",   // Orange
+        accent: "#f1c40f",      // Yellow/Gold
+        lightBg: "#f8f9fd",
+        darkText: "#2d3436",
+        muted: "#636e72"
+    };
 
     useEffect(() => {
         fetchCompanies();
@@ -63,42 +83,35 @@ const ManageCompanies = () => {
         e.preventDefault();
         setLoading(true);
         setStatus({ type: '', message: '' });
-
         try {
             await api.post('/companies/register', formData);
-
-            setStatus({ type: 'success', message: `Successfully registered ${formData.companyName}! HR account created.` });
+            setStatus({ type: 'success', message: `Successfully registered ${formData.companyName}!` });
             setFormData({ companyName: '', domain: '', purchasedLicenses: 100, hrName: '', hrEmail: '', hrPassword: '' });
             setShowForm(false);
-
             fetchCompanies();
         } catch (error) {
             setStatus({
                 type: 'error',
-                message: error.response?.data?.message || error.response?.data?.warning || "Failed to register company."
+                message: error.response?.data?.message || "Failed to register company."
             });
         } finally {
             setLoading(false);
         }
     };
 
-    // ✅ NEW: Function to handle License Update
     const handleUpdateLicense = async (e) => {
         e.preventDefault();
         setUpdateLoading(true);
         setStatus({ type: '', message: '' });
-
         try {
-            // Note: Make sure to create this PUT route in your backend
             await api.put(`/companies/${editingLicenseCompany._id}/licenses`, {
                 purchasedLicenses: newLicenseCount
             });
-
-            setStatus({ type: 'success', message: `Successfully updated licenses for ${editingLicenseCompany.companyName} to ${newLicenseCount}!` });
+            setStatus({ type: 'success', message: `Updated licenses for ${editingLicenseCompany.companyName} to ${newLicenseCount}!` });
             setEditingLicenseCompany(null);
-            fetchCompanies(); // Refresh the table to show new counts
+            fetchCompanies();
         } catch (error) {
-            setStatus({ type: 'error', message: "Failed to allocate licenses. Try again." });
+            setStatus({ type: 'error', message: "Failed to allocate licenses." });
         } finally {
             setUpdateLoading(false);
         }
@@ -110,138 +123,197 @@ const ManageCompanies = () => {
     };
 
     return (
-        <div className="p-4 p-md-5">
+        <div className="manage-companies-page">
+            <style>{`
+                .manage-companies-page { background: ${colors.lightBg}; min-height: 100vh; padding: 30px; }
+                .page-title { color: ${colors.darkText}; font-weight: 850; letter-spacing: -1px; }
+                
+                .main-card { 
+                    background: white; border-radius: 20px; border: none; 
+                    box-shadow: 0 10px 30px rgba(108, 92, 231, 0.05); overflow: hidden; 
+                }
+
+                .btn-purple { background: ${colors.primary}; color: white; border: none; font-weight: 700; border-radius: 12px; transition: 0.3s; }
+                .btn-purple:hover { background: #5b4bc4; transform: translateY(-2px); color: white; }
+
+                .btn-orange { background: ${colors.secondary}; color: white; border: none; font-weight: 700; border-radius: 12px; transition: 0.3s; }
+                .btn-orange:hover { background: #e67e22; transform: translateY(-2px); color: white; }
+
+                .table thead th { 
+                    background: #fcfcfd; color: ${colors.muted}; font-size: 0.75rem; 
+                    text-transform: uppercase; letter-spacing: 1px; padding: 18px 24px; border-bottom: 1px solid #f1f2f6;
+                }
+                .table tbody td { padding: 20px 24px; border-bottom: 1px solid #f8f9fa; vertical-align: middle; }
+                
+                .company-name { font-weight: 700; color: ${colors.darkText}; font-size: 1rem; margin-bottom: 2px; }
+                .domain-tag { font-size: 0.85rem; color: ${colors.primary}; display: flex; align-items: center; gap: 5px; }
+
+                .license-badge { 
+                    background: rgba(108, 92, 231, 0.1); color: ${colors.primary}; 
+                    font-weight: 700; padding: 8px 16px; border-radius: 10px; border: 1px solid rgba(108, 92, 231, 0.2);
+                }
+
+                .status-active { 
+                    background-color: #e3fcef !important; /* Light Greenish-Blue tint */
+                    color: #00b894 !important; 
+                    border: none;
+                }
+
+                .status-inactive { 
+                    background-color: #fff3cd !important; /* Orange/Yellow tint */
+                    color: #d35400 !important;
+                    border: none;
+                }
+
+                /* Registration Form Styling */
+                .form-section-title { color: ${colors.primary}; font-weight: 800; display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+                .form-control { border-radius: 12px; padding: 12px 15px; border: 2px solid #f1f2f6; transition: 0.3s; }
+                .form-control:focus { border-color: ${colors.primaryLight}; box-shadow: 0 0 0 4px rgba(108, 92, 231, 0.1); }
+
+                /* Allocation Panel */
+                .allocation-panel { 
+                    background: white; border: 2px solid ${colors.secondary}; border-radius: 20px; 
+                    padding: 25px; margin-top: 30px; animation: slideUp 0.4s ease;
+                }
+
+                /* Skeleton */
+                @keyframes shimmer { 0% { background-position: -450px 0; } 100% { background-position: 450px 0; } }
+                .skeleton-row { display: flex; gap: 20px; padding: 20px; border-bottom: 1px solid #eee; }
+                .skeleton-item { 
+                    height: 20px; background: linear-gradient(to right, #f0f0f0 8%, #f8f8f8 18%, #f0f0f0 33%);
+                    background-size: 800px 104px; animation: shimmer 2s infinite linear; border-radius: 4px;
+                }
+
+                @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+                @media (max-width: 768px) {
+                    .manage-companies-page { padding: 15px; }
+                    .d-flex.justify-content-between { flex-direction: column; align-items: flex-start !important; gap: 20px; }
+                    .btn-purple { width: 100%; }
+                }
+            `}</style>
+
             <div className="d-flex justify-content-between align-items-center mb-5">
                 <div>
-                    <h2 className="fw-bold mb-1"><FaBuilding className="me-2 text-primary" /> Manage B2B Clients</h2>
-                    <p className="text-muted">Onboard new corporate clients and view their enterprise details.</p>
+                    <h2 className="page-title mb-1"><FaBuilding className="me-2" style={{ color: colors.primary }} /> B2B Client Center</h2>
+                    <p className="text-muted fw-medium">Manage enterprise subscriptions and corporate onboarding.</p>
                 </div>
-                <button
-                    className="btn btn-primary px-4 py-2 fw-bold shadow-sm"
-                    onClick={() => {
-                        setShowForm(!showForm);
-                        setStatus({ type: '', message: '' });
-                    }}
+                <Button 
+                    className={showForm ? "btn-light border" : "btn-purple shadow"} 
+                    onClick={() => { setShowForm(!showForm); setStatus({ type: '', message: '' }); }}
                 >
-                    {showForm ? 'Cancel Registration' : <><FaPlus className="me-2" /> Onboard New Company</>}
-                </button>
+                    {showForm ? <><FaTimes className="me-2" /> Close Form</> : <><FaPlus className="me-2" /> Register New Client</>}
+                </Button>
             </div>
 
             {status.message && (
-                <div className={`alert ${status.type === 'success' ? 'alert-success' : 'alert-danger'} border-0 shadow-sm d-flex align-items-center mb-4`}>
-                    {status.type === 'success' ? <FaCheckCircle className="me-2 fs-5" /> : <FaExclamationCircle className="me-2 fs-5" />}
+                <div className={`alert ${status.type === 'success' ? 'alert-success' : 'alert-danger'} border-0 shadow-sm rounded-4 d-flex align-items-center mb-4 animate-fade-in`}>
+                    {status.type === 'success' ? <FaCheckCircle className="me-3 fs-4" /> : <FaExclamationCircle className="me-3 fs-4" />}
                     <div className="fw-bold">{status.message}</div>
                 </div>
             )}
 
-            {/* Registration Form (Same as before) */}
             {showForm && (
-                <div className="card shadow-sm border-0 rounded-4 p-4 mb-5">
-                    {/* ... (Your existing registration form code goes here) ... */}
-                    <h4 className="fw-bold mb-4 text-dark">Client Registration Details</h4>
-                    <form onSubmit={handleRegisterCompany}>
-                        <div className="row g-4">
-                            <div className="col-md-6">
-                                <label className="form-label fw-semibold">Company Name</label>
-                                <input type="text" className="form-control" name="companyName" value={formData.companyName} onChange={handleInputChange} required placeholder="e.g. Tata Consultancy Services" />
-                            </div>
-                            <div className="col-md-4">
-                                <label className="form-label fw-semibold">Corporate Domain</label>
-                                <input type="text" className="form-control" name="domain" value={formData.domain} onChange={handleInputChange} required placeholder="e.g. tcs.com" />
-                            </div>
-                            <div className="col-md-2">
-                                <label className="form-label fw-semibold">Licenses</label>
-                                <input type="number" className="form-control" name="purchasedLicenses" value={formData.purchasedLicenses} onChange={handleInputChange} required min="1" />
-                            </div>
+                <div className="main-card p-4 p-md-5 mb-5 animate-fade-in">
+                    <h4 className="form-section-title"><FaBuilding /> Company Identity</h4>
+                    <Form onSubmit={handleRegisterCompany}>
+                        <Row className="g-4 mb-5">
+                            <Col md={6}>
+                                <Form.Label className="small fw-bold text-muted">Legal Company Name</Form.Label>
+                                <Form.Control name="companyName" value={formData.companyName} onChange={handleInputChange} required placeholder="e.g. Microsoft Corporation" />
+                            </Col>
+                            <Col md={4}>
+                                <Form.Label className="small fw-bold text-muted">Official Domain</Form.Label>
+                                <Form.Control name="domain" value={formData.domain} onChange={handleInputChange} required placeholder="microsoft.com" />
+                            </Col>
+                            <Col md={2}>
+                                <Form.Label className="small fw-bold text-muted">Initial Seats</Form.Label>
+                                <Form.Control type="number" name="purchasedLicenses" value={formData.purchasedLicenses} onChange={handleInputChange} required min="1" />
+                            </Col>
+                        </Row>
 
-                            <div className="col-12"><hr className="my-2 opacity-25" /></div>
-                            <h5 className="fw-bold mb-0 mt-3 text-primary"><FaUserTie className="me-2" />Initial HR Manager Account</h5>
+                        <h4 className="form-section-title" style={{ color: colors.secondary }}><FaUserTie /> Primary HR Administrator</h4>
+                        <Row className="g-4 mb-4">
+                            <Col md={4}>
+                                <Form.Label className="small fw-bold text-muted">Full Name</Form.Label>
+                                <Form.Control name="hrName" value={formData.hrName} onChange={handleInputChange} required placeholder="HR name" />
+                            </Col>
+                            <Col md={4}>
+                                <Form.Label className="small fw-bold text-muted">Work Email</Form.Label>
+                                <Form.Control type="email" name="hrEmail" value={formData.hrEmail} onChange={handleInputChange} required placeholder="hr@domain.com" />
+                            </Col>
+                            <Col md={4}>
+                                <Form.Label className="small fw-bold text-muted">Temporary Password</Form.Label>
+                                <Form.Control type="password" name="hrPassword" value={formData.hrPassword} onChange={handleInputChange} required placeholder="••••••••" />
+                            </Col>
+                        </Row>
 
-                            <div className="col-md-4">
-                                <label className="form-label fw-semibold">HR Full Name</label>
-                                <input type="text" className="form-control" name="hrName" value={formData.hrName} onChange={handleInputChange} required placeholder="e.g. Priya Sharma" />
-                            </div>
-                            <div className="col-md-4">
-                                <label className="form-label fw-semibold">HR Work Email</label>
-                                <input type="email" className="form-control" name="hrEmail" value={formData.hrEmail} onChange={handleInputChange} required placeholder="priya@tcs.com" />
-                            </div>
-                            <div className="col-md-4">
-                                <label className="form-label fw-semibold">Temporary Password</label>
-                                <input type="text" className="form-control" name="hrPassword" value={formData.hrPassword} onChange={handleInputChange} required placeholder="Create a strong password" />
-                            </div>
-
-                            <div className="col-12 mt-4">
-                                <button type="submit" className="btn btn-dark px-5 py-2 fw-bold" disabled={loading}>
-                                    {loading ? 'Registering...' : 'Complete Registration'}
-                                </button>
-                            </div>
+                        <div className="text-end border-top pt-4 mt-2">
+                            <Button type="submit" className="btn-orange px-5 py-3 shadow" disabled={loading}>
+                                {loading ? <Spinner size="sm" /> : 'Confirm Registration & Create HR'}
+                            </Button>
                         </div>
-                    </form>
+                    </Form>
                 </div>
             )}
 
-            {/* Existing Companies Table */}
             {!showForm && (
-                <div className="card shadow-sm border-0 rounded-4 overflow-hidden">
+                <div className="main-card">
                     {fetchLoading ? (
-                        <div className="p-5 text-center text-muted">
-                            <div className="spinner-border text-primary mb-3" role="status"></div>
-                            <div>Loading corporate clients...</div>
+                        <div className="p-3">
+                            {Array(5).fill(0).map((_, i) => <TableSkeleton key={i} />)}
                         </div>
                     ) : companies.length === 0 ? (
-                        <div className="text-center p-5 bg-light">
-                            <FaBuilding size={48} className="text-muted mb-3 opacity-50" />
-                            <h5 className="text-muted fw-bold">No corporate clients found.</h5>
-                            <p className="text-muted small">Click "Onboard New Company" to add your first enterprise client.</p>
+                        <div className="text-center p-5">
+                            <FaBuilding size={60} className="mb-3 opacity-25" />
+                            <h4 className="fw-bold text-muted">No corporate clients onboarded.</h4>
+                            <p>Start by registering your first B2B partner.</p>
                         </div>
                     ) : (
                         <div className="table-responsive">
-                            <table className="table table-hover align-middle mb-0">
-                                <thead className="table-light">
-                                    <tr className="text-muted text-uppercase small">
-                                        <th className="px-4 py-3">Company Info</th>
-                                        <th className="py-3 text-center">Licenses Total</th>
-                                        <th className="py-3 text-center">Status</th>
-                                        <th className="py-3 text-end px-4">Action</th>
+                            <table className="table align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Organization</th>
+                                        <th className="text-center">License Pool</th>
+                                        <th className="text-center">Status</th>
+                                        <th className="text-end">Management</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {companies.map((company) => (
                                         <tr key={company._id}>
-                                            <td className="px-4 py-3">
-                                                <div className="fw-bold text-dark fs-6">{company.companyName}</div>
-                                                <div className="small text-muted d-flex align-items-center gap-1 mt-1">
-                                                    <FaEnvelope className="opacity-75" /> {company.domain}
+                                            <td>
+                                                <div className="company-name">{company.companyName}</div>
+                                                <div className="domain-tag"><FaGlobe size={12} /> {company.domain}</div>
+                                            </td>
+                                            <td className="text-center">
+                                                <div className="license-badge">
+                                                    <FaUsers className="me-2" /> 
+                                                    {company.subscription?.activeLicenses || company.subscription?.purchasedLicenses || 0}
                                                 </div>
                                             </td>
-                                            <td className="py-3 text-center">
-                                                <span className="badge bg-primary-subtle text-primary border border-primary px-3 py-2 rounded-pill fs-6">
-                                                    <FaUsers className="me-1" /> {company.subscription?.activeLicenses || company.subscription?.purchasedLicenses || 0}
-                                                </span>
+                                            <td className="text-center">
+                                                <Badge className={`px-3 py-2 rounded-pill ${company.isActive !== false ? 'status-active' : 'status-inactive'}`}>
+                                                    {company.isActive !== false ? '● ACTIVE CLIENT' : '● SUSPENDED'}
+                                                </Badge>
                                             </td>
-                                            <td className="py-3 text-center">
-                                                <span className={`badge px-3 py-2 rounded-pill ${company.isActive !== false ? 'bg-success' : 'bg-danger'}`}>
-                                                    {company.isActive !== false ? 'Active Client' : 'Inactive'}
-                                                </span>
-                                            </td>
-                                            <td className="py-3 text-end px-4">
-                                                {/* ✅ NEW: Allocate Button */}
-                                                <button
-                                                    className="btn btn-sm btn-outline-primary border shadow-sm fw-bold px-3 py-2 d-inline-flex align-items-center gap-2 me-2"
+                                            <td className="text-end">
+                                                <button 
+                                                    className="btn btn-sm btn-light fw-bold border text-muted px-3 py-2 me-2"
+                                                    onClick={() => openDetailsModal(company)}
+                                                >
+                                                    <FaEye className="me-2" /> Details
+                                                </button>
+                                                <button 
+                                                    className="btn btn-sm btn-purple px-3 py-2"
                                                     onClick={() => {
                                                         setEditingLicenseCompany(company);
                                                         setNewLicenseCount(company.subscription?.purchasedLicenses || company.subscription?.activeLicenses || 0);
                                                         setStatus({ type: '', message: '' });
                                                     }}
                                                 >
-                                                    <FaEdit /> Allocate
-                                                </button>
-
-                                                <button
-                                                    className="btn btn-sm btn-light border shadow-sm text-secondary fw-bold px-3 py-2 d-inline-flex align-items-center gap-2"
-                                                    onClick={() => openDetailsModal(company)}
-                                                >
-                                                    <FaEye /> View
+                                                    <FaEdit className="me-2" /> Allocate
                                                 </button>
                                             </td>
                                         </tr>
@@ -253,129 +325,88 @@ const ManageCompanies = () => {
                 </div>
             )}
 
-            {/* ✅ NEW: ALLOCATE LICENSES INLINE PANEL */}
             {editingLicenseCompany && (
-                <div className="card mt-4 border-primary shadow-lg rounded-4 p-4 position-relative animate-fade-in">
-                    <button
-                        className="btn-close position-absolute top-0 end-0 m-3"
-                        onClick={() => setEditingLicenseCompany(null)}
-                    ></button>
-                    <h5 className="fw-bold mb-3 text-primary">Allocate Licenses: {editingLicenseCompany.companyName}</h5>
-
-                    <form onSubmit={handleUpdateLicense} className="row g-3 align-items-end">
-                        <div className="col-md-4">
-                            <label className="form-label fw-bold text-muted small">Current Total Licenses</label>
-                            <input
-                                type="text"
-                                className="form-control bg-light fw-bold"
-                                value={editingLicenseCompany.subscription?.purchasedLicenses || editingLicenseCompany.subscription?.activeLicenses || 0}
-                                disabled
-                            />
-                        </div>
-                        <div className="col-md-4">
-                            <label className="form-label fw-bold text-dark small">New Total Licenses</label>
-                            <input
-                                type="number"
-                                className="form-control border-primary fw-bold"
-                                value={newLicenseCount}
-                                onChange={(e) => setNewLicenseCount(Number(e.target.value))}
-                                min={editingLicenseCompany.subscription?.usedLicenses || 1}
-                                required
-                            />
-                        </div>
-                        <div className="col-md-4">
-                            <button type="submit" className="btn btn-primary w-100 fw-bold rounded-3 py-2" disabled={updateLoading}>
-                                {updateLoading ? 'Saving...' : <><FaCheckCircle className="me-2" /> Save Changes</>}
-                            </button>
-                        </div>
-                    </form>
-                    <div className="form-text text-muted mt-3 small">
-                        <FaBuilding className="me-1" /> Update this value after receiving the offline invoice payment for the extra seats.
+                <div className="allocation-panel shadow-lg">
+                    <div className="d-flex justify-content-between align-items-center mb-3">
+                        <h5 className="fw-bold m-0" style={{ color: colors.secondary }}>
+                            <FaEdit className="me-2" /> Modify License Allocation
+                        </h5>
+                        <FaTimes style={{ cursor: 'pointer' }} onClick={() => setEditingLicenseCompany(null)} />
                     </div>
+                    <p className="text-muted small mb-4">Updating seat count for <strong>{editingLicenseCompany.companyName}</strong>. Ensure billing is confirmed.</p>
+                    
+                    <Form onSubmit={handleUpdateLicense}>
+                        <Row className="g-3 align-items-end">
+                            <Col md={4}>
+                                <Form.Label className="small fw-bold">Currently Purchased</Form.Label>
+                                <Form.Control disabled className="bg-light fw-bold" value={editingLicenseCompany.subscription?.purchasedLicenses || 0} />
+                            </Col>
+                            <Col md={4}>
+                                <Form.Label className="small fw-bold text-dark">New License Total</Form.Label>
+                                <Form.Control 
+                                    type="number" 
+                                    className="border-primary fw-bold" 
+                                    value={newLicenseCount} 
+                                    onChange={(e) => setNewLicenseCount(Number(e.target.value))}
+                                    min={editingLicenseCompany.subscription?.usedLicenses || 1}
+                                    required 
+                                />
+                            </Col>
+                            <Col md={4}>
+                                <Button type="submit" className="btn-purple w-100 py-2 shadow-sm" disabled={updateLoading}>
+                                    {updateLoading ? <Spinner size="sm" /> : 'Apply New Allocation'}
+                                </Button>
+                            </Col>
+                        </Row>
+                    </Form>
                 </div>
             )}
 
-            {/* ✅ EXISTING: FULL COMPANY DETAILS MODAL */}
-            {showModal && selectedCompany && (
-                // ... (Aapka existing Details Modal wala code waise ka waisa hi rahega) ...
-                <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}>
-                    {/* Appending placeholder for your existing modal code so the snippet isn't overwhelmingly long, but you just keep your exact modal code here */}
-                    <div className="modal-dialog modal-dialog-centered modal-lg">
-                        <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '15px' }}>
-                            <div className="modal-header bg-dark text-white p-4" style={{ borderRadius: '15px 15px 0 0' }}>
-                                <h4 className="modal-title fw-bold mb-0">{selectedCompany.companyName} Details</h4>
-                                <button type="button" className="btn-close btn-close-white" onClick={() => setShowModal(false)}></button>
-                            </div>
-                            <div className="modal-body p-4 bg-light">
-                                <p className="text-muted">Total Licenses: {selectedCompany.subscription?.purchasedLicenses || selectedCompany.subscription?.activeLicenses || 0}</p>
-                                {/* Modal Body */}
-                                <div className="modal-body p-4 bg-light">
-                                    <div className="row g-4">
-
-                                        {/* Subscription Block */}
-                                        <div className="col-md-6">
-                                            <div className="card h-100 border-0 shadow-sm rounded-4">
-                                                <div className="card-body p-4">
-                                                    <h6 className="text-uppercase text-muted fw-bold mb-3 d-flex align-items-center gap-2">
-                                                        <FaCheckCircle className="text-success" /> Subscription Status
-                                                    </h6>
-
-                                                    <div className="d-flex justify-content-between align-items-center mb-3">
-                                                        <span className="text-secondary fw-medium">Total Licenses</span>
-                                                        <span className="badge bg-primary fs-6 rounded-pill px-3">{selectedCompany.subscription?.activeLicenses || 0}</span>
-                                                    </div>
-
-                                                    <div className="d-flex justify-content-between align-items-center mb-3">
-                                                        <span className="text-secondary fw-medium">Onboarding Date</span>
-                                                        <span className="text-dark fw-bold d-flex align-items-center gap-1">
-                                                            <FaCalendarAlt className="text-muted" /> {new Date(selectedCompany.createdAt).toLocaleDateString('en-GB')}
-                                                        </span>
-                                                    </div>
-
-                                                    <div className="d-flex justify-content-between align-items-center">
-                                                        <span className="text-secondary fw-medium">Account Status</span>
-                                                        <span className={`fw-bold ${selectedCompany.isActive !== false ? 'text-success' : 'text-danger'}`}>
-                                                            {selectedCompany.isActive !== false ? '● Active' : '● Inactive'}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* HR Info Block */}
-                                        <div className="col-md-6">
-                                            <div className="card h-100 border-0 shadow-sm rounded-4">
-                                                <div className="card-body p-4">
-                                                    <h6 className="text-uppercase text-muted fw-bold mb-3 d-flex align-items-center gap-2">
-                                                        <FaUserTie className="text-info" /> Admin / HR Info
-                                                    </h6>
-
-                                                    <div className="alert alert-info bg-info-subtle border-0 rounded-3 mb-0">
-                                                        <p className="mb-2 text-dark fw-medium">
-                                                            The HR Manager accounts for this company are managed securely in the <strong>Users Table</strong>.
-                                                        </p>
-                                                        <p className="mb-0 text-muted small">
-                                                            To view the HR representatives of <strong>{selectedCompany.companyName}</strong>, please navigate to the <a href="/admin-dashboard/users" className="fw-bold text-decoration-none">All Users</a> section and filter by the "HR" role or their domain (<em>@{selectedCompany.domain}</em>).
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
+            {/* Company Details Modal */}
+            <Modal show={showModal} onHide={() => setShowModal(false)} centered size="lg">
+                <Modal.Header closeButton className="bg-dark text-white border-0 py-4">
+                    <Modal.Title className="fw-bold"><FaBuilding className="me-2 text-warning" /> {selectedCompany?.companyName}</Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="bg-light p-4">
+                    {selectedCompany && (
+                        <Row className="g-4">
+                            <Col md={6}>
+                                <div className="card border-0 shadow-sm rounded-4 h-100 p-4">
+                                    <h6 className="text-uppercase fw-bold text-muted small mb-4">Subscription Insight</h6>
+                                    <div className="d-flex justify-content-between mb-3 pb-2 border-bottom">
+                                        <span className="text-muted">Total Seats:</span>
+                                        <span className="fw-bold text-primary">{selectedCompany.subscription?.activeLicenses || 0}</span>
+                                    </div>
+                                    <div className="d-flex justify-content-between mb-3 pb-2 border-bottom">
+                                        <span className="text-muted">Onboarded On:</span>
+                                        <span className="fw-bold"><FaCalendarAlt className="me-1 text-muted" /> {new Date(selectedCompany.createdAt).toLocaleDateString()}</span>
+                                    </div>
+                                    <div className="d-flex justify-content-between">
+                                        <span className="text-muted">Client Status:</span>
+                                        <Badge bg={selectedCompany.isActive !== false ? "success" : "danger"}>
+                                            {selectedCompany.isActive !== false ? "ACTIVE" : "SUSPENDED"}
+                                        </Badge>
                                     </div>
                                 </div>
-
-                            </div>
-                            <div className="modal-footer border-0 p-4 pt-0 bg-light" style={{ borderRadius: '0 0 15px 15px' }}>
-                                <button type="button" className="btn btn-secondary px-5 py-2 fw-bold rounded-pill shadow-sm" onClick={() => setShowModal(false)}>
-                                    Close Details
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
+                            </Col>
+                            <Col md={6}>
+                                <div className="card border-0 shadow-sm rounded-4 h-100 p-4" style={{ background: 'rgba(253, 150, 68, 0.05)' }}>
+                                    <h6 className="text-uppercase fw-bold text-muted small mb-4" style={{ color: colors.secondary }}>Administration</h6>
+                                    <p className="small mb-3">Company Domain: <strong>@{selectedCompany.domain}</strong></p>
+                                    <div className="alert alert-warning border-0 small py-2 px-3">
+                                        <FaUserTie className="me-2" /> 
+                                        HR Managers are managed via the <strong>User Directory</strong>. Filter by the corporate domain to manage admins.
+                                    </div>
+                                    <Button variant="outline-dark" size="sm" className="w-100 mt-2 fw-bold" href="/admin-dashboard/users">Go to User Directory</Button>
+                                </div>
+                            </Col>
+                        </Row>
+                    )}
+                </Modal.Body>
+                <Modal.Footer className="border-0 bg-light pb-4">
+                    <Button variant="secondary" className="px-5 rounded-pill fw-bold" onClick={() => setShowModal(false)}>Close Overview</Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 };

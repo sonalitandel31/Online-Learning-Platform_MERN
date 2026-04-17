@@ -142,15 +142,61 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <DashboardLayout sidebarLinks={adminSidebarLinks}>
-        <div className="loader-box">
-          <div className="admin-spinner" />
-          <p>Analyzing Platform Data...</p>
-        </div>
         <style>{`
-          .loader-box { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 70vh; color: ${colors.primary}; }
-          .admin-spinner { border: 4px solid #f3f3f3; border-top: 4px solid ${colors.primary}; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; }
-          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+          .admin-main { padding: 10px; font-family: 'Inter', sans-serif; }
+          .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px; }
+          .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+          
+          /* Skeleton Animation */
+          .skeleton {
+            background: #f1f5f9;
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite linear;
+          }
+          @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+          }
+          
+          /* Skeleton Shapes */
+          .skel-title { width: 200px; height: 28px; border-radius: 6px; margin-bottom: 8px; }
+          .skel-sub { width: 140px; height: 16px; border-radius: 4px; }
+          .skel-avatar { width: 45px; height: 45px; border-radius: 50%; }
+          .skel-card { height: 140px; border-radius: 15px; border: 1px solid #eef2f6; }
+          .skel-chart { height: 350px; border-radius: 15px; border: 1px solid #eef2f6; }
+          .skel-engagement { height: 300px; border-radius: 15px; border: 1px solid #eef2f6; margin-top: 1rem; }
+
+          @media (min-width: 768px) {
+            .admin-main { padding: 20px; }
+            .stat-grid { grid-template-columns: repeat(3, 1fr); gap: 20px; }
+          }
+          @media (min-width: 1200px) {
+            .stat-grid { grid-template-columns: repeat(6, 1fr); }
+          }
         `}</style>
+
+        <div className="admin-main">
+          {/* Header Skeleton */}
+          <div className="admin-header">
+            <div>
+              <div className="skeleton skel-title"></div>
+              <div className="skeleton skel-sub"></div>
+            </div>
+            <div className="skeleton skel-avatar"></div>
+          </div>
+
+          {/* Stats Grid Skeleton */}
+          <div className="stat-grid">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="skeleton skel-card"></div>
+            ))}
+          </div>
+
+          {/* Chart Skeletons */}
+          <div className="skeleton skel-chart"></div>
+          <div className="skeleton skel-engagement"></div>
+        </div>
       </DashboardLayout>
     );
   }

@@ -44,8 +44,6 @@ export default function Transactions() {
     }
   };
 
-  if (loading) return <div className="loading-container">Fetching transactions...</div>;
-
   return (
     <div className="txn-container">
       <style>{`
@@ -56,28 +54,81 @@ export default function Transactions() {
         .icon-box { font-size: 1.5rem; background: #f3effb; padding: 10px; border-radius: 12px; }
         .sum-title { font-size: 0.85rem; color: #64748b; font-weight: 600; display: block; }
         .sum-value { font-size: 1.4rem; font-weight: 800; color: #1e293b; }
+        
         .filter-bar { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
-        .search-box { flex: 1; min-width: 280px; padding: 12px 18px; border-radius: 12px; border: 1px solid #e2e8f0; outline: none; transition: 0.2s; }
+        .search-box, .status-select { flex: 1; min-width: 280px; padding: 12px 18px; border-radius: 12px; border: 1px solid #e2e8f0; outline: none; transition: 0.2s; }
+        .search-box:disabled, .status-select:disabled { background-color: #f8fafc; cursor: not-allowed; }
+        .status-select { min-width: 150px; flex: unset; }
+        
         .table-card { background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); overflow: hidden; }
         .table-header { display: grid; grid-template-columns: 1.5fr 1.5fr 1fr 1fr 1.2fr; background: #f8fafc; padding: 18px; font-weight: 700; color: #6f42c1; font-size: 0.85rem; }
         .table-row { display: grid; grid-template-columns: 1.5fr 1.5fr 1fr 1fr 1.2fr; padding: 18px; border-bottom: 1px solid #f1f5f9; align-items: center; transition: 0.2s; }
         .table-row:hover { background: #fdfbff; }
-        .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+        .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; display: inline-block; }
         .bounty-label { background: #e0f2fe; color: #0369a1; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; margin-left: 8px; }
-        @media (max-width: 900px) { .desktop-only { display: none; } .table-row { grid-template-columns: 1fr; gap: 12px; padding: 20px; border-bottom: 8px solid #f8fafc; } .cell { display: flex; justify-content: space-between; align-items: center; } }
+
+        /* ✅ Skeleton Animation & Styles */
+        .skeleton {
+          background: #f1f5f9;
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+          border-radius: 4px;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .skel-icon { width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0; }
+        .skel-text-sm { height: 14px; margin-bottom: 6px; border-radius: 4px; }
+        .skel-text-lg { height: 22px; border-radius: 6px; }
+        .skel-pill { height: 24px; width: 85px; border-radius: 20px; }
+
+        @media (max-width: 900px) { 
+          .desktop-only { display: none; } 
+          .table-row { grid-template-columns: 1fr; gap: 12px; padding: 20px; border-bottom: 8px solid #f8fafc; } 
+          .cell { display: flex; justify-content: space-between; align-items: center; } 
+        }
       `}</style>
 
       <h2 className="title">Transaction History</h2>
 
       <div className="summary-grid">
-        <SummaryCard title="Total Volume" value={txns.length} icon="📊" />
-        <SummaryCard title="Total Revenue" value={`₹${totalAmount(txns).toLocaleString('en-IN')}`} icon="💰" />
-        <SummaryCard title="Successful" value={txns.filter(t => t.status === "completed").length} icon="✅" />
+        {loading ? (
+          /* ✅ Skeleton Summary Cards */
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="summary-item">
+              <div className="skeleton skel-icon"></div>
+              <div style={{ flex: 1 }}>
+                <div className="skeleton skel-text-sm" style={{ width: '50%' }}></div>
+                <div className="skeleton skel-text-lg" style={{ width: '80%', margin: 0 }}></div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <>
+            <SummaryCard title="Total Volume" value={txns.length} icon="📊" />
+            <SummaryCard title="Total Revenue" value={`₹${totalAmount(txns).toLocaleString('en-IN')}`} icon="💰" />
+            <SummaryCard title="Successful" value={txns.filter(t => t.status === "completed").length} icon="✅" />
+          </>
+        )}
       </div>
 
       <div className="filter-bar">
-        <input type="text" className="search-box" placeholder="Search student, instructor..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        <select className="status-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <input 
+          type="text" 
+          className="search-box" 
+          placeholder="Search student, instructor..." 
+          value={search} 
+          onChange={(e) => setSearch(e.target.value)} 
+          disabled={loading}
+        />
+        <select 
+          className="status-select" 
+          value={status} 
+          onChange={(e) => setStatus(e.target.value)}
+          disabled={loading}
+        >
           <option value="all">All Status</option>
           <option value="completed">Completed</option>
           <option value="failed">Failed</option>
@@ -94,24 +145,60 @@ export default function Transactions() {
         </div>
 
         <div className="table-body">
-          {filtered.map((t) => {
-            const style = getStatusStyle(t.status);
-            return (
-              <div key={t._id} className="table-row">
+          {loading ? (
+            /* ✅ Skeleton Table Rows */
+            Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="table-row">
                 <div className="cell">
-                  <strong>{t.student?.name || "Guest"}</strong>
-                  <div style={{fontSize:'11px', color:'#94a3b8'}}>To: {t.instructor?.name}</div>
+                  <div style={{ width: '100%' }}>
+                    <div className="skeleton skel-text-lg" style={{ width: '70%', marginBottom: '4px' }}></div>
+                    <div className="skeleton skel-text-sm" style={{ width: '50%' }}></div>
+                  </div>
                 </div>
                 <div className="cell">
-                  <span className="course-title">{t.course?.title || "N/A"}</span>
-                  {t.paymentMethod === "Subscription Bounty" && <span className="bounty-label">10% BOUNTY</span>}
+                  <div className="skeleton skel-text-lg" style={{ width: '90%' }}></div>
                 </div>
-                <div className="cell"><strong>₹{t.amount.toLocaleString()}</strong></div>
-                <div className="cell"><span className="status-badge" style={{ background: style.bg, color: style.color }}>{t.status}</span></div>
-                <div className="cell" style={{fontSize:'12px'}}>{new Date(t.paymentDate).toLocaleDateString()}</div>
+                <div className="cell">
+                  <div className="skeleton skel-text-lg" style={{ width: '60%' }}></div>
+                </div>
+                <div className="cell">
+                  <div className="skeleton skel-pill"></div>
+                </div>
+                <div className="cell">
+                  <div className="skeleton skel-text-sm" style={{ width: '70%' }}></div>
+                </div>
               </div>
-            );
-          })}
+            ))
+          ) : filtered.length === 0 ? (
+            <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+              No transactions found.
+            </div>
+          ) : (
+            filtered.map((t) => {
+              const style = getStatusStyle(t.status);
+              return (
+                <div key={t._id} className="table-row">
+                  <div className="cell">
+                    <strong>{t.student?.name || "Guest"}</strong>
+                    <div style={{fontSize:'11px', color:'#94a3b8'}}>To: {t.instructor?.name}</div>
+                  </div>
+                  <div className="cell">
+                    <span className="course-title">{t.course?.title || "N/A"}</span>
+                    {t.paymentMethod === "Subscription Bounty" && <span className="bounty-label">10% BOUNTY</span>}
+                  </div>
+                  <div className="cell"><strong>₹{t.amount.toLocaleString()}</strong></div>
+                  <div className="cell">
+                    <span className="status-badge" style={{ background: style.bg, color: style.color }}>
+                      {t.status}
+                    </span>
+                  </div>
+                  <div className="cell" style={{fontSize:'12px'}}>
+                    {new Date(t.paymentDate).toLocaleDateString()}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </div>

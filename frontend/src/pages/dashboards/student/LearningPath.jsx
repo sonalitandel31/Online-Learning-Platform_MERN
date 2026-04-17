@@ -58,11 +58,66 @@ const LearningPath = () => {
     }
   };
 
-  if (loading) return (
-    <div className="d-flex justify-content-center align-items-center vh-100">
-      <div className="spinner-border text-primary" />
-    </div>
-  );
+  // --- SKELETON LOADER ENHANCEMENT ---
+  if (loading) {
+    return (
+      <div className="container-fluid py-5" style={{ backgroundColor: colors.bg, minHeight: "100vh" }}>
+        <style>{`
+          .skeleton {
+            background: #e2e5e7;
+            background-image: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+            background-size: 200px 100%;
+            background-repeat: no-repeat;
+            border-radius: 4px;
+            display: inline-block;
+            line-height: 1;
+            animation: skeletonShimmer 1.5s infinite linear;
+          }
+          @keyframes skeletonShimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
+          }
+        `}</style>
+        
+        <div className="container">
+          {/* Header Skeleton */}
+          <div className="text-center mb-4">
+            <div className="skeleton mb-3" style={{ height: "40px", width: "250px", borderRadius: "8px" }}></div>
+            <br />
+            <div className="skeleton" style={{ height: "20px", width: "300px", borderRadius: "4px" }}></div>
+          </div>
+
+          {/* Tab Switcher Skeleton (Shows if user has companyId) */}
+          {user.companyId && (
+            <div className="d-flex justify-content-center mb-5">
+              <div className="skeleton rounded-pill" style={{ height: "45px", width: "350px" }}></div>
+            </div>
+          )}
+
+          {/* Timeline Skeleton */}
+          <div className="row justify-content-center">
+            <div className="col-lg-8 position-relative mx-auto">
+              <div className="position-absolute h-100" style={{ width: '4px', background: '#e2e8f0', left: '38px', top: '20px', zIndex: 0 }}></div>
+              
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="d-flex mb-5 position-relative align-items-center z-1">
+                  <div 
+                    className="skeleton rounded-circle flex-shrink-0 border border-4 border-white shadow-sm" 
+                    style={{ width: '50px', height: '50px', marginLeft: '15px' }}
+                  ></div>
+                  <div className="ms-4 card border-0 shadow-sm rounded-4 overflow-hidden flex-grow-1 p-4 bg-white">
+                    <div className="skeleton mb-3" style={{ height: "24px", width: "80px", borderRadius: "4px" }}></div>
+                    <div className="skeleton mb-4" style={{ height: "28px", width: "60%", borderRadius: "6px" }}></div>
+                    <div className="skeleton rounded-pill" style={{ height: "36px", width: "150px" }}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // --- Sub-Component: AI Roadmap Section ---
   const PersonalRoadmap = () => (

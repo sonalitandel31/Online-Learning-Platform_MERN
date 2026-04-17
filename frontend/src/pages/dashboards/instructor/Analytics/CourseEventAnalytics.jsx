@@ -100,11 +100,89 @@ export default function CourseEventAnalytics() {
     return events.map((e) => ({ event: e._id.replace(/_/g, ' '), count: e.count || 0 }));
   }, [events]);
 
-  if (loading) return (
-    <div className="d-flex justify-content-center align-items-center vh-100 bg-white">
-      <div className="spinner-border text-primary" style={{ width: '3rem', height: '3rem' }}></div>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div style={{ padding: "clamp(16px, 4vw, 32px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+          }
+          .skeleton {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            background-color: #cbd5e1;
+            border-radius: 8px;
+          }
+        `}</style>
+        
+        {/* Header Skeleton */}
+        <header className="mb-5 text-start">
+          <div className="skeleton" style={{ height: "36px", width: "300px", marginBottom: "8px" }}></div>
+          <div className="skeleton" style={{ height: "20px", width: "400px", maxWidth: "100%" }}></div>
+        </header>
+
+        {/* Selector Card Skeleton */}
+        <div style={{
+          background: colors.card,
+          border: `1px solid ${colors.border}`,
+          borderRadius: "24px",
+          padding: "24px",
+          marginBottom: "24px",
+          boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02)"
+        }}>
+          <div className="row g-3 align-items-center">
+            <div className="col-auto">
+              <div className="skeleton" style={{ width: "56px", height: "56px", borderRadius: "16px" }}></div>
+            </div>
+            <div className="col text-start">
+              <div className="skeleton" style={{ height: "16px", width: "120px", marginBottom: "8px" }}></div>
+              <div className="skeleton" style={{ height: "14px", width: "180px" }}></div>
+            </div>
+            <div className="col-12 col-lg-4">
+              <div className="skeleton" style={{ height: "56px", width: "100%", borderRadius: "14px" }}></div>
+            </div>
+            <div className="col-auto">
+              <div className="skeleton" style={{ height: "56px", width: "120px", borderRadius: "14px" }}></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Chart Card Skeleton */}
+        <div style={{
+          background: colors.card,
+          border: `1px solid ${colors.border}`,
+          borderRadius: "24px",
+          padding: "32px",
+          boxShadow: "0 20px 25px -5px rgba(0,0,0,0.05)",
+          minHeight: "500px",
+          display: "flex",
+          flexDirection: "column"
+        }}>
+          <div className="d-flex align-items-center gap-2 mb-5">
+            <div className="skeleton" style={{ width: "24px", height: "24px", borderRadius: "4px" }}></div>
+            <div className="skeleton" style={{ height: "24px", width: "200px" }}></div>
+            <div className="skeleton ms-auto" style={{ height: "30px", width: "100px", borderRadius: "50rem" }}></div>
+          </div>
+          
+          <div className="skeleton" style={{ width: "100%", height: "400px", borderRadius: "16px", marginBottom: "2rem" }}></div>
+          
+          <div style={{ 
+              padding: "1rem 1.5rem", 
+              background: "#f8fafc", 
+              borderRadius: "16px", 
+              border: "1px solid #e2e8f0",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              marginTop: "auto"
+          }}>
+            <div className="skeleton" style={{ width: "20px", height: "20px", borderRadius: "50%", flexShrink: 0 }}></div>
+            <div className="skeleton" style={{ height: "16px", width: "100%" }}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "clamp(16px, 4vw, 32px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>

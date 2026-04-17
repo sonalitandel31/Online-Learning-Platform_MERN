@@ -211,11 +211,125 @@ function LegendItem({ color, label, count }) {
     );
 }
 
+// ✅ NEW Skeleton Loading Component
 function LoadingSkeleton() {
     return (
-        <div className="vh-100 d-flex flex-column align-items-center justify-content-center bg-white">
-            <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}></div>
-            <span className="mt-3 fw-bold text-muted">Analyzing Platform Data...</span>
+        <div className="platform-risk-container">
+            <style>{`
+                .skeleton {
+                    background: #f1f5f9;
+                    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+                    background-size: 200% 100%;
+                    animation: shimmer 1.5s infinite linear;
+                    border-radius: 4px;
+                }
+                @keyframes shimmer {
+                    0% { background-position: 200% 0; }
+                    100% { background-position: -200% 0; }
+                }
+                
+                .skel-title-lg { height: 32px; width: 250px; margin-bottom: 6px; border-radius: 6px; }
+                .skel-text-md { height: 18px; width: 350px; }
+                .skel-badge-lg { height: 36px; width: 140px; border-radius: 50px; }
+                
+                .skel-stat-box { background: white; border-radius: 18px; padding: 22px; border: 1px solid #eef0f2; height: 100px; display: flex; align-items: center; justify-content: space-between; }
+                .skel-stat-label { height: 10px; width: 80px; margin-bottom: 8px; }
+                .skel-stat-value { height: 28px; width: 60px; margin-bottom: 8px; }
+                .skel-stat-sub { height: 12px; width: 100px; }
+                .skel-stat-icon { width: 52px; height: 52px; border-radius: 14px; }
+                
+                .skel-card { background: white; border-radius: 20px; border: 1px solid #eef0f2; padding: 24px; }
+                
+                .skel-table-header { height: 14px; margin-bottom: 15px; }
+                .skel-table-row { padding: 18px 0; border-bottom: 1px solid #f8f9fa; display: flex; align-items: center; }
+                .skel-table-title { height: 18px; width: 60%; margin-bottom: 6px; }
+                .skel-table-sub { height: 12px; width: 40%; }
+                .skel-table-cell { height: 24px; width: 80px; border-radius: 10px; margin: auto; }
+                .skel-table-progress { height: 8px; width: 100%; border-radius: 10px; }
+                
+                .skel-doughnut { width: 240px; height: 240px; border-radius: 50%; margin: 0 auto 30px; border: 30px solid #f1f5f9; background: transparent !important; }
+                .skel-legend-item { height: 48px; border-radius: 16px; margin-bottom: 16px; }
+            `}</style>
+
+            {/* Header Skeleton */}
+            <div className="content-header mb-4">
+                <div className="skeleton" style={{ width: '200px', height: '14px', marginBottom: '8px' }}></div>
+                <div className="d-flex justify-content-between align-items-end">
+                    <div>
+                        <div className="skeleton skel-title-lg"></div>
+                        <div className="skeleton skel-text-md"></div>
+                    </div>
+                    <div className="skeleton skel-badge-lg"></div>
+                </div>
+            </div>
+
+            <div className="row g-4">
+                <div className="col-xl-8">
+                    {/* Stats Grid Skeleton */}
+                    <div className="row g-3">
+                        {Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="col-md-6 col-lg-3">
+                                <div className="skel-stat-box shadow-sm">
+                                    <div>
+                                        <div className="skeleton skel-stat-label"></div>
+                                        <div className="skeleton skel-stat-value"></div>
+                                        <div className="skeleton skel-stat-sub"></div>
+                                    </div>
+                                    <div className="skeleton skel-stat-icon"></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Table Skeleton */}
+                    <div className="skel-card mt-4">
+                        <div className="d-flex justify-content-between align-items-center mb-4">
+                            <div className="skeleton" style={{ width: '180px', height: '24px', borderRadius: '6px' }}></div>
+                            <div className="skeleton" style={{ width: '80px', height: '36px', borderRadius: '12px' }}></div>
+                        </div>
+                        
+                        <div className="d-flex mb-2">
+                            <div className="skeleton skel-table-header" style={{ width: '40%' }}></div>
+                            <div className="skeleton skel-table-header text-center" style={{ width: '15%' }}></div>
+                            <div className="skeleton skel-table-header text-center" style={{ width: '20%' }}></div>
+                            <div className="skeleton skel-table-header" style={{ width: '25%' }}></div>
+                        </div>
+                        
+                        {Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="skel-table-row">
+                                <div style={{ width: '40%' }}>
+                                    <div className="skeleton skel-table-title"></div>
+                                    <div className="skeleton skel-table-sub"></div>
+                                </div>
+                                <div style={{ width: '15%', textAlign: 'center' }}>
+                                    <div className="skeleton skel-table-cell"></div>
+                                </div>
+                                <div style={{ width: '20%', textAlign: 'center' }}>
+                                    <div className="skeleton skel-table-cell"></div>
+                                </div>
+                                <div style={{ width: '25%' }}>
+                                    <div className="skeleton skel-table-progress"></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Right Column Skeleton (Chart) */}
+                <div className="col-xl-4">
+                    <div className="skel-card h-100 shadow-sm">
+                        <div className="skeleton" style={{ width: '120px', height: '16px', marginBottom: '32px' }}></div>
+                        
+                        <div className="skel-doughnut"></div>
+                        
+                        <div className="mt-5">
+                            <div className="skeleton skel-legend-item"></div>
+                            <div className="skeleton skel-legend-item"></div>
+                            <div className="skeleton skel-legend-item"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

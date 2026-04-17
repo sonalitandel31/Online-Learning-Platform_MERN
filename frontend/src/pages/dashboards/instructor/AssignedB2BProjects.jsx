@@ -50,9 +50,55 @@ const AssignedB2BProjects = () => {
   };
 
   if (loading) return (
-    <div className="text-center py-5">
-      <div className="spinner-border text-primary" role="status"></div>
-      <p className="mt-2">Loading your B2B projects...</p>
+    <div className="container-fluid py-4">
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: .5; }
+        }
+        .skeleton {
+          animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          background-color: #e2e8f0;
+        }
+        .skeleton-darker {
+          animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          background-color: #cbd5e1;
+        }
+      `}</style>
+      
+      <div className="mb-4">
+        <div className="skeleton" style={{ height: "32px", width: "250px", marginBottom: "8px", borderRadius: "6px" }}></div>
+        <div className="skeleton" style={{ height: "20px", width: "350px", borderRadius: "6px", maxWidth: "100%" }}></div>
+      </div>
+
+      <div className="row g-4">
+        {[1, 2, 3, 4, 5, 6].map((item) => (
+          <div key={item} className="col-md-6 col-lg-4">
+            <div className="card h-100 border-0 shadow-sm" style={{ borderRadius: '15px' }}>
+              <div className="card-header py-3 skeleton" style={{ borderRadius: '15px 15px 0 0', border: 'none' }}>
+                <div className="skeleton-darker" style={{ height: '14px', width: '40%', borderRadius: '4px', marginBottom: '8px' }}></div>
+                <div className="skeleton-darker" style={{ height: '24px', width: '70%', borderRadius: '4px' }}></div>
+              </div>
+              
+              <div className="card-body">
+                <div className="mb-3 d-flex justify-content-between align-items-center">
+                  <div className="skeleton" style={{ height: "28px", width: "120px", borderRadius: "50rem" }}></div>
+                  <div className="skeleton" style={{ height: "16px", width: "90px", borderRadius: "4px" }}></div>
+                </div>
+
+                <div className="mb-3">
+                  <div className="skeleton" style={{ height: "14px", width: "130px", marginBottom: "8px", borderRadius: "4px" }}></div>
+                  <div className="skeleton" style={{ height: "80px", width: "100%", borderRadius: "0.25rem" }}></div>
+                </div>
+              </div>
+
+              <div className="card-footer bg-white border-0 pb-3">
+                <div className="skeleton" style={{ height: "38px", width: "100%", borderRadius: "0.375rem" }}></div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 

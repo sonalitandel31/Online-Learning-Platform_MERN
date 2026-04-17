@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "../../../api/api";
-import { Button, Form, Card, Alert, Spinner, Row, Col } from "react-bootstrap";
+import { Button, Form, Card, Alert, Row, Col } from "react-bootstrap";
 
 export default function SystemSettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -162,12 +162,86 @@ export default function SystemSettingsPage() {
 
   return (
     <div style={styles.container}>
+      
+      {/* ✅ Skeleton CSS Styles */}
+      <style>{`
+        .skeleton {
+          background: #f1f5f9;
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+          border-radius: 4px;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .skel-title { width: 120px; height: 24px; margin-bottom: 16px; border-radius: 4px; }
+        .skel-label { width: 200px; height: 16px; margin-bottom: 8px; border-radius: 4px; }
+        .skel-input { width: 100%; height: 38px; margin-bottom: 8px; border-radius: 6px; }
+        .skel-text-sm { width: 250px; height: 12px; border-radius: 4px; }
+        .skel-hr { width: 100%; height: 1px; margin: 24px 0; background: #e2e8f0; }
+        .skel-switch { width: 280px; height: 24px; border-radius: 12px; }
+        .skel-pill { width: 100px; height: 32px; border-radius: 9999px; display: inline-block; margin-right: 8px; }
+        .skel-btn { width: 100px; height: 38px; border-radius: 6px; }
+      `}</style>
+
       <h2 style={styles.heading}>System Settings</h2>
 
       {loading ? (
-        <div style={{ display: "flex", justifyContent: "center", marginTop: "4rem" }}>
-          <Spinner animation="border" />
-        </div>
+        <Row className="justify-content-center">
+          <Col xs={12} md={10} lg={8}>
+            <Card style={styles.card}>
+              <Card.Body>
+                {/* Skeleton Commission */}
+                <div className="skeleton skel-title"></div>
+                <div className="mb-3">
+                  <div className="skeleton skel-label"></div>
+                  <div className="skeleton skel-input"></div>
+                  <div className="skeleton skel-text-sm"></div>
+                </div>
+
+                <div className="skel-hr"></div>
+
+                {/* Skeleton Approval */}
+                <div className="skeleton skel-title" style={{ width: '180px' }}></div>
+                <div className="mb-3">
+                  <div className="skeleton skel-label"></div>
+                  <div className="skeleton skel-input"></div>
+                </div>
+                <div className="mb-3">
+                  <div className="skeleton skel-switch"></div>
+                </div>
+
+                <div className="skel-hr"></div>
+
+                {/* Skeleton Rejection Reasons */}
+                <div className="skeleton skel-title" style={{ width: '220px' }}></div>
+                <div style={{ marginBottom: '16px' }}>
+                  <div className="skeleton skel-pill"></div>
+                  <div className="skeleton skel-pill"></div>
+                  <div className="skeleton skel-pill" style={{ width: '80px' }}></div>
+                </div>
+
+                <Row className="g-2 align-items-center">
+                  <Col xs={12} md={9}>
+                    <div className="skeleton skel-input" style={{ marginBottom: 0 }}></div>
+                  </Col>
+                  <Col xs={12} md={3}>
+                    <div className="skeleton skel-input" style={{ marginBottom: 0 }}></div>
+                  </Col>
+                </Row>
+
+                <div className="skel-hr"></div>
+
+                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                  <div className="skeleton skel-btn" style={{ width: '70px' }}></div>
+                  <div className="skeleton skel-btn" style={{ width: '120px' }}></div>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
       ) : (
         <Row className="justify-content-center">
           <Col xs={12} md={10} lg={8}>

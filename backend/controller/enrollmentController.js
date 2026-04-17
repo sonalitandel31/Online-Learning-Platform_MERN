@@ -459,7 +459,7 @@ const enrolledStudent = async (req, res) => {
   }
 };
 
-const downloadReceipt = async (req, res) => {
+/* const downloadReceipt = async (req, res) => {
   try {
     const userId = req.user._id;
     const { id } = req.params;
@@ -495,6 +495,63 @@ const downloadReceipt = async (req, res) => {
     return fs.createReadStream(absPath).pipe(res);
   } catch (err) {
     console.error("DownloadReceipt Error:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+}; */
+
+const downloadReceipt = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { id } = req.params;
+
+    console.log("👉 1. Request received for Enrollment ID:", id);
+
+    const enrollment = await Enrollment.findById(id).populate("course", "title").lean();
+    
+    if (!enrollment) {
+      console.log("❌ ERROR: Enrollment not found in Database.");
+      return res.status(404).json({ success: false, message: "Enrollment not found" });
+    }
+
+    if (String(enrollment.student) !== String(userId)) {
+      console.log("❌ ERROR: User ID does not match enrollment student ID.");
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    if (enrollment.paymentStatus !== "complete" && enrollment.source !== "subscription") {
+      console.log("❌ ERROR: Payment status is not complete.");
+      return res.status(400).json({ success: false, message: "Payment not completed" });
+    }
+
+    if (!enrollment.receiptUrl) {
+      console.log("❌ ERROR: No receiptUrl saved in the database for this enrollment.");
+      return res.status(404).json({ success: false, message: "Receipt not available" });
+    }
+
+    console.log("👉 2. Database receiptUrl is:", enrollment.receiptUrl);
+
+    // Fix path resolution
+    const relPath = enrollment.receiptUrl.replace(/^\/+/, ""); // Removes leading slash
+    const absPath = path.join(__dirname, "..", relPath); 
+
+    console.log("👉 3. Looking for physical file at:", absPath);
+
+    if (!fs.existsSync(absPath)) {
+      console.log("❌ ERROR: File does not exist on the server at that path!");
+      return res.status(404).json({ success: false, message: "Receipt file missing on server" });
+    }
+
+    console.log("✅ SUCCESS: File found, sending to frontend!");
+    
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="receipt-${enrollment.receiptNo || enrollment._id}.pdf"`
+    );
+
+    return fs.createReadStream(absPath).pipe(res);
+  } catch (err) {
+    console.error("DownloadReceipt Server Error:", err);
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };

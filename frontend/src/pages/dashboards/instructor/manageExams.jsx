@@ -407,10 +407,38 @@ export default function ManageExams() {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "70vh" }}>
-        <div className="spinner" />
-        <p style={{ marginTop: "15px", color: colors.primary }}>Loading exams...</p>
-        <style>{`.spinner { border: 4px solid #f3f3f3; border-top: 4px solid ${colors.primary}; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+      <div className="manage-exams-container" style={{ padding: "15px", background: colors.bg, minHeight: "100vh" }}>
+        <style>{`
+          @media (min-width: 768px) {
+            .manage-exams-container { padding: 30px !important; }
+          }
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+          }
+          .skeleton {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            background-color: #cbd5e1;
+            border-radius: 6px;
+          }
+        `}</style>
+        
+        <h2 style={{ marginBottom: "25px", fontWeight: "800", color: "#1e293b" }}>
+          Manage Exams
+        </h2>
+
+        {[1, 2, 3, 4, 5].map((item) => (
+          <div key={item} style={{ background: "#fff", border: `1px solid ${colors.border}`, borderRadius: "12px", marginBottom: "15px", padding: "18px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}>
+            <div style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <div className="skeleton" style={{ height: "20px", width: "40%", maxWidth: "250px" }}></div>
+                <div className="skeleton" style={{ height: "20px", width: "70px", borderRadius: "999px" }}></div>
+              </div>
+              <div className="skeleton" style={{ height: "14px", width: "100px" }}></div>
+            </div>
+            <div className="skeleton" style={{ height: "16px", width: "16px", borderRadius: "4px", marginLeft: "15px" }}></div>
+          </div>
+        ))}
       </div>
     );
   }

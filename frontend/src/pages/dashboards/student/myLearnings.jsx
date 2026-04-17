@@ -189,7 +189,7 @@ function MyLearnings() {
   };
 
   // ✅ receipt: direct download (blob)
-  const handleDownloadReceipt = async (course) => {
+  /* const handleDownloadReceipt = async (course) => {
     try {
       const amount = Number(course.amount || 0);
       if (amount <= 0) return;
@@ -233,6 +233,65 @@ function MyLearnings() {
       window.URL.revokeObjectURL(url);
     } catch (e) {
       alert("Receipt download failed.");
+    }
+  }; */
+
+  // ✅ receipt: direct download (blob)
+  const handleDownloadReceipt = async (course) => {
+    try {
+      const amount = Number(course.amount || 0);
+      if (amount <= 0) return;
+
+      const receiptEndpoint = course.receiptUrl
+        ? course.receiptUrl.startsWith("http")
+          ? course.receiptUrl
+          : `${BASE_URL}${course.receiptUrl}`
+        : null;
+
+      if (receiptEndpoint) {
+        const res = await fetch(receiptEndpoint, { credentials: "include" });
+        if (!res.ok) throw new Error("Receipt fetch failed");
+        const blob = await res.blob();
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `payment-receipt-${course.enrollmentId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        return;
+      }
+
+      const res = await api.get(`/enrollments/${course.enrollmentId}/receipt`, {
+        responseType: "blob",
+      });
+
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `payment-receipt-${course.enrollmentId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      // 👇 NEW: Decode the blob error to see what the backend is actually complaining about
+      if (e.response && e.response.data && e.response.data instanceof Blob) {
+        const text = await e.response.data.text();
+        try {
+          const errData = JSON.parse(text);
+          alert(errData.message || "Receipt download failed.");
+        } catch {
+          alert("Receipt download failed.");
+        }
+      } else {
+        alert("Receipt download failed. " + (e.message || ""));
+      }
     }
   };
 
@@ -281,11 +340,14 @@ function MyLearnings() {
     return `Expires in ${formatRemaining(remaining)}`;
   };
 
-  // ✅ paid check
+  // ✅ paid check (Reverted so the button shows up again)
   const hasPaid = useMemo(
     () => (course) => {
       const amount = Number(course.amount || 0);
-      if (amount <= 0) return false;
+      // Agar course free hai (amount 0 hai), toh receipt button nahi dikhega
+      if (amount <= 0) return false; 
+      
+      // Sirf check karein ki payment complete hui hai ya nahi
       return course.paymentStatus === "complete" || !!(course.paymentId || course.orderId);
     },
     []
@@ -476,13 +538,64 @@ function MyLearnings() {
     },
   };
 
-  if (loading)
+  if (loading) {
     return (
-      <div className="d-flex justify-content-center align-items-center vh-100">
-        <div className="spinner-border text-warning"></div>
-        <h5 className="text-secondary fw-light ms-2">Loading your learnings...</h5>
+      <div style={styles.container}>
+        <style>{`
+          .skeleton {
+            background: #e2e5e7;
+            background-image: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+            background-size: 200px 100%;
+            background-repeat: no-repeat;
+            border-radius: 4px;
+            display: inline-block;
+            line-height: 1;
+            animation: skeletonShimmer 1.5s infinite linear;
+          }
+          @keyframes skeletonShimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
+          }
+        `}</style>
+        
+        {/* Title Skeleton */}
+        <div style={{ ...styles.title, borderLeftColor: "#e5e7eb" }}>
+          <div className="skeleton" style={{ width: "250px", height: "40px", borderRadius: "8px" }}></div>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <div className="skeleton rounded-pill" style={{ width: "100px", height: "32px" }}></div>
+            <div className="skeleton rounded-pill" style={{ width: "100px", height: "32px" }}></div>
+            <div className="skeleton rounded-pill" style={{ width: "100px", height: "32px" }}></div>
+          </div>
+        </div>
+
+        {/* Grid Skeleton */}
+        <div style={styles.grid}>
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} style={styles.card}>
+              <div className="skeleton" style={{ height: "180px", width: "100%", borderRadius: "16px 16px 0 0" }}></div>
+              <div style={styles.details}>
+                <div className="skeleton mb-3" style={{ height: "24px", width: "70%" }}></div>
+                <div className="skeleton mb-2" style={{ height: "14px", width: "100%" }}></div>
+                <div className="skeleton mb-4" style={{ height: "14px", width: "90%" }}></div>
+                
+                <div className="skeleton mb-4" style={{ height: "16px", width: "40%" }}></div>
+
+                <div style={{ marginTop: "auto" }}>
+                  <div className="skeleton mb-2" style={{ height: "8px", width: "100%", borderRadius: "10px" }}></div>
+                  <div className="skeleton mb-3" style={{ height: "12px", width: "30%" }}></div>
+                  
+                  <div style={styles.btnContainer}>
+                    <div className="skeleton" style={{ flex: 1, height: "40px", borderRadius: "8px" }}></div>
+                    <div className="skeleton" style={{ flex: 1, height: "40px", borderRadius: "8px" }}></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
+  }
 
   if (error)
     return (

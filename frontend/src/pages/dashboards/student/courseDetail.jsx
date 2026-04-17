@@ -151,8 +151,6 @@ function CourseDetail() {
       if (data.success) {
         showAlert("Enrolled via Subscription! ✅", "success");
         await refreshEnrollmentState(id);
-
-        // setTimeout(() => navigate("/me/subscription"), 1500);
       }
     } catch (err) {
       console.error("Auto-enroll failed:", err.response?.data);
@@ -355,30 +353,22 @@ function CourseDetail() {
     navigate(`/course/${id}/discussion`);
   };
 
-  // --- YAHAN NAYA FUNCTION ADD KAREIN ---
-  const logBehavior = async () => {
+  // --- FIXED BEHAVIOR TRACKING FUNCTION ---
+  const logBehavior = () => {
     if (!selectedLesson || !isEnrolled) return;
 
     const timeSpentSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
 
-    // Data tayyar karein
-    const behaviorData = {
+    // Using the built-in track utility handles the analytics API call properly
+    // without throwing 404s for undefined backend routes.
+    track("lesson_behavior_log", {
       courseId: id,
       lessonId: selectedLesson._id,
       timeSpentSeconds: timeSpentSeconds,
       videoProgress: Math.round(videoProgress),
       rewindCount: rewindCountRef.current,
       contentType: selectedLesson.contentType
-    };
-
-    try {
-      // Hamari banayi hui AI tracking API call karein
-      await api.post("/analytics/log-behavior", behaviorData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-    } catch (err) {
-      console.error("AI Behavior Track Error:", err);
-    }
+    });
   };
 
   // ---------- Razorpay loader ----------
@@ -412,10 +402,8 @@ function CourseDetail() {
     }
 
     // if user has subscription access but no enrollment record => ask to create it
-    // (this keeps progress working)
     if (hasAccess && !isEnrolled && isPaidCourse) {
       // user can start learning via subscription; but allow individual purchase too
-      // We won't block individual purchase, just let them choose.
     }
 
     // FREE COURSE OR CORPORATE BYPASS
@@ -503,13 +491,13 @@ function CourseDetail() {
 
               showAlert("Payment Successful! Welcome to the course.", "success");
 
-              // OPEN RECEIPT (backend must return receiptUrl)
+              // OPEN RECEIPT
               if (verifyRes.data.receiptUrl) {
                 const base = (import.meta.env.VITE_BASE_URL || "").replace(/\/+$/, "");
                 window.open(`${base}${verifyRes.data.receiptUrl}`, "_blank");
               }
 
-              // update UI states (no reload)
+              // update UI states
               setHasAccess(true);
               setAccessReason("purchase");
               await refreshEnrollmentState(id);
@@ -561,7 +549,6 @@ function CourseDetail() {
       track("course_unenroll_click", { courseId: id });
       setEnrollLoading(true);
 
-      // Backend expects courseId in params; studentId comes from req.user
       const res = await api.put(
         `/enrollments/unenroll/${id}`,
         {},
@@ -578,7 +565,6 @@ function CourseDetail() {
         setCompletedLessons([]);
         setCertificateUrl(null);
 
-        // instant UI update
         setHasAccess(false);
         setAccessReason("cancelled");
       } else {
@@ -602,12 +588,10 @@ function CourseDetail() {
   const handleReEnroll = async () => {
     if (!course) return;
 
-    // Paid course renew must go via Razorpay (same as enroll)
     if (isPaidCourse) {
       return handleEnroll();
     }
 
-    // Free course renew direct
     try {
       setEnrollLoading(true);
 
@@ -655,7 +639,7 @@ function CourseDetail() {
     // Cleanup: Jab lesson badle ya page chhodien, toh data save ho jaye
     return () => {
       video.removeEventListener("timeupdate", handleTimeUpdate);
-      logBehavior(); // Save data to AI engine
+      logBehavior(); // Save data to AI engine natively via track utility
       // Reset trackers for next lesson
       startTimeRef.current = Date.now();
       rewindCountRef.current = 0;
@@ -858,13 +842,66 @@ function CourseDetail() {
   }, []);
 
   // ---------- loading / error ----------
-  if (loading)
+  if (loading) {
     return (
-      <div className="d-flex flex-column justify-content-center align-items-center vh-100 bg-white">
-        <div className="spinner-grow text-info mb-3" role="status"></div>
-        <h5 className="text-secondary fw-light animate-pulse">Setting up your learning environment...</h5>
+      <div className="bg-light min-vh-100 pb-5" style={{ fontFamily: "'Inter', sans-serif" }}>
+        <style>{`
+          .skeleton {
+            background: #e2e5e7;
+            background-image: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+            background-size: 200px 100%;
+            background-repeat: no-repeat;
+            border-radius: 8px;
+            display: inline-block;
+            line-height: 1;
+            width: 100%;
+            animation: skeletonShimmer 1.5s infinite linear;
+          }
+          @keyframes skeletonShimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
+          }
+        `}</style>
+        
+        {/* Skeleton Header */}
+        <div className="py-5 mb-4 border-bottom" style={{ background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)" }}>
+          <div className="container">
+            <div className="row align-items-center g-4">
+              <div className="col-lg-8">
+                <div className="skeleton mb-3" style={{ height: "24px", width: "15%" }}></div>
+                <div className="skeleton mb-3" style={{ height: "48px", width: "70%" }}></div>
+                <div className="skeleton mb-4" style={{ height: "16px", width: "40%" }}></div>
+                <div className="skeleton mb-2" style={{ height: "16px", width: "80%" }}></div>
+                <div className="skeleton mb-4" style={{ height: "16px", width: "60%" }}></div>
+                
+                <div className="d-flex gap-3">
+                  <div className="skeleton rounded-pill" style={{ height: "40px", width: "180px" }}></div>
+                  <div className="skeleton rounded-pill" style={{ height: "40px", width: "120px" }}></div>
+                </div>
+              </div>
+              <div className="col-lg-4">
+                <div className="skeleton rounded-4 shadow-sm" style={{ height: "200px", width: "100%" }}></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Skeleton Body */}
+        <div className="container">
+          <div className="row g-4">
+            <div className="col-lg-8">
+              <div className="skeleton rounded-4 shadow-sm mb-4" style={{ height: "450px", width: "100%" }}></div>
+              <div className="skeleton rounded-4 shadow-sm" style={{ height: "150px", width: "100%" }}></div>
+            </div>
+            <div className="col-lg-4">
+              <div className="skeleton rounded-4 shadow-sm mb-4" style={{ height: "250px", width: "100%" }}></div>
+              <div className="skeleton rounded-4 shadow-sm" style={{ height: "500px", width: "100%" }}></div>
+            </div>
+          </div>
+        </div>
       </div>
     );
+  }
 
   if (error)
     return (

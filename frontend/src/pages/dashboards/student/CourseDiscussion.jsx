@@ -1,4 +1,3 @@
-// src/pages/Student/Forum/CourseDiscussion.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -240,11 +239,72 @@ const CourseDiscussion = () => {
     setDetailLoading(false);
   };
 
+  // --- SKELETON LOADER ENHANCEMENT ---
   if (loading) {
     return (
-      <div className="d-flex justify-content-center align-items-center vh-100">
-        <div className="spinner-border" style={{ color: colors.purple }} role="status">
-          <span className="visually-hidden">Loading...</span>
+      <div className="container-fluid container-lg py-4" style={{ backgroundColor: "#fdfdfd", minHeight: "100vh" }}>
+        <style>{`
+          .skeleton {
+            background: #e2e5e7;
+            background-image: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+            background-size: 200px 100%;
+            background-repeat: no-repeat;
+            border-radius: 4px;
+            display: inline-block;
+            line-height: 1;
+            animation: skeletonShimmer 1.5s infinite linear;
+          }
+          @keyframes skeletonShimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
+          }
+        `}</style>
+        
+        {/* Skeleton Header */}
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 gap-3">
+          <div className="d-flex align-items-center gap-3 w-100">
+            <div className="skeleton rounded-circle shadow-sm" style={{ width: "42px", height: "42px", flexShrink: 0 }}></div>
+            <div className="flex-grow-1">
+              <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <div className="skeleton rounded-3 d-none d-sm-block" style={{ width: "40px", height: "40px" }}></div>
+                <div className="skeleton" style={{ height: "30px", width: "200px", borderRadius: "8px" }}></div>
+              </div>
+              <div className="d-flex flex-column flex-md-row gap-2 mt-3">
+                <div className="skeleton" style={{ height: "32px", width: "100%", maxWidth: "420px", borderRadius: "6px" }}></div>
+                <div className="d-flex gap-2">
+                  <div className="skeleton" style={{ height: "32px", width: "150px", borderRadius: "6px" }}></div>
+                  <div className="skeleton" style={{ height: "32px", width: "150px", borderRadius: "6px" }}></div>
+                </div>
+              </div>
+            </div>
+            <div className="skeleton rounded-pill d-none d-md-block" style={{ height: "40px", width: "160px" }}></div>
+          </div>
+        </div>
+
+        {/* Skeleton List Items */}
+        <div className="row justify-content-center">
+          <div className="col-12 col-xl-10">
+            <div className="list-group shadow-sm rounded-4 overflow-hidden border-0 bg-white">
+              {[1, 2, 3, 4, 5].map((item) => (
+                <div
+                  key={item}
+                  className="list-group-item p-3 p-md-4 border-bottom"
+                  style={{ borderLeft: `6px solid ${colors.purpleLight}`, borderRight: "none" }}
+                >
+                  <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                    <div className="flex-grow-1">
+                      <div className="skeleton mb-2" style={{ height: "20px", width: "60%", borderRadius: "4px" }}></div>
+                      <div className="skeleton" style={{ height: "14px", width: "25%", borderRadius: "4px" }}></div>
+                    </div>
+                    <div className="d-flex gap-2">
+                      <div className="skeleton rounded-pill" style={{ height: "26px", width: "55px" }}></div>
+                      <div className="skeleton rounded-pill" style={{ height: "26px", width: "55px" }}></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );

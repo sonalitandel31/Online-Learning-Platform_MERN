@@ -93,12 +93,61 @@ export default function PlatformRules() {
 
   return (
     <div style={styles.container}>
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: .5; }
+        }
+        .skeleton {
+          animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          background-color: #e2e8f0;
+          border-radius: 4px;
+        }
+      `}</style>
+      
       <h2 style={styles.heading}>Platform Rules & Commission</h2>
 
       {loading ? (
-        <div style={{ display: "flex", justifyContent: "center", marginTop: "4rem" }}>
-          <Spinner animation="border" />
-        </div>
+        <Row className="justify-content-center">
+          <Col xs={12} md={10} lg={8}>
+            <Card style={styles.card}>
+              <Card.Body>
+                {/* Commission Section Skeleton */}
+                <div className="skeleton" style={{ height: "24px", width: "120px", marginBottom: "15px" }}></div>
+                <div style={styles.rowItem}>
+                  <div className="skeleton" style={{ height: "20px", width: "150px" }}></div>
+                  <div className="skeleton" style={{ height: "20px", width: "40px" }}></div>
+                </div>
+                <div style={styles.rowItem}>
+                  <div className="skeleton" style={{ height: "20px", width: "100px" }}></div>
+                  <div className="skeleton" style={{ height: "20px", width: "40px" }}></div>
+                </div>
+                <div className="skeleton" style={{ height: "60px", width: "100%", borderRadius: "10px", marginTop: "12px" }}></div>
+
+                <hr />
+
+                {/* Content Approval Section Skeleton */}
+                <div className="skeleton" style={{ height: "24px", width: "150px", marginBottom: "15px" }}></div>
+                <div style={styles.rowItem}>
+                  <div className="skeleton" style={{ height: "20px", width: "120px" }}></div>
+                  <div className="skeleton" style={{ height: "20px", width: "200px" }}></div>
+                </div>
+                <div className="skeleton" style={{ height: "80px", width: "100%", borderRadius: "10px", marginTop: "12px" }}></div>
+
+                <hr />
+
+                {/* Rejection Reasons Section Skeleton */}
+                <div className="skeleton" style={{ height: "24px", width: "200px", marginBottom: "15px" }}></div>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <div className="skeleton" style={{ height: "30px", width: "80px", borderRadius: "999px" }}></div>
+                  <div className="skeleton" style={{ height: "30px", width: "120px", borderRadius: "999px" }}></div>
+                  <div className="skeleton" style={{ height: "30px", width: "100px", borderRadius: "999px" }}></div>
+                  <div className="skeleton" style={{ height: "30px", width: "90px", borderRadius: "999px" }}></div>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
       ) : (
         <Row className="justify-content-center">
           <Col xs={12} md={10} lg={8}>

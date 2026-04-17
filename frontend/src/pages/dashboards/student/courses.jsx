@@ -159,7 +159,6 @@ function Courses() {
     location.search
   ]);
 
-  // Fetch user specific course enrollments
   // Fetch user specific course enrollments & subscription status
   const fetchEnrollments = async () => {
     try {
@@ -180,7 +179,6 @@ function Courses() {
         });
         setEnrolledCoursesIds(enrollmentMap);
 
-        // NEW: Backend se aayi hui subscription details save karein
         if (res.data.subscription) {
           setMySubscription(res.data.subscription);
         }
@@ -251,7 +249,6 @@ function Courses() {
       const isCorporateCourse = course.isGlobal === false;
       const isCompanyEmployee = !!user?.companyId;
 
-      // NEW: Check if course is covered by active subscription
       let isCoveredBySub = false;
       if (mySubscription?.active) {
         if (mySubscription.accessType === "all") {
@@ -264,7 +261,6 @@ function Courses() {
       // ===== BYPASS RAZORPAY CONDITION =====
       if (!course.price || course.price === 0 || (isCorporateCourse && isCompanyEmployee) || isCoveredBySub) {
 
-        // Agar subscription se hai, toh source 'subscription' bhejein taki receipt bypass ho sake
         const payload = {
           courseId: course._id,
           amount: 0,
@@ -323,7 +319,6 @@ function Courses() {
             notify("Enrollment successful!");
             fetchEnrollments();
 
-            // Open receipt in new tab
             if (verify.data.receiptUrl) {
               const base = (import.meta.env.VITE_BASE_URL || "").replace(/\/+$/, "");
               window.open(`${base}${verify.data.receiptUrl}`, "_blank");
@@ -331,7 +326,7 @@ function Courses() {
           } else notify("Payment verification failed!", "danger");
         },
         prefill: { name: user.name, email: user.email, contact: user.phone || "" },
-        theme: { color: THEME_PRIMARY }, // Dynamic Razorpay theme color
+        theme: { color: THEME_PRIMARY }, 
       };
 
       const razorpay = new window.Razorpay(options);
@@ -470,18 +465,6 @@ function Courses() {
     }
   };
 
-  // Render full-page context loader while fetching enrollments
-  if (enrollmentsLoading)
-    return (
-      <div className="d-flex justify-content-center align-items-center" style={{ height: "100vh", width: "100vw", position: "fixed", top: 0, left: 0, background: "rgba(255, 255, 255, 0.95)", backdropFilter: "blur(10px)", zIndex: 1050 }}>
-        <div className="text-center">
-          <div className="spinner-border mb-3" style={{ color: THEME_PRIMARY, width: "3rem", height: "3rem", borderWidth: "0.25em" }} role="status"></div>
-          <h5 className="fw-bolder" style={{ color: "#2b2b2b", letterSpacing: "-0.5px" }}>Synchronizing Profile...</h5>
-          <p className="text-muted small">Preparing your personalized learning space</p>
-        </div>
-      </div>
-    );
-
   // Setup current page course slice
   const approvedCourses = courses.filter((c) => c.status === "approved");
   const indexOfLastCourse = currentPage * coursesPerPage;
@@ -617,6 +600,29 @@ function Courses() {
           margin-bottom: -40px;
           color: white;
         }
+
+        /* --- SKELETON LOADER CSS --- */
+        .skeleton {
+          background: #e2e5e7;
+          background-image: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+          background-size: 200px 100%;
+          background-repeat: no-repeat;
+          border-radius: 4px;
+          display: inline-block;
+          line-height: 1;
+          width: 100%;
+          animation: skeletonShimmer 1.5s infinite linear;
+        }
+        @keyframes skeletonShimmer {
+          0% { background-position: -200px 0; }
+          100% { background-position: calc(200px + 100%) 0; }
+        }
+        .skeleton-img { height: 160px; border-radius: 14px; margin: 12px; width: calc(100% - 24px); }
+        .skeleton-title { height: 24px; width: 75%; margin-bottom: 12px; }
+        .skeleton-text { height: 14px; margin-bottom: 8px; }
+        .skeleton-text-short { width: 60%; }
+        .skeleton-meta { height: 16px; width: 40px; }
+        .skeleton-btn { height: 38px; width: 90px; border-radius: 50rem; }
       `}</style>
 
       {/* --- CUSTOM NOTIFICATION UI --- */}
@@ -845,12 +851,39 @@ function Courses() {
 
           {/* Main Course Grid Area */}
           <main className="col-lg-9">
-            {loading ? (
-              // Section-level context loading effect
-              <div className="card border-0 shadow-sm rounded-4 p-5 text-center w-100 d-flex flex-column align-items-center justify-content-center" style={{ minHeight: "500px", background: "#fff" }}>
-                <div className="spinner-border mb-4" style={{ width: '3rem', height: '3rem', color: THEME_PRIMARY, borderWidth: '0.25em' }} role="status"></div>
-                <h4 className="fw-bolder text-dark mb-2">Curating Courses...</h4>
-                <p className="text-muted">Applying your specific preferences</p>
+            {(loading || enrollmentsLoading) ? (
+              // Enhanced Skeleton Grid shown while EITHER courses or enrollments are loading
+              <div className="row g-4">
+                {[...Array(6)].map((_, index) => (
+                  <div key={index} className="col-md-6 col-lg-4 mb-2">
+                    <div className="masterpiece-card" style={{ pointerEvents: 'none' }}>
+                      <div className="card-img-container">
+                        <div className="skeleton skeleton-img"></div>
+                      </div>
+                      <div className="card-body d-flex flex-column p-3">
+                        <div className="skeleton skeleton-title mt-2"></div>
+                        <div className="d-flex gap-2 mb-3">
+                          <div className="skeleton" style={{ width: '16px', height: '16px', borderRadius: '50%' }}></div>
+                          <div className="skeleton" style={{ width: '50%' }}></div>
+                        </div>
+                        <div className="skeleton skeleton-text"></div>
+                        <div className="skeleton skeleton-text"></div>
+                        <div className="skeleton skeleton-text skeleton-text-short mb-4"></div>
+                        
+                        <div className="d-flex align-items-center gap-3 mb-3 pb-2 border-bottom border-light">
+                          <div className="skeleton skeleton-meta"></div>
+                          <div className="skeleton skeleton-meta"></div>
+                          <div className="skeleton skeleton-meta"></div>
+                        </div>
+                        
+                        <div className="d-flex justify-content-between align-items-center mt-auto">
+                          <div className="skeleton" style={{ width: '50px', height: '24px', margin: 0 }}></div>
+                          <div className="skeleton skeleton-btn"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : error ? (
               <div className="card border-0 shadow-sm rounded-4 p-5 text-center" style={{ background: "#fff0f0", color: "#dc3545" }}>
@@ -980,7 +1013,6 @@ function Courses() {
                               {/* Action Footer */}
                               <div className="d-flex justify-content-between align-items-center mt-auto">
 
-                                {/* Price Section */}
                                 {/* Price Section */}
                                 <div>
                                   {(course.isGlobal === false && loggedInUser?.companyId) ||

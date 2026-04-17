@@ -177,6 +177,29 @@ const ForumDiscussions = () => {
         /* Modal */
         .modal-overlay { position: fixed; inset: 0; background: rgba(30, 27, 75, 0.4); backdrop-filter: blur(8px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .modal-card-custom { background: white; width: 100%; max-width: 850px; border-radius: 28px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0,0,0,0.15); }
+
+        /* ✅ Skeleton Animation & Styles */
+        .skeleton {
+          background: #f1f5f9;
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+          border-radius: 4px;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .skel-stat-val { width: 40px; height: 28px; border-radius: 4px; margin-top: 4px; }
+        .skel-search { width: 100%; height: 40px; border-radius: 12px; margin-bottom: 24px; }
+        .skel-table-row { height: 64px; border-bottom: 1px solid #f1f5f9; }
+        .skel-text-lg { height: 18px; width: 60%; margin-bottom: 4px; }
+        .skel-text-sm { height: 12px; width: 40%; }
+        .skel-badge { height: 26px; width: 70px; border-radius: 50rem; }
+        .skel-btn-group { display: flex; gap: 8px; justify-content: flex-end; }
+        .skel-icon-btn { width: 36px; height: 36px; border-radius: 10px; }
+        
+        .skel-filter { width: 100%; height: 42px; border-radius: 12px; }
       `}</style>
 
       {/* Header & Stats */}
@@ -211,188 +234,267 @@ const ForumDiscussions = () => {
                     <div className="p-3 rounded-4" style={{ background: s.color + '15', color: s.color }}>{s.icon}</div>
                     <div>
                       <small className="text-muted fw-bold text-uppercase" style={{ fontSize: '0.65rem' }}>{s.label}</small>
-                      <h4 className="mb-0 fw-800">{s.val}</h4>
+                      {loadingDiscussions ? (
+                        <div className="skeleton skel-stat-val"></div>
+                      ) : (
+                        <h4 className="mb-0 fw-800">{s.val}</h4>
+                      )}
                     </div>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Search */}
-            <div className="bg-light p-2 rounded-4 d-flex align-items-center mb-4 border">
-              <Search className="ms-3 text-muted" size={18} />
-              <input className="form-control border-0 bg-transparent shadow-none" placeholder="Search by title, course or user..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-            </div>
-
             {loadingDiscussions ? (
-              <div className="text-center py-5"><div className="spinner-border text-primary" /></div>
-            ) : (
-              <div className="table-responsive rounded-4 border overflow-hidden">
-                <table className="table data-table mb-0">
-                  <thead>
-                    <tr>
-                      <th className="ps-4">Discussion</th>
-                      <th>Status</th>
-                      <th className="text-center">Replies</th>
-                      <th className="text-end pe-4">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredQuestions.map(q => (
-                      <React.Fragment key={q._id}>
-                        <tr onClick={() => handleExpandRow(q._id)} style={{ cursor: 'pointer' }}>
-                          <td className="ps-4 text-start">
+              <>
+                <div className="skeleton skel-search"></div>
+                <div className="table-responsive rounded-4 border overflow-hidden">
+                  <table className="table data-table mb-0">
+                    <thead>
+                      <tr>
+                        <th className="ps-4">Discussion</th>
+                        <th>Status</th>
+                        <th className="text-center">Replies</th>
+                        <th className="text-end pe-4">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <tr key={i} className="skel-table-row">
+                          <td className="ps-4">
                             <div className="d-flex align-items-center gap-3">
-                              {/* Expand Icon */}
-                              <div className={`p-1 rounded ${expandedId === q._id ? 'bg-primary text-white' : 'text-muted'}`}>
-                                <ChevronDown
-                                  size={16}
-                                  style={{ transform: expandedId === q._id ? 'rotate(180deg)' : 'rotate(0)' }}
-                                />
-                              </div>
-
-                              {/* Text Container: flex-grow-1 pushes this to occupy the left side */}
-                              <div className="flex-grow-1 text-start">
-                                <div className="fw-bold text-dark mb-0" style={{ fontSize: '0.95rem' }}>
-                                  {q.title}
-                                </div>
-                                <small className="text-muted d-block mt-n1">
-                                  {q.courseTitle || "General Forum"}
-                                </small>
+                              <div className="skeleton" style={{ width: '24px', height: '24px', borderRadius: '4px' }}></div>
+                              <div className="flex-grow-1">
+                                <div className="skeleton skel-text-lg"></div>
+                                <div className="skeleton skel-text-sm"></div>
                               </div>
                             </div>
                           </td>
-                          <td>
-                            <div className="d-flex gap-2">
-                              <span className={`badge rounded-pill px-3 py-1 ${q.isSolved ? 'bg-success-subtle text-success border border-success' : 'bg-warning-subtle text-warning border border-warning'}`}>
-                                {q.isSolved ? 'Solved' : 'Active'}
-                              </span>
-                              {q.isLocked && <span className="badge rounded-pill bg-secondary text-white px-2"><Lock size={12} /></span>}
-                            </div>
-                          </td>
-                          <td className="text-center fw-bold text-muted">{q.answerCount || 0}</td>
-                          <td className="text-end pe-4" onClick={e => e.stopPropagation()}>
-                            <div className="d-flex justify-content-end gap-2">
-                              <button className="action-icon-btn" onClick={(e) => toggleLock(e, q._id, !q.isLocked)} disabled={actionLoadingId === q._id}>
-                                {q.isLocked ? <Unlock size={18} /> : <Lock size={18} />}
-                              </button>
-                              <button className="action-icon-btn btn-delete" onClick={(e) => deleteThread(e, q._id)} disabled={actionLoadingId === q._id}>
-                                <Trash2 size={18} />
-                              </button>
+                          <td><div className="skeleton skel-badge"></div></td>
+                          <td><div className="skeleton" style={{ width: '20px', height: '20px', margin: 'auto', borderRadius: '4px' }}></div></td>
+                          <td className="pe-4">
+                            <div className="skel-btn-group">
+                              <div className="skeleton skel-icon-btn"></div>
+                              <div className="skeleton skel-icon-btn"></div>
                             </div>
                           </td>
                         </tr>
-                        {expandedId === q._id && (
-                          <tr>
-                            <td colSpan="4" className="p-0 border-0">
-                              <div className="expanded-box shadow-inner">
-                                <div className="row g-4">
-                                  <div className="col-lg-7">
-                                    <h6 className="fw-bold text-primary small text-uppercase mb-2"><Info size={14} /> Thread Content</h6>
-                                    <p className="text-muted bg-white p-3 rounded-3 border" style={{ whiteSpace: 'pre-line' }}>{q.description}</p>
-                                    <div className="mt-3 d-flex align-items-center justify-content-start gap-2 text-start">
-                                      <div className="bg-primary-subtle text-primary p-2 rounded-circle d-flex align-items-center justify-content-center">
-                                        <User size={14} />
-                                      </div>
-                                      <small className="fw-bold text-dark">
-                                        Reported By: <span className="text-primary">{safeName(q.userId || q.asker)}</span>
-                                      </small>
-                                    </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Search */}
+                <div className="bg-light p-2 rounded-4 d-flex align-items-center mb-4 border">
+                  <Search className="ms-3 text-muted" size={18} />
+                  <input className="form-control border-0 bg-transparent shadow-none" placeholder="Search by title, course or user..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                </div>
+
+                <div className="table-responsive rounded-4 border overflow-hidden">
+                  <table className="table data-table mb-0">
+                    <thead>
+                      <tr>
+                        <th className="ps-4">Discussion</th>
+                        <th>Status</th>
+                        <th className="text-center">Replies</th>
+                        <th className="text-end pe-4">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredQuestions.length === 0 ? (
+                        <tr><td colSpan="4" className="text-center py-5 text-muted">No discussions found.</td></tr>
+                      ) : (
+                        filteredQuestions.map(q => (
+                          <React.Fragment key={q._id}>
+                            <tr onClick={() => handleExpandRow(q._id)} style={{ cursor: 'pointer' }}>
+                              <td className="ps-4 text-start">
+                                <div className="d-flex align-items-center gap-3">
+                                  <div className={`p-1 rounded ${expandedId === q._id ? 'bg-primary text-white' : 'text-muted'}`}>
+                                    <ChevronDown
+                                      size={16}
+                                      style={{ transform: expandedId === q._id ? 'rotate(180deg)' : 'rotate(0)' }}
+                                    />
                                   </div>
-                                  <div className="col-lg-5">
-                                    <h6 className="fw-bold text-warning small text-uppercase mb-2"><MessageSquare size={14} /> Response Audit</h6>
-                                    <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
-                                      {(q.answers || []).map(ans => {
-                                        const rList = getRepliesForAnswer(q._id, ans._id);
-                                        return (
-                                          <div key={ans._id} className="ans-pill shadow-sm">
-                                            <div className="d-flex justify-content-between mb-1">
-                                              <small className="fw-bold text-primary">{safeName(ans.userId)}</small>
-                                              {ans.isVerified && <span className="badge bg-warning text-white rounded-pill" style={{ fontSize: '8px' }}>OFFICIAL</span>}
-                                            </div>
-                                            <div className="small text-muted">{ans.answerText}</div>
-                                            {rList.length > 0 && (
-                                              <div className="mt-2 ps-2 border-start">
-                                                {rList.map(rep => (
-                                                  <div key={rep._id} className="reply-mini small">
-                                                    <strong>{safeName(rep.userId)}:</strong> {rep.replyText}
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
+                                  <div className="flex-grow-1 text-start">
+                                    <div className="fw-bold text-dark mb-0" style={{ fontSize: '0.95rem' }}>
+                                      {q.title}
                                     </div>
+                                    <small className="text-muted d-block mt-n1">
+                                      {q.courseTitle || "General Forum"}
+                                    </small>
                                   </div>
                                 </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                              </td>
+                              <td>
+                                <div className="d-flex gap-2">
+                                  <span className={`badge rounded-pill px-3 py-1 ${q.isSolved ? 'bg-success-subtle text-success border border-success' : 'bg-warning-subtle text-warning border border-warning'}`}>
+                                    {q.isSolved ? 'Solved' : 'Active'}
+                                  </span>
+                                  {q.isLocked && <span className="badge rounded-pill bg-secondary text-white px-2"><Lock size={12} /></span>}
+                                </div>
+                              </td>
+                              <td className="text-center fw-bold text-muted">{q.answerCount || 0}</td>
+                              <td className="text-end pe-4" onClick={e => e.stopPropagation()}>
+                                <div className="d-flex justify-content-end gap-2">
+                                  <button className="action-icon-btn" onClick={(e) => toggleLock(e, q._id, !q.isLocked)} disabled={actionLoadingId === q._id}>
+                                    {q.isLocked ? <Unlock size={18} /> : <Lock size={18} />}
+                                  </button>
+                                  <button className="action-icon-btn btn-delete" onClick={(e) => deleteThread(e, q._id)} disabled={actionLoadingId === q._id}>
+                                    <Trash2 size={18} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                            {expandedId === q._id && (
+                              <tr>
+                                <td colSpan="4" className="p-0 border-0">
+                                  <div className="expanded-box shadow-inner">
+                                    <div className="row g-4">
+                                      <div className="col-lg-7">
+                                        <h6 className="fw-bold text-primary small text-uppercase mb-2"><Info size={14} /> Thread Content</h6>
+                                        <p className="text-muted bg-white p-3 rounded-3 border" style={{ whiteSpace: 'pre-line' }}>{q.description}</p>
+                                        <div className="mt-3 d-flex align-items-center justify-content-start gap-2 text-start">
+                                          <div className="bg-primary-subtle text-primary p-2 rounded-circle d-flex align-items-center justify-content-center">
+                                            <User size={14} />
+                                          </div>
+                                          <small className="fw-bold text-dark">
+                                            Reported By: <span className="text-primary">{safeName(q.userId || q.asker)}</span>
+                                          </small>
+                                        </div>
+                                      </div>
+                                      <div className="col-lg-5">
+                                        <h6 className="fw-bold text-warning small text-uppercase mb-2"><MessageSquare size={14} /> Response Audit</h6>
+                                        <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                                          {(q.answers || []).map(ans => {
+                                            const rList = getRepliesForAnswer(q._id, ans._id);
+                                            return (
+                                              <div key={ans._id} className="ans-pill shadow-sm">
+                                                <div className="d-flex justify-content-between mb-1">
+                                                  <small className="fw-bold text-primary">{safeName(ans.userId)}</small>
+                                                  {ans.isVerified && <span className="badge bg-warning text-white rounded-pill" style={{ fontSize: '8px' }}>OFFICIAL</span>}
+                                                </div>
+                                                <div className="small text-muted">{ans.answerText}</div>
+                                                {rList.length > 0 && (
+                                                  <div className="mt-2 ps-2 border-start">
+                                                    {rList.map(rep => (
+                                                      <div key={rep._id} className="reply-mini small">
+                                                        <strong>{safeName(rep.userId)}:</strong> {rep.replyText}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          })}
+                                          {(q.answers || []).length === 0 && <div className="text-muted small">No responses yet.</div>}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </>
         ) : (
           /* --- REPORTS TAB --- */
           <>
-            <div className="row g-3 mb-4">
-              <div className="col-md-4">
-                <select className="form-select rounded-4 border-2 shadow-sm fw-bold" value={reportStatus} onChange={e => setReportStatus(e.target.value)}>
-                  <option value="pending">Review Pending</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="all">Full History</option>
-                </select>
-              </div>
-              <div className="col-md-8">
-                <div className="bg-white p-1 rounded-4 border-2 border d-flex align-items-center shadow-sm">
-                  <Search className="ms-3 text-muted" size={18} />
-                  <input className="form-control border-0 bg-transparent shadow-none" placeholder="Filter reports..." value={reportSearch} onChange={e => setReportSearch(e.target.value)} />
-                </div>
-              </div>
-            </div>
-
             {loadingReports ? (
-              <div className="text-center py-5"><div className="spinner-border text-primary" /></div>
-            ) : filteredReports.length === 0 ? (
-              <div className="alert alert-success border-0 rounded-4 text-center py-4"><CheckCircle2 size={32} className="mb-2" /><h6 className="mb-0">No reports found!</h6></div>
-            ) : (
-              Object.entries(groupedReports).map(([type, list]) => (
-                <div key={type} className="mb-4">
-                  <h6 className="fw-800 text-uppercase text-muted small mb-3 border-start border-4 border-primary ps-2">{type} Cases</h6>
-                  <div className="table-responsive rounded-4 border overflow-hidden">
-                    <table className="table data-table mb-0">
-                      <thead className="bg-light">
-                        <tr>
-                          <th className="ps-4">Target</th>
-                          <th>Reason</th>
-                          <th>Status</th>
-                          <th>Reporter</th>
-                          <th className="text-end pe-4">Action</th>
+              <>
+                <div className="row g-3 mb-4">
+                  <div className="col-md-4"><div className="skeleton skel-filter"></div></div>
+                  <div className="col-md-8"><div className="skeleton skel-filter"></div></div>
+                </div>
+                <div className="skeleton" style={{ width: '150px', height: '20px', marginBottom: '16px' }}></div>
+                <div className="table-responsive rounded-4 border overflow-hidden">
+                  <table className="table data-table mb-0">
+                    <thead className="bg-light">
+                      <tr>
+                        <th className="ps-4">Target</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                        <th>Reporter</th>
+                        <th className="text-end pe-4">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <tr key={i} className="skel-table-row">
+                          <td className="ps-4"><div className="skeleton skel-text-sm"></div></td>
+                          <td><div className="skeleton skel-text-lg"></div></td>
+                          <td><div className="skeleton skel-badge"></div></td>
+                          <td><div className="skeleton skel-text-sm"></div></td>
+                          <td className="pe-4"><div className="skeleton skel-btn-group"><div className="skeleton skel-badge" style={{ width: '80px', borderRadius: '50rem' }}></div></div></td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {list.map(r => (
-                          <tr key={r._id} onClick={() => setSelectedReport(r)} style={{ cursor: 'pointer' }}>
-                            <td className="ps-4 text-capitalize fw-bold text-primary">{r.targetType}</td>
-                            <td>{r.reason}</td>
-                            <td>{renderStatusBadge(r.status)}</td>
-                            <td>{safeName(r.reporterId)}</td>
-                            <td className="text-end pe-4">
-                              <button className="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" onClick={() => setSelectedReport(r)}>Inspect</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="row g-3 mb-4">
+                  <div className="col-md-4">
+                    <select className="form-select rounded-4 border-2 shadow-sm fw-bold" value={reportStatus} onChange={e => setReportStatus(e.target.value)}>
+                      <option value="pending">Review Pending</option>
+                      <option value="resolved">Resolved</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="all">Full History</option>
+                    </select>
+                  </div>
+                  <div className="col-md-8">
+                    <div className="bg-white p-1 rounded-4 border-2 border d-flex align-items-center shadow-sm">
+                      <Search className="ms-3 text-muted" size={18} />
+                      <input className="form-control border-0 bg-transparent shadow-none" placeholder="Filter reports..." value={reportSearch} onChange={e => setReportSearch(e.target.value)} />
+                    </div>
                   </div>
                 </div>
-              ))
+
+                {filteredReports.length === 0 ? (
+                  <div className="alert alert-success border-0 rounded-4 text-center py-4"><CheckCircle2 size={32} className="mb-2" /><h6 className="mb-0">No reports found!</h6></div>
+                ) : (
+                  Object.entries(groupedReports).map(([type, list]) => (
+                    <div key={type} className="mb-4">
+                      <h6 className="fw-800 text-uppercase text-muted small mb-3 border-start border-4 border-primary ps-2">{type} Cases</h6>
+                      <div className="table-responsive rounded-4 border overflow-hidden">
+                        <table className="table data-table mb-0">
+                          <thead className="bg-light">
+                            <tr>
+                              <th className="ps-4">Target</th>
+                              <th>Reason</th>
+                              <th>Status</th>
+                              <th>Reporter</th>
+                              <th className="text-end pe-4">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {list.map(r => (
+                              <tr key={r._id} onClick={() => setSelectedReport(r)} style={{ cursor: 'pointer' }}>
+                                <td className="ps-4 text-capitalize fw-bold text-primary">{r.targetType}</td>
+                                <td>{r.reason}</td>
+                                <td>{renderStatusBadge(r.status)}</td>
+                                <td>{safeName(r.reporterId)}</td>
+                                <td className="text-end pe-4">
+                                  <button className="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" onClick={(e) => { e.stopPropagation(); setSelectedReport(r); }}>Inspect</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </>
             )}
           </>
         )}
@@ -439,18 +541,10 @@ const ForumDiscussions = () => {
                     {selectedReport.targetContent?.isDeleted ? (
                       <div className="text-center py-3 text-muted">Data purged from database.</div>
                     ) : (
-                      <p className="mb-0 text-dark fw-medium" style={{ whiteSpace: 'pre-line' }}>{selectedReport.targetContent?.text}</p>
+                      <p className="mb-0 text-dark fw-medium" style={{ whiteSpace: 'pre-line' }}>{selectedReport.targetContent?.text || "No specific content text provided."}</p>
                     )}
                   </div>
                 </div>
-
-                {/* Testimony */}
-                {/* <div className="col-12">
-                  <h6 className="fw-800 text-uppercase text-muted small mb-2">Reporter Testimony</h6>
-                  <div className="p-3 rounded-4 border-start border-4 border-danger bg-danger-subtle fw-bold small">
-                    {selectedReport.note || "No specific comments provided."}
-                  </div>
-                </div> */}
 
                 {/* Auditor History */}
                 <div className="col-12 pt-4 border-top">

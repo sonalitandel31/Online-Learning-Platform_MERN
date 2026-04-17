@@ -62,13 +62,77 @@ export default function PayoutHistory() {
 
   if (loading) {
     return (
-      <div className="loader-container">
-        <div className="spinner" />
+      <div className="payout-container">
         <style>{`
-          .loader-container { display: flex; justify-content: center; align-items: center; height: 60vh; }
-          .spinner { border: 4px solid ${colors.border}; border-top: 4px solid ${colors.primary}; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
-          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+          .payout-container { padding: 16px; background: ${colors.bg}; min-height: 100vh; font-family: 'Inter', sans-serif; }
+          .header-section { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+          .table-wrapper { background: white; border-radius: 12px; border: 1px solid ${colors.border}; overflow: hidden; display: none; }
+          .payout-table { width: 100%; border-collapse: collapse; }
+          .payout-table th { background: #f8fafc; padding: 14px; text-align: left; font-size: 0.75rem; color: ${colors.textMuted}; text-transform: uppercase; border-bottom: 1px solid ${colors.border}; }
+          .payout-table td { padding: 14px; border-bottom: 1px solid ${colors.border}; }
+          .mobile-list { display: flex; flex-direction: column; gap: 12px; }
+          .payout-card { background: white; padding: 16px; border-radius: 12px; border: 1px solid ${colors.border}; }
+          .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+          
+          @media (min-width: 768px) { .payout-container { padding: 30px; } .table-wrapper { display: block; } .mobile-list { display: none; } }
+
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+          }
+          .skeleton {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            background-color: #cbd5e1;
+            border-radius: 6px;
+          }
         `}</style>
+        
+        <div className="header-section">
+          <div className="skeleton" style={{ width: "150px", height: "32px", borderRadius: "8px" }}></div>
+          <div className="skeleton" style={{ width: "100px", height: "32px", borderRadius: "8px" }}></div>
+        </div>
+
+        <div className="table-wrapper">
+          <table className="payout-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[1, 2, 3, 4, 5].map((item) => (
+                <tr key={item}>
+                  <td><div className="skeleton" style={{ height: "18px", width: "100px" }}></div></td>
+                  <td><div className="skeleton" style={{ height: "18px", width: "80px" }}></div></td>
+                  <td><div className="skeleton" style={{ height: "18px", width: "120px" }}></div></td>
+                  <td><div className="skeleton" style={{ height: "24px", width: "90px", borderRadius: "20px" }}></div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mobile-list">
+          {[1, 2, 3, 4, 5].map((item) => (
+            <div key={item} className="payout-card">
+              <div className="card-header">
+                <div>
+                  <div className="skeleton" style={{ height: "22px", width: "80px", marginBottom: "8px" }}></div>
+                  <div className="skeleton" style={{ height: "14px", width: "100px" }}></div>
+                </div>
+                <div className="skeleton" style={{ height: "24px", width: "90px", borderRadius: "20px" }}></div>
+              </div>
+              <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div className="skeleton" style={{ height: "14px", width: "50px" }}></div>
+                <div className="skeleton" style={{ height: "14px", width: "120px" }}></div>
+              </div>
+            </div>
+          ))}
+        </div>
+
       </div>
     );
   }

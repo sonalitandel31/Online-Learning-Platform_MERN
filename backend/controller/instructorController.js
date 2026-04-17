@@ -380,7 +380,7 @@ const getCourseDetail = async (req, res) => {
   }
 };
 
-const updateCourse = async (req, res) => {
+/* const updateCourse = async (req, res) => {
   try {
     const { courseId } = req.params;
     const instructorId = req.user._id;
@@ -397,6 +397,38 @@ const updateCourse = async (req, res) => {
     res.json({ message: "Course updated", course });
   } catch (error) {
     console.error("Course update failed:", error);
+    res.status(500).json({ message: "Course update failed", error });
+  }
+}; */
+
+// instructorController.js
+
+const updateCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const instructorId = req.user._id;
+    const { title, description, category, level, price, thumbnail } = req.body;
+
+    // Force status to "pendingApproval" or "draft" whenever an edit is made
+    // This prevents instructors from bypassing approval by editing after being approved.
+    const course = await Course.findOneAndUpdate(
+      { _id: courseId, instructor: instructorId },
+      { 
+        title, 
+        description, 
+        category, 
+        level, 
+        price, 
+        thumbnail, 
+        status: "pendingApproval"
+      },
+      { new: true }
+    ).populate("category", "name");
+
+    if (!course) return res.status(404).json({ message: "Course not found" });
+
+    res.json({ message: "Course updated and sent for re-approval", course });
+  } catch (error) {
     res.status(500).json({ message: "Course update failed", error });
   }
 };

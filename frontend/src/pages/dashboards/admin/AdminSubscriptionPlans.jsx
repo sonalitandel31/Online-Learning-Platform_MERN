@@ -12,10 +12,8 @@ import {
   Star, 
   ChevronLeft, 
   ChevronRight,
-  Search,
   Settings,
   DollarSign,
-  Layers,
   Layout
 } from "lucide-react";
 
@@ -34,7 +32,7 @@ export default function AdminSubscriptionPlans() {
   const [msg, setMsg] = useState({ type: "", text: "" });
   const notify = (type, text) => setMsg({ type, text });
 
-  // Creation Form State (Preserving all fields)
+  // Creation Form State
   const [createLoading, setCreateLoading] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -50,12 +48,12 @@ export default function AdminSubscriptionPlans() {
     isFeatured: false,
   });
 
-  // Edit Modal State (Preserving all fields)
+  // Edit Modal State
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editPlan, setEditPlan] = useState(null);
 
-  // Individual action loading states (Toggle/Razorpay buttons)
+  // Individual action loading states
   const [actionLoading, setActionLoading] = useState({});
 
   // Filtering, Searching, and Pagination
@@ -71,7 +69,6 @@ export default function AdminSubscriptionPlans() {
 
   const COURSE_LIMIT = 8;
 
-  // Helper to set action-specific loading (e.g., toggle loading for plan X)
   const setAction = (planId, key, val) => {
     setActionLoading((prev) => ({
       ...prev,
@@ -82,8 +79,6 @@ export default function AdminSubscriptionPlans() {
   // ---------------------------
   // 2. DATA FETCHING (API)
   // ---------------------------
-  
-  // Load all plans for the table
   const fetchPlans = async () => {
     try {
       setPlansLoading(true);
@@ -98,7 +93,6 @@ export default function AdminSubscriptionPlans() {
     }
   };
 
-  // Load courses for the "Selected Courses" selector
   const fetchCourses = async (page = 1) => {
     try {
       setCoursesLoading(true);
@@ -124,7 +118,6 @@ export default function AdminSubscriptionPlans() {
     }
   };
 
-  // Load categories for the filter dropdown
   const fetchCategories = async () => {
     try {
       const { data } = await api.get("/categories");
@@ -137,13 +130,11 @@ export default function AdminSubscriptionPlans() {
   // ---------------------------
   // 3. EFFECTS (Lifecycle)
   // ---------------------------
-
   useEffect(() => {
     fetchPlans();
     fetchCategories();
   }, []);
 
-  // Debounce search to wait 500ms after user stops typing
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchTerm);
@@ -152,14 +143,12 @@ export default function AdminSubscriptionPlans() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Refetch courses when filters or pagination changes
   useEffect(() => {
     if (form.accessType === "selected" || (editOpen && editPlan?.accessType === "selected")) {
       fetchCourses(coursePage);
     }
   }, [form.accessType, editOpen, debouncedSearch, selectedCategory, sortOption, coursePage]);
 
-  // Reset page when category or sort changes
   useEffect(() => {
     setCoursePage(1);
   }, [selectedCategory, sortOption]);
@@ -167,8 +156,6 @@ export default function AdminSubscriptionPlans() {
   // ---------------------------
   // 4. LOGIC HANDLERS
   // ---------------------------
-
-  // Handle inputs for the Create Form
   const onChange = (e) => {
     const { name, value, type, checked } = e.target;
     setForm((prev) => ({
@@ -177,7 +164,6 @@ export default function AdminSubscriptionPlans() {
     }));
   };
 
-  // Add/Remove course from the creation selection
   const toggleCourseInForm = (courseId) => {
     setForm((prev) => {
       const set = new Set((prev.courseIds || []).map(String));
@@ -187,7 +173,6 @@ export default function AdminSubscriptionPlans() {
     });
   };
 
-  // Add/Remove course from the edit modal selection
   const toggleCourseInEdit = (courseId) => {
     setEditPlan((prev) => {
       if (!prev) return prev;
@@ -200,7 +185,6 @@ export default function AdminSubscriptionPlans() {
 
   const formatMoney = (p) => `₹${Number(p?.price || 0)}`;
 
-  // Validator logic
   const validatePayload = (payload) => {
     if (!payload.name?.trim()) return "Plan name is required";
     const price = Number(payload.price);
@@ -211,7 +195,6 @@ export default function AdminSubscriptionPlans() {
     return null;
   };
 
-  // API Call: Create Plan
   const createPlan = async (e) => {
     e.preventDefault();
     notify("", "");
@@ -234,7 +217,6 @@ export default function AdminSubscriptionPlans() {
     } catch (e) { notify("danger", "Server error creating plan"); } finally { setCreateLoading(false); }
   };
 
-  // API Call: Toggle Active Status
   const toggleActive = async (planId) => {
     try {
       setAction(planId, "toggle", true);
@@ -243,7 +225,6 @@ export default function AdminSubscriptionPlans() {
     } catch { notify("danger", "Toggle failed"); } finally { setAction(planId, "toggle", false); }
   };
 
-  // API Call: Link to Razorpay
   const createRazorpayMapping = async (planId) => {
     try {
       setAction(planId, "razorpay", true);
@@ -252,7 +233,6 @@ export default function AdminSubscriptionPlans() {
     } catch (e) { notify("danger", "Razorpay mapping failed"); } finally { setAction(planId, "razorpay", false); }
   };
 
-  // Edit Modal Helpers
   const openEdit = (plan) => {
     setEditPlan({ ...plan, courseIds: Array.isArray(plan.courseIds) ? plan.courseIds.map(String) : [] });
     setEditOpen(true);
@@ -281,11 +261,38 @@ export default function AdminSubscriptionPlans() {
     } catch (e) { notify("danger", "Update failed"); } finally { setEditSaving(false); }
   };
 
-  // Styling Variables
   const colors = { primary: "#8b63f1", amber: "#f59e0b" };
 
   return (
     <div className="container py-4" style={{ maxWidth: 1150 }}>
+      {/* --- CSS STYLES --- */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .hover-row:hover { background-color: #f8fafc; transition: all 0.2s; }
+        .bg-success-subtle { background-color: #dcfce7; color: #166534; }
+        .bg-primary-subtle { background-color: #eef2ff; }
+        .form-check-input:checked { background-color: ${colors.primary}; border-color: ${colors.primary}; }
+        .dropdown-item:hover { background-color: #f1f5f9; cursor: pointer; }
+        .btn-xs { padding: 0.1rem 0.4rem; font-size: 0.7rem; }
+
+        /* ✅ Skeleton Animation & Styles */
+        .skeleton {
+          background: #f1f5f9;
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+          border-radius: 4px;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .skel-text-lg { height: 20px; width: 70%; margin-bottom: 6px; }
+        .skel-text-sm { height: 14px; width: 40%; }
+        .skel-price { height: 22px; width: 60px; margin-bottom: 4px; }
+        .skel-pill { height: 26px; width: 65px; border-radius: 20px; }
+        .skel-btn { height: 32px; width: 32px; border-radius: 50%; float: right; }
+      `}} />
+
       {/* --- HEADER --- */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 gap-3">
         <div>
@@ -321,10 +328,39 @@ export default function AdminSubscriptionPlans() {
                 </tr>
               </thead>
               <tbody>
-                {plansLoading ? <tr><td colSpan="6" className="text-center py-5"><div className="spinner-border text-primary" /></td></tr> : 
+                {plansLoading ? (
+                  /* ✅ Skeleton Table Rows */
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="ps-4 py-3">
+                        <div className="skeleton skel-text-lg"></div>
+                        <div className="skeleton skel-text-sm"></div>
+                      </td>
+                      <td>
+                        <div className="skeleton skel-price"></div>
+                        <div className="skeleton skel-text-sm" style={{ width: '80px' }}></div>
+                      </td>
+                      <td>
+                        <div className="skeleton skel-text-sm" style={{ width: '80px', marginBottom: '6px' }}></div>
+                        <div className="skeleton skel-text-sm" style={{ width: '60px' }}></div>
+                      </td>
+                      <td>
+                        <div className="skeleton skel-pill"></div>
+                      </td>
+                      <td>
+                        <div className="skeleton skel-text-sm" style={{ width: '70px' }}></div>
+                      </td>
+                      <td className="pe-4">
+                        <div className="skeleton skel-btn"></div>
+                      </td>
+                    </tr>
+                  ))
+                ) : plans.length === 0 ? (
+                  <tr><td colSpan="6" className="text-center py-5 text-muted">No subscription plans found.</td></tr>
+                ) : (
                   plans.map((p) => (
                     <tr key={p._id} className="hover-row">
-                      <td className="ps-4">
+                      <td className="ps-4 py-3">
                         <div className="fw-bold">{p.name} {p.isFeatured && <Star size={14} fill={colors.amber} color={colors.amber} />}</div>
                         <div className="small text-muted">Order: {p.sortOrder}</div>
                       </td>
@@ -345,7 +381,7 @@ export default function AdminSubscriptionPlans() {
                       </td>
                     </tr>
                   ))
-                }
+                )}
               </tbody>
             </table>
           </div>
@@ -406,7 +442,7 @@ export default function AdminSubscriptionPlans() {
         </form>
       )}
 
-      {/* --- EDIT MODAL (Full Correction) --- */}
+      {/* --- EDIT MODAL --- */}
       {editOpen && (
         <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3" style={{ background: "rgba(15, 23, 42, 0.7)", zIndex: 9999, backdropFilter: "blur(6px)" }} onClick={closeEdit}>
           <div className="card border-0 shadow-lg w-100 p-4 p-lg-5 overflow-auto animate__animated animate__zoomIn animate__faster" style={{ maxWidth: 900, maxHeight: '95vh', borderRadius: 28 }} onClick={e => e.stopPropagation()}>
@@ -431,7 +467,6 @@ export default function AdminSubscriptionPlans() {
                 <div className="form-check form-switch"><input className="form-check-input" type="checkbox" name="isActive" checked={editPlan.isActive} onChange={onEditChange} /><label className="small fw-bold">ACTIVE</label></div>
               </div>
 
-              {/* RESTORED: Course Selector in Edit Modal */}
               {editPlan.accessType === "selected" && (
                 <div className="col-12 mt-3"><div className="p-3 bg-light rounded-4 border">
                   <div className="d-flex justify-content-between mb-2"><span className="fw-bold small">Course Selection</span><span className="badge bg-primary rounded-pill">{(editPlan.courseIds || []).length} Selected</span></div>
@@ -463,16 +498,6 @@ export default function AdminSubscriptionPlans() {
           </div>
         </div>
       )}
-
-      {/* --- STYLES --- */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        .hover-row:hover { background-color: #f8fafc; transition: all 0.2s; }
-        .bg-success-subtle { background-color: #dcfce7; color: #166534; }
-        .bg-primary-subtle { background-color: #eef2ff; }
-        .form-check-input:checked { background-color: ${colors.primary}; border-color: ${colors.primary}; }
-        .dropdown-item:hover { background-color: #f1f5f9; cursor: pointer; }
-        .btn-xs { padding: 0.1rem 0.4rem; font-size: 0.7rem; }
-      `}} />
     </div>
   );
 }

@@ -349,12 +349,70 @@ export default function Exams() {
 
   const suggestAutoEnroll = hasAccess && accessType === "subscription" && attemptNumber === 0 && !result;
 
-  if (loading) return (
-    <div className="d-flex justify-content-center align-items-center vh-100">
-      <div className="spinner-border text-warning"></div>
-      <h5 className="ms-3 text-secondary fw-light">Loading exam...</h5>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="exam-page-root">
+        <style>{`
+          .skeleton {
+            background: #e2e5e7;
+            background-image: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+            background-size: 200px 100%;
+            background-repeat: no-repeat;
+            border-radius: 4px;
+            display: inline-block;
+            line-height: 1;
+            animation: skeletonShimmer 1.5s infinite linear;
+          }
+          @keyframes skeletonShimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
+          }
+          .exam-page-root { display: flex; height: 100vh; background: #fff; overflow: hidden; position: relative; }
+          .exam-sidebar { width: 350px; background: #fdfdfd; border-right: 1px solid #eee; display: flex; flex-direction: column; transition: all 0.3s ease-in-out; height: 100vh; z-index: 2000; }
+          .sidebar-header { padding: 25px; border-bottom: 2px solid #f8f8f8; }
+          .exam-scroll-area { flex: 1; overflow-y: auto; }
+          .exam-main-content { flex: 1; overflow-y: auto; background: #fff; width: 100%; position: relative; }
+          .sticky-top-bar { position: sticky; top: 0; z-index: 1000; background: #fff; padding: 15px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+          .question-container { max-width: 850px; margin: 20px auto; padding: 0 15px; }
+          @media (max-width: 991px) {
+            .exam-sidebar { display: none; }
+          }
+        `}</style>
+        
+        {/* Skeleton Sidebar */}
+        <aside className="exam-sidebar shadow-sm d-none d-lg-flex">
+          <div className="sidebar-header">
+            <div className="skeleton mb-3" style={{ height: "16px", width: "120px" }}></div>
+            <div className="skeleton" style={{ height: "28px", width: "180px", borderRadius: "8px" }}></div>
+          </div>
+          <div className="exam-scroll-area p-3">
+            {[1, 2, 3, 4, 5, 6].map((item) => (
+              <div key={item} className="d-flex align-items-center gap-3 mb-4">
+                <div className="skeleton rounded-circle" style={{ width: "24px", height: "24px", flexShrink: 0 }}></div>
+                <div className="skeleton flex-grow-1" style={{ height: "20px", borderRadius: "4px" }}></div>
+                <div className="skeleton rounded-pill" style={{ width: "60px", height: "24px", flexShrink: 0 }}></div>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        {/* Skeleton Main Content */}
+        <main className="exam-main-content">
+          <div className="sticky-top-bar">
+            <div className="skeleton d-lg-none" style={{ width: "40px", height: "40px", borderRadius: "8px" }}></div>
+            <div className="d-none d-lg-block"></div>
+            <div className="skeleton rounded-pill" style={{ width: "120px", height: "36px" }}></div>
+          </div>
+          
+          <div className="question-container mt-5 pt-5 text-center">
+             <div className="skeleton rounded-circle mb-4 mx-auto" style={{ width: "80px", height: "80px" }}></div>
+             <div className="skeleton mb-3 mx-auto" style={{ height: "32px", width: "250px", borderRadius: "8px" }}></div>
+             <div className="skeleton mx-auto" style={{ height: "16px", width: "350px", borderRadius: "4px" }}></div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (!hasAccess) {
     return (

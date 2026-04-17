@@ -650,11 +650,9 @@ const getLessonDropoff = async (req, res) => {
           },
         },
       },
-
       {
         $addFields: {
-          // dropRate = 1 - completionRate
-          dropRate: { $subtract: [1, "$completionRate"] },
+          dropRate: { $max: [0, { $subtract: [1, "$completionRate"] }] },
         },
       },
       {
@@ -792,13 +790,15 @@ const calcInstructorScore = async (instructorId) => {
         dropRate: {
           $cond: [
             { $gt: ["$opens", 0] },
-            { $subtract: [1, { $divide: ["$completes", "$opens"] }] },
+            {
+              // FIX: Humne $max laga diya, taaki agar value minus me aaye, toh wo 0 ban jaye.
+              $max: [0, { $subtract: [1, { $divide: ["$completes", "$opens"] }] }]
+            },
             0,
           ],
         },
       },
     },
-    // weighted average by opens
     {
       $group: {
         _id: null,

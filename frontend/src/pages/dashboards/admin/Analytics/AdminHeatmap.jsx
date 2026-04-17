@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import api from "../../../../api/api";
 import html2canvas from "html2canvas";
-import { FaDownload, FaChartArea, FaInfoCircle, FaCalendarAlt, FaFireAlt, FaUsers } from "react-icons/fa";
+import { FaDownload, FaInfoCircle, FaCalendarAlt, FaFireAlt, FaUsers } from "react-icons/fa";
 import { motion } from "framer-motion";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -74,7 +74,6 @@ export default function AdminHeatmap() {
                 {/* Dashboard Header */}
                 <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
                     <div className="d-flex align-items-center gap-2">
-                        {/* <FaChartArea className="text" size={24} /> */}
                         <div>
                             <h2 className="fw-bold text-dark m-0" style={{ fontSize: '1.5rem', lineHeight: '1' }}>
                                 Engagement Heatmap
@@ -218,11 +217,93 @@ function SummaryCard({ label, value, color, icon }) {
     );
 }
 
+// ✅ NEW Skeleton Loading Component
 function LoadingSkeleton() {
     return (
-        <div className="vh-100 d-flex flex-column align-items-center justify-content-center bg-white">
-            <div className="spinner-grow text-primary" role="status" style={{ width: '3rem', height: '3rem' }}></div>
-            <p className="mt-3 text-muted fw-bold">Synthesizing Heatmap Data...</p>
+        <div className="container-fluid py-4" style={{ backgroundColor: '#f8fafc', minHeight: '100vh' }}>
+            <style>{`
+                .skeleton {
+                    background: #f1f5f9;
+                    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+                    background-size: 200% 100%;
+                    animation: shimmer 1.5s infinite linear;
+                    border-radius: 4px;
+                }
+                @keyframes shimmer {
+                    0% { background-position: 200% 0; }
+                    100% { background-position: -200% 0; }
+                }
+                .skel-title { width: 250px; height: 28px; margin-bottom: 8px; border-radius: 6px; }
+                .skel-subtitle { width: 350px; height: 16px; border-radius: 4px; }
+                .skel-btn { width: 140px; height: 40px; border-radius: 50rem; }
+                
+                .skel-stat-card { height: 85px; border-radius: 16px; border: 1px solid #f1f5f9; padding: 16px; display: flex; justify-content: space-between; align-items: center; background: white;}
+                .skel-stat-label { width: 100px; height: 12px; margin-bottom: 8px; }
+                .skel-stat-value { width: 80px; height: 24px; }
+                .skel-stat-icon { width: 46px; height: 46px; border-radius: 8px; }
+
+                .skel-heat-card { background: white; border-radius: 16px; height: 500px; border: 1px solid #f1f5f9; margin-top: 24px;}
+                .skel-heat-header { height: 80px; border-bottom: 1px solid #f1f5f9; padding: 24px; }
+                .skel-heat-body { padding: 24px; }
+                
+                .skel-heat-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+                .skel-heat-label { width: 40px; height: 12px; }
+                .skel-heat-cell { flex: 1; aspect-ratio: 1/1; border-radius: 4px; }
+            `}</style>
+
+            <div className="mx-auto" style={{ maxWidth: '1200px' }}>
+                
+                {/* Header Skeleton */}
+                <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+                    <div>
+                        <div className="skeleton skel-title"></div>
+                        <div className="skeleton skel-subtitle"></div>
+                    </div>
+                    <div className="skeleton skel-btn"></div>
+                </div>
+
+                {/* Stats Skeleton */}
+                <div className="row g-3 mb-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="col-md-4">
+                            <div className="skel-stat-card shadow-sm">
+                                <div>
+                                    <div className="skeleton skel-stat-label"></div>
+                                    <div className="skeleton skel-stat-value"></div>
+                                </div>
+                                <div className="skeleton skel-stat-icon"></div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Heatmap Skeleton */}
+                <div className="skel-heat-card shadow-sm">
+                    <div className="skel-heat-header d-flex justify-content-between">
+                        <div>
+                            <div className="skeleton" style={{ width: '150px', height: '20px', marginBottom: '8px' }}></div>
+                            <div className="skeleton" style={{ width: '250px', height: '14px' }}></div>
+                        </div>
+                        <div className="skeleton" style={{ width: '150px', height: '30px', borderRadius: '8px' }}></div>
+                    </div>
+                    <div className="skel-heat-body">
+                        {/* X-axis placeholder */}
+                        <div className="skel-heat-row" style={{ paddingLeft: '50px', marginBottom: '16px' }}>
+                             <div className="skeleton" style={{ width: '100%', height: '10px' }}></div>
+                        </div>
+                        {/* 7 Days of skeleton blocks */}
+                        {Array.from({ length: 7 }).map((_, r) => (
+                            <div key={r} className="skel-heat-row">
+                                <div className="skeleton skel-heat-label"></div>
+                                {Array.from({ length: 24 }).map((_, c) => (
+                                    <div key={c} className="skeleton skel-heat-cell" style={{ opacity: Math.random() * 0.5 + 0.1 }}></div>
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+            </div>
         </div>
     );
 }

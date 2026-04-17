@@ -157,30 +157,52 @@ export default function RejectedCourses() {
     <div style={styles.container}>
       <h2 style={styles.heading}>Rejected Courses</h2>
 
+      {/* ✅ Added Skeleton Styles */}
+      <style>{`
+        .skeleton {
+          background: #f1f5f9;
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .skel-img { height: 140px; width: 100%; }
+        .skel-title { height: 22px; width: 80%; margin-bottom: 12px; border-radius: 4px; }
+        .skel-line { height: 14px; width: 90%; margin-bottom: 8px; border-radius: 4px; }
+        .skel-reject-box { height: 85px; width: 100%; margin: 12px 0; border-radius: 8px; }
+        .skel-details { height: 32px; width: 100%; margin-bottom: 8px; border-radius: 6px; }
+        .skel-view-btn { height: 42px; width: 100%; margin-top: auto; margin-bottom: 0; border-radius: 8px; }
+        .skel-footer { height: 38px; width: 100%; border-top: 1px solid #edf2f7; }
+      `}</style>
+
       {loading ? (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            height: "70vh",
-            color: "#6f42c1",
-          }}
-        >
-          <div
-            style={{
-              border: "4px solid #f3f3f3",
-              borderTop: "4px solid #6f42c1",
-              borderRadius: "50%",
-              width: "50px",
-              height: "50px",
-              animation: "spin 1s linear infinite",
-              marginBottom: "20px",
-            }}
-          />
-          <p>Loading...</p>
-          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+        <div style={styles.cardsContainer}>
+          {/* ✅ Render 8 Skeleton Cards */}
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} style={styles.card}>
+              <div className="skeleton skel-img"></div>
+              <div style={styles.body}>
+                <div className="skeleton skel-title"></div>
+                <div className="skeleton skel-line"></div>
+                <div className="skeleton skel-line"></div>
+                <div className="skeleton skel-line"></div>
+                <div className="skeleton skel-line" style={{ width: '50%' }}></div>
+                <div className="skeleton skel-line" style={{ width: '40%', marginTop: '6px' }}></div>
+
+                {/* Specific placeholder for the Rejection Details Box */}
+                <div className="skeleton skel-reject-box"></div>
+
+                <div className="skeleton skel-details"></div>
+                <div className="skeleton skel-details"></div>
+
+                <div className="skeleton skel-view-btn"></div>
+              </div>
+              <div className="skeleton skel-footer"></div>
+            </div>
+          ))}
         </div>
       ) : courses.length === 0 ? (
         <p style={{ textAlign: "center", color: "#6f42c1", fontSize: "1.1rem", marginTop: "2rem" }}>

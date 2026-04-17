@@ -70,11 +70,73 @@ export default function EngagementAnalytics() {
     }));
   }, [events]);
 
-  if (loading) return (
-    <div className="d-flex justify-content-center align-items-center vh-100 bg-white">
-      <div className="spinner-border text-primary" style={{ width: '3rem', height: '3rem' }}></div>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div style={{ padding: "clamp(16px, 4vw, 32px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+          }
+          .skeleton {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            background-color: #cbd5e1;
+            border-radius: 8px;
+          }
+        `}</style>
+        
+        {/* Header Skeleton */}
+        <header className="mb-5 text-start">
+          <div className="d-flex align-items-center gap-3 mb-2">
+            <div className="skeleton" style={{ height: "36px", width: "250px" }}></div>
+            <div className="skeleton" style={{ height: "24px", width: "120px", borderRadius: "100px" }}></div>
+          </div>
+          <div className="skeleton" style={{ height: "20px", width: "350px", maxWidth: "100%" }}></div>
+        </header>
+
+        {/* Stats Grid Skeleton */}
+        <div className="row g-4 mb-5">
+          {[1, 2, 3].map((item) => (
+            <div key={item} className="col-12 col-md-4">
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "24px", padding: "24px", display: "flex", alignItems: "center", gap: "20px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02)" }}>
+                <div className="skeleton" style={{ width: "60px", height: "60px", borderRadius: "18px", flexShrink: 0 }}></div>
+                <div className="text-start" style={{ flexGrow: 1 }}>
+                  <div className="skeleton" style={{ height: "14px", width: "120px", marginBottom: "8px" }}></div>
+                  <div className="skeleton" style={{ height: "32px", width: "80px" }}></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Charts Grid Skeleton */}
+        <div className="row g-4">
+          {[1, 2].map((item) => (
+            <div key={item} className="col-12 col-xl-6">
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "24px", padding: "24px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.05)", height: "100%", display: "flex", flexDirection: "column" }}>
+                <div className="mb-4 text-start">
+                  <div className="skeleton" style={{ height: "24px", width: "180px", marginBottom: "6px" }}></div>
+                  <div className="skeleton" style={{ height: "14px", width: "250px" }}></div>
+                </div>
+                
+                <div className="skeleton" style={{ width: "100%", height: "350px", borderRadius: "12px", flexGrow: 1 }}></div>
+                
+                {/* Specific skeleton for the info footer in the second card */}
+                {item === 2 && (
+                  <div style={{ marginTop: "1.5rem", padding: "1rem", background: "#f8fafc", borderRadius: "12px", border: "1px solid #e2e8f0", width: "100%" }}>
+                    <div className="d-flex align-items-center justify-content-start gap-2">
+                      <div className="skeleton" style={{ width: "16px", height: "16px", borderRadius: "50%", flexShrink: 0 }}></div>
+                      <div className="skeleton" style={{ height: "14px", width: "80%" }}></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "clamp(16px, 4vw, 32px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>

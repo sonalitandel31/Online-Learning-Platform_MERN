@@ -263,13 +263,111 @@ function Lesson() {
 
   const isProbablyHtml = (str = "") => /<\/?[a-z][\s\S]*>/i.test(str);
 
-  if (loading)
+  // --- SKELETON LOADER ENHANCEMENT ---
+  if (loading) {
     return (
-      <div className="d-flex flex-column justify-content-center align-items-center vh-100 bg-white">
-        <div className="spinner-border text-purple mb-3" style={{ width: "3rem", height: "3rem" }}></div>
-        <h5 className="text-purple fw-light">Opening your lesson...</h5>
+      <div className="lesson-page-container">
+        <style>{`
+          :root { 
+            --purple: #6f42c1; 
+            --light-purple: #f3effb; 
+          }
+          .lesson-page-container { display: flex; height: 100vh; background: var(--light-purple); overflow: hidden; }
+          .lesson-sidebar { 
+            width: 350px; background: white; border-right: 1px solid #e0d7f2; 
+            display: flex; flex-direction: column; transition: transform 0.3s ease;
+            box-shadow: 4px 0 15px rgba(111, 66, 193, 0.05);
+          }
+          .main-content { flex-grow: 1; overflow-y: auto; position: relative; background: var(--light-purple); }
+          .content-inner { max-width: 1100px; margin: 0 auto; width: 100%; padding-bottom: 100px; }
+          
+          .skeleton {
+            background: #e2e5e7;
+            background-image: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+            background-size: 200px 100%;
+            background-repeat: no-repeat;
+            border-radius: 4px;
+            display: inline-block;
+            line-height: 1;
+            animation: skeletonShimmer 1.5s infinite linear;
+          }
+          @keyframes skeletonShimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
+          }
+          @media (max-width: 991px) {
+            .lesson-sidebar { display: none; }
+          }
+        `}</style>
+        
+        {/* Skeleton Sidebar */}
+        <aside className="lesson-sidebar d-none d-lg-flex">
+          <div className="p-4 border-bottom bg-white">
+            <div className="skeleton mb-4" style={{ height: "20px", width: "140px", borderRadius: "4px" }}></div>
+            <div className="skeleton mb-2" style={{ height: "24px", width: "200px", borderRadius: "4px" }}></div>
+            <div className="skeleton rounded-pill mt-2" style={{ height: "4px", width: "100px" }}></div>
+          </div>
+          <div className="p-3 flex-grow-1 overflow-hidden">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="d-flex align-items-center gap-3 mb-3 p-3 rounded-4 border" style={{ borderColor: "#f8f5fe", background: "#fff" }}>
+                 <div className="skeleton rounded-3" style={{ width: "24px", height: "24px", flexShrink: 0 }}></div>
+                 <div className="flex-grow-1">
+                   <div className="skeleton mb-2" style={{ height: "14px", width: "80%" }}></div>
+                   <div className="skeleton" style={{ height: "10px", width: "40%" }}></div>
+                 </div>
+                 <div className="skeleton rounded-circle" style={{ width: "16px", height: "16px", flexShrink: 0 }}></div>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        {/* Skeleton Main Content */}
+        <main className="main-content p-3 p-lg-5">
+          <div className="content-inner">
+            {/* Header Desktop */}
+            <div className="d-none d-lg-flex justify-content-between align-items-center mb-4">
+              <div className="d-flex align-items-center gap-3 w-50">
+                <div className="skeleton rounded-3" style={{ width: "40px", height: "40px", flexShrink: 0 }}></div>
+                <div className="skeleton" style={{ height: "28px", width: "100%", maxWidth: "400px", borderRadius: "6px" }}></div>
+              </div>
+              <div className="skeleton rounded-pill" style={{ height: "40px", width: "180px" }}></div>
+            </div>
+
+            {/* Mobile Header Skeleton */}
+            <div className="d-lg-none d-flex align-items-center justify-content-between mb-4 bg-white p-2 rounded-pill shadow-sm">
+              <div className="skeleton rounded-circle" style={{ width: "36px", height: "36px" }}></div>
+              <div className="skeleton" style={{ height: "20px", width: "150px" }}></div>
+              <div className="skeleton rounded-circle" style={{ width: "36px", height: "36px" }}></div>
+            </div>
+
+            {/* Title Section */}
+            <div className="mb-4 mt-2">
+              <div className="skeleton mb-3" style={{ height: "40px", width: "60%", borderRadius: "8px" }}></div>
+              <div className="skeleton" style={{ height: "20px", width: "150px", borderRadius: "4px" }}></div>
+            </div>
+
+            {/* Video/PDF Container Placeholder */}
+            <div 
+              className="skeleton" 
+              style={{ 
+                width: "100%", 
+                aspectRatio: "16/9", 
+                borderRadius: "20px", 
+                border: "4px solid white", 
+                boxShadow: "0 25px 50px -12px rgba(111, 66, 193, 0.2)" 
+              }}
+            ></div>
+
+            {/* Navigation Placeholder */}
+            <div className="d-none d-lg-flex justify-content-between mt-5 pt-4 border-top" style={{ borderColor: "#e0d7f2" }}>
+               <div className="skeleton rounded-pill" style={{ height: "40px", width: "120px" }}></div>
+               <div className="skeleton rounded-pill" style={{ height: "40px", width: "160px" }}></div>
+            </div>
+          </div>
+        </main>
       </div>
     );
+  }
 
   if (error)
     return (

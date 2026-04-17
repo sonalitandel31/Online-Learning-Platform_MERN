@@ -139,6 +139,75 @@ export default function SubscriptionPlans() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="container py-5" style={{ maxWidth: 1200 }}>
+        <style>{`
+          .skeleton {
+            background: #e2e5e7;
+            background-image: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+            background-size: 200px 100%;
+            background-repeat: no-repeat;
+            border-radius: 4px;
+            display: inline-block;
+            line-height: 1;
+            animation: skeletonShimmer 1.5s infinite linear;
+          }
+          @keyframes skeletonShimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
+          }
+        `}</style>
+        
+        {/* Header Skeleton */}
+        <div className="text-center mb-5 animate__animated animate__fadeInDown">
+          <div className="skeleton mb-3 mx-auto" style={{ height: "48px", width: "350px", borderRadius: "8px" }}></div>
+          <div className="skeleton mx-auto" style={{ height: "20px", width: "450px", borderRadius: "4px" }}></div>
+        </div>
+
+        {/* Banner Skeleton Placeholder (in case mySub is active) */}
+        <div className="skeleton mb-5 rounded-4 mx-auto" style={{ height: "80px", width: "100%", maxWidth: "1200px" }}></div>
+
+        {/* Pricing Cards Skeleton */}
+        <div className="row g-4 justify-content-center">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="col-md-6 col-lg-4">
+              <div className="card h-100 border-0 shadow-lg" style={{ borderRadius: 24, overflow: "hidden" }}>
+                <div className="card-body p-4 p-xl-5 d-flex flex-column">
+                  <div className="skeleton mb-3" style={{ height: "28px", width: "60%", borderRadius: "6px" }}></div>
+                  <div className="skeleton mb-4" style={{ height: "16px", width: "90%", borderRadius: "4px" }}></div>
+                  <div className="skeleton mb-2" style={{ height: "16px", width: "70%", borderRadius: "4px" }}></div>
+                  
+                  <div className="my-4">
+                    <div className="d-flex align-items-baseline">
+                      <div className="skeleton" style={{ height: "48px", width: "120px", borderRadius: "8px" }}></div>
+                      <div className="skeleton ms-2" style={{ height: "20px", width: "60px", borderRadius: "4px" }}></div>
+                    </div>
+                    <div className="skeleton mt-3" style={{ height: "16px", width: "50%", borderRadius: "4px" }}></div>
+                  </div>
+
+                  <div className="mb-5">
+                    {[1, 2, 3].map(j => (
+                      <div key={j} className="d-flex align-items-center gap-2 mb-3">
+                        <div className="skeleton rounded-circle" style={{ width: "24px", height: "24px", flexShrink: 0 }}></div>
+                        <div className="skeleton" style={{ height: "16px", width: "80%", borderRadius: "4px" }}></div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-auto">
+                    <div className="skeleton rounded-pill w-100" style={{ height: "54px" }}></div>
+                    <div className="skeleton mt-3 mx-auto" style={{ height: "14px", width: "50%", borderRadius: "4px" }}></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container py-5" style={{ maxWidth: 1200 }}>
       {/* HEADER */}
@@ -170,12 +239,7 @@ export default function SubscriptionPlans() {
         </div>
       )}
 
-      {loading ? (
-        <div className="text-center py-5">
-          <div className="spinner-border" style={{ color: colors.primary }} role="status" />
-          <p className="mt-3 text-muted fw-bold">Fetching latest offers...</p>
-        </div>
-      ) : visiblePlans.length === 0 ? (
+      {visiblePlans.length === 0 ? (
         <div className="text-center py-5 bg-light rounded-4 border border-dashed">
           <AlertCircle size={48} className="text-muted mb-3" />
           <h4 className="text-muted">No subscription plans available right now.</h4>

@@ -7,6 +7,7 @@ export default function RequestCategory() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [myRequests, setMyRequests] = useState([]);
+  const [fetchingRequests, setFetchingRequests] = useState(true);
   const [checking, setChecking] = useState(false);
   const [existsMessage, setExistsMessage] = useState("");
   const [search, setSearch] = useState("");
@@ -24,9 +25,14 @@ export default function RequestCategory() {
 
   const fetchMyRequests = async () => {
     try {
+      setFetchingRequests(true);
       const res = await api.get("/categories/my-requests");
       setMyRequests(res.data);
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+      console.error(err); 
+    } finally {
+      setFetchingRequests(false);
+    }
   };
 
   const checkCategoryExists = async (value) => {
@@ -88,6 +94,17 @@ export default function RequestCategory() {
         
         .mobile-list { display: flex; flex-direction: column; gap: 10px; }
         .mobile-item { padding: 15px; border: 1px solid ${colors.border}; border-radius: 10px; background: #fff; }
+
+        /* Skeleton Animation */
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: .5; }
+        }
+        .skeleton {
+          animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          background-color: #cbd5e1;
+          border-radius: 6px;
+        }
 
         @media (min-width: 768px) {
           .req-cat-container { padding: 30px; }
@@ -160,30 +177,53 @@ export default function RequestCategory() {
             </tr>
           </thead>
           <tbody>
-            {myRequests.filter(r => r.name.toLowerCase().includes(search.toLowerCase())).map(cat => (
-              <tr key={cat._id}>
-                <td style={{ fontWeight: "600" }}>{cat.name}</td>
-                <td>
-                  <span style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "0.75rem", fontWeight: "700", color: "#fff", background: cat.status === "approved" ? colors.approved : (cat.status === "pending" ? colors.pending : colors.rejected) }}>
-                    {cat.status}
-                  </span>
-                </td>
-                <td style={{ fontSize: "0.85rem", color: "#64748b" }}>{new Date(cat.createdAt).toLocaleDateString()}</td>
-                <td>
-                  {cat.status === "rejected" && (
-                    <button onClick={() => reRequest(cat.name)} style={{ border: "none", background: "none", color: colors.primary, cursor: "pointer" }}>
-                      <FaRedoAlt />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {fetchingRequests ? (
+              [1, 2, 3, 4].map(item => (
+                <tr key={item}>
+                  <td><div className="skeleton" style={{ height: "16px", width: "140px" }}></div></td>
+                  <td><div className="skeleton" style={{ height: "24px", width: "80px", borderRadius: "20px" }}></div></td>
+                  <td><div className="skeleton" style={{ height: "14px", width: "90px" }}></div></td>
+                  <td><div className="skeleton" style={{ height: "16px", width: "24px" }}></div></td>
+                </tr>
+              ))
+            ) : (
+              myRequests.filter(r => r.name.toLowerCase().includes(search.toLowerCase())).map(cat => (
+                <tr key={cat._id}>
+                  <td style={{ fontWeight: "600" }}>{cat.name}</td>
+                  <td>
+                    <span style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "0.75rem", fontWeight: "700", color: "#fff", background: cat.status === "approved" ? colors.approved : (cat.status === "pending" ? colors.pending : colors.rejected) }}>
+                      {cat.status}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: "0.85rem", color: "#64748b" }}>{new Date(cat.createdAt).toLocaleDateString()}</td>
+                  <td>
+                    {cat.status === "rejected" && (
+                      <button onClick={() => reRequest(cat.name)} style={{ border: "none", background: "none", color: colors.primary, cursor: "pointer" }}>
+                        <FaRedoAlt />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
 
         {/* CARDS FOR MOBILE */}
         <div className="mobile-list">
-          {myRequests.filter(r => r.name.toLowerCase().includes(search.toLowerCase())).length === 0 ? (
+          {fetchingRequests ? (
+             [1, 2, 3].map(item => (
+              <div key={item} className="mobile-item">
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
+                  <div className="skeleton" style={{ height: "18px", width: "120px" }}></div>
+                  <div className="skeleton" style={{ height: "16px", width: "60px", borderRadius: "10px" }}></div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div className="skeleton" style={{ height: "14px", width: "80px" }}></div>
+                </div>
+              </div>
+            ))
+          ) : myRequests.filter(r => r.name.toLowerCase().includes(search.toLowerCase())).length === 0 ? (
             <p style={{ textAlign: "center", color: "#94a3b8" }}>No requests found.</p>
           ) : (
             myRequests.filter(r => r.name.toLowerCase().includes(search.toLowerCase())).map(cat => (

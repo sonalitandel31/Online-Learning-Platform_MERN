@@ -109,6 +109,8 @@ export default function DashboardLayout({ sidebarLinks, children }) {
     sidebar: {
       backgroundColor: "#6f42c1",
       width: "280px",
+      minWidth: "280px",
+      flexShrink: 0,    
       display: "flex",
       flexDirection: "column",
       position: isMobile ? "fixed" : "relative",
@@ -492,7 +494,7 @@ export const adminSidebarLinks = [
     ],
   },
   {
-    label: "Basic Reports", 
+    label: "Basic Reports",
     icon: <FaClipboardList />,
     children: [
       { label: "Enrollment Stats", path: "/admin-dashboard/reports/enrollments" },

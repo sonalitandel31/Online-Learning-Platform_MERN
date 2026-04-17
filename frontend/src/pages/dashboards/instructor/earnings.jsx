@@ -94,14 +94,78 @@ export default function InstructorEarnings() {
 
   if (loading) {
     return (
-      <div className="loader-container">
-        <div className="spinner" />
-        <p>Updating Ledger...</p>
+      <div className="earnings-container">
         <style>{`
-          .loader-container { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 60vh; color: ${colors.primary}; }
-          .spinner { border: 4px solid ${colors.border}; border-top: 4px solid ${colors.primary}; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 15px; }
-          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+          /* Copied layout classes to ensure the skeleton structure matches perfectly */
+          .earnings-container { padding: 16px; background: ${colors.bg}; min-height: 100vh; font-family: 'Inter', sans-serif; }
+          .header-section { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+          .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
+          .stat-card { background: white; padding: 16px; border-radius: 12px; border: 1px solid ${colors.border}; display: flex; flex-direction: column; }
+          .chart-section { background: white; padding: 16px; border-radius: 12px; border: 1px solid ${colors.border}; box-shadow: 0 2px 4px rgba(0,0,0,0.02); margin-bottom: 24px; }
+          .chart-canvas-wrapper { height: 280px; position: relative; width: 100%; }
+          .revenue-info-box { background: white; border: 1px solid ${colors.border}; border-radius: 12px; overflow: hidden; margin-bottom: 24px; }
+          .revenue-info-header { background: ${colors.infoBg}; padding: 12px 16px; border-bottom: 1px solid rgba(0,0,0,0.05); display: flex; align-items: center; gap: 8px; }
+          .revenue-info-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+          .revenue-split-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; }
+          
+          @media (min-width: 768px) {
+            .earnings-container { padding: 30px; }
+            .stats-grid { grid-template-columns: repeat(4, 1fr); gap: 20px; }
+            .chart-canvas-wrapper { height: 350px; }
+            .revenue-info-body { flex-direction: row; }
+            .revenue-split-row { flex: 1; }
+          }
+
+          /* Skeleton Animation */
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+          }
+          .skeleton {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            background-color: #cbd5e1;
+            border-radius: 6px;
+          }
         `}</style>
+        
+        <div className="header-section">
+          <div className="skeleton" style={{ width: "150px", height: "32px", borderRadius: "8px" }}></div>
+          <div className="skeleton" style={{ width: "100px", height: "32px", borderRadius: "8px" }}></div>
+        </div>
+
+        <div className="stats-grid">
+          {[1, 2, 3, 4].map((item) => (
+            <div key={item} className="stat-card">
+              <div className="skeleton" style={{ height: "14px", width: "70%", marginBottom: "12px" }}></div>
+              <div className="skeleton" style={{ height: "28px", width: "50%", marginBottom: "12px" }}></div>
+              <div className="skeleton" style={{ height: "12px", width: "60%" }}></div>
+            </div>
+          ))}
+        </div>
+
+        <div className="chart-section">
+          <div className="skeleton" style={{ height: "20px", width: "200px", marginBottom: "16px" }}></div>
+          <div className="skeleton chart-canvas-wrapper" style={{ borderRadius: "8px" }}></div>
+        </div>
+
+        <div className="revenue-info-box">
+          <div className="revenue-info-header">
+            <div className="skeleton" style={{ width: "20px", height: "20px", borderRadius: "50%" }}></div>
+            <div className="skeleton" style={{ width: "250px", height: "20px", borderRadius: "4px" }}></div>
+          </div>
+          <div className="revenue-info-body">
+            {[1, 2].map((item) => (
+              <div key={item} className="revenue-split-row">
+                <div className="skeleton" style={{ width: "40px", height: "40px", borderRadius: "8px", flexShrink: 0 }}></div>
+                <div style={{ flex: 1 }}>
+                  <div className="skeleton" style={{ height: "16px", width: "40%", marginBottom: "8px" }}></div>
+                  <div className="skeleton" style={{ height: "12px", width: "100%", marginBottom: "6px" }}></div>
+                  <div className="skeleton" style={{ height: "12px", width: "80%" }}></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

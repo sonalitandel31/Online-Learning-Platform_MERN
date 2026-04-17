@@ -259,7 +259,95 @@ export default function Profile() {
   
   const levelInfo = profile ? calculateLevel(profile.xpTotal) : { level: 1, nextLevelXp: 500, currentLevelProgressXp: 0, progressPercentage: 0 };
 
-  if (loading) return <div className="d-flex justify-content-center align-items-center vh-100"><div className="spinner-border text-primary" /></div>;
+  // --- SKELETON LOADER ENHANCEMENT ---
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", backgroundColor: "#F5F3FF", padding: "60px 16px 40px", fontFamily: "'Inter', sans-serif", marginTop: "-1%" }}>
+        <style>{`
+          .skeleton {
+            background: #e2e5e7;
+            background-image: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+            background-size: 200px 100%;
+            background-repeat: no-repeat;
+            border-radius: 4px;
+            display: inline-block;
+            line-height: 1;
+            animation: skeletonShimmer 1.5s infinite linear;
+          }
+          @keyframes skeletonShimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
+          }
+        `}</style>
+        <div className="container px-0" style={{ maxWidth: 900 }}>
+          
+          {/* Header Skeleton */}
+          <div className="card border-0 rounded-4 shadow-sm overflow-hidden mb-4 bg-white">
+            <div className="skeleton" style={{ height: "88px", width: "100%", borderRadius: "0" }}></div>
+            <div className="bg-white px-4 px-md-5 pb-4 position-relative">
+              <div className="d-flex flex-column flex-sm-row align-items-center align-items-sm-end gap-4" style={{ marginTop: "-60px" }}>
+                <div className="skeleton rounded-circle border border-white border-4 shadow-sm flex-shrink-0" style={{ width: 130, height: 130, zIndex: 2 }}></div>
+                <div className="text-center text-sm-start flex-grow-1 pb-sm-2 w-100">
+                  <div className="skeleton mb-2 mx-auto mx-sm-0" style={{ height: "32px", width: "60%", maxWidth: "250px", borderRadius: "8px" }}></div>
+                  <div className="skeleton mx-auto mx-sm-0" style={{ height: "16px", width: "40%", maxWidth: "200px", borderRadius: "4px" }}></div>
+                </div>
+                <div className="pb-sm-3 d-flex gap-2">
+                  <div className="skeleton rounded-pill" style={{ height: "36px", width: "80px" }}></div>
+                  <div className="skeleton rounded-pill" style={{ height: "36px", width: "80px" }}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabs Skeleton */}
+          <div className="bg-white p-2 rounded-2 shadow-sm mb-4 d-flex gap-2">
+             <div className="skeleton rounded" style={{ height: "36px", width: "100px" }}></div>
+             <div className="skeleton rounded" style={{ height: "36px", width: "100px" }}></div>
+             <div className="skeleton rounded" style={{ height: "36px", width: "100px" }}></div>
+          </div>
+
+          {/* Content Skeleton */}
+          <div className="card border-0 rounded-4 shadow-sm p-4 p-md-5 bg-white">
+            <div className="skeleton mb-4" style={{ height: "24px", width: "250px", borderRadius: "6px" }}></div>
+            
+            <div className="row g-4 mb-5">
+              {[1, 2, 3, 4].map(i => (
+                <div className="col-md-6" key={i}>
+                  <div className="p-3 rounded-4 bg-light">
+                    <div className="skeleton mb-2" style={{ height: "10px", width: "80px" }}></div>
+                    <div className="skeleton" style={{ height: "20px", width: "70%" }}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Achievements Grid Skeleton */}
+            <div className="row g-4">
+              <div className="col-sm-6">
+                <div className="p-4 rounded-4 border-0 text-center" style={{ background: "#f8f9fa", height: "100%" }}>
+                  <div className="skeleton rounded-circle mb-2 mx-auto" style={{ width: "32px", height: "32px" }}></div>
+                  <div className="skeleton mb-3 mx-auto" style={{ height: "14px", width: "140px" }}></div>
+                  <div className="skeleton mb-4 mx-auto" style={{ height: "36px", width: "90px" }}></div>
+                  <div className="px-3">
+                    <div className="skeleton rounded-pill mx-auto mb-2" style={{ height: "8px", width: "100%" }}></div>
+                    <div className="skeleton mx-auto" style={{ height: "10px", width: "60px" }}></div>
+                  </div>
+                </div>
+              </div>
+              <div className="col-sm-6">
+                <div className="p-4 rounded-4 border-0 text-center" style={{ background: "#f8f9fa", height: "100%" }}>
+                  <div className="skeleton rounded-circle mb-2 mx-auto" style={{ width: "32px", height: "32px" }}></div>
+                  <div className="skeleton mb-3 mx-auto" style={{ height: "14px", width: "120px" }}></div>
+                  <div className="skeleton mx-auto" style={{ height: "36px", width: "80px" }}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#F5F3FF", padding: "60px 16px 40px", fontFamily: "'Inter', sans-serif", marginTop: "-1%" }}>

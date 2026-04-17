@@ -50,11 +50,113 @@ const SkillAnalysis = () => {
     ? Math.round(skills.reduce((acc, curr) => acc + curr.level, 0) / skills.length) 
     : 0;
 
-  if (loading) return (
-    <div className="d-flex justify-content-center align-items-center vh-100">
-      <div className="spinner-border text-primary" />
-    </div>
-  );
+  // --- SKELETON LOADER ENHANCEMENT ---
+  if (loading) {
+    return (
+      <div className="container-fluid py-5" style={{ backgroundColor: colors.bg, minHeight: "100vh" }}>
+        <style>{`
+          .skeleton {
+            background: #e2e5e7;
+            background-image: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+            background-size: 200px 100%;
+            background-repeat: no-repeat;
+            border-radius: 4px;
+            display: inline-block;
+            line-height: 1;
+            animation: skeletonShimmer 1.5s infinite linear;
+          }
+          @keyframes skeletonShimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
+          }
+        `}</style>
+        <div className="container">
+          
+          {/* Header Skeleton */}
+          <div className="row mb-5 align-items-center">
+            <div className="col-md-7">
+              <div className="skeleton mb-3" style={{ height: "48px", width: "70%", borderRadius: "8px" }}></div>
+              <div className="skeleton" style={{ height: "24px", width: "90%", borderRadius: "4px" }}></div>
+            </div>
+            <div className="col-md-5 text-md-end mt-4 mt-md-0">
+              <div className="p-3 bg-white rounded-4 shadow-sm border d-inline-block text-start" style={{ width: "180px" }}>
+                <div className="skeleton mb-2" style={{ height: "12px", width: "80%" }}></div>
+                <div className="skeleton" style={{ height: "32px", width: "60%", borderRadius: "6px" }}></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="row g-4">
+            {/* Radar Chart Skeleton */}
+            <div className="col-lg-6">
+              <div className="card border-0 shadow-sm rounded-4 p-4 h-100 bg-white">
+                <div className="skeleton mb-4" style={{ height: "24px", width: "40%", borderRadius: "4px" }}></div>
+                <div className="d-flex justify-content-center align-items-center" style={{ height: "350px" }}>
+                  <div className="skeleton rounded-circle" style={{ width: "280px", height: "280px" }}></div>
+                </div>
+                <div className="skeleton mt-3 mx-auto" style={{ height: "14px", width: "60%", borderRadius: "4px" }}></div>
+              </div>
+            </div>
+
+            {/* Detailed Bars Skeleton */}
+            <div className="col-lg-6">
+              <div className="card border-0 shadow-sm rounded-4 p-4 h-100 bg-white d-flex flex-column">
+                <div className="d-flex justify-content-between align-items-center mb-4">
+                  <div className="skeleton" style={{ height: "24px", width: "40%", borderRadius: "4px" }}></div>
+                  <div className="skeleton" style={{ height: "32px", width: "30%", borderRadius: "6px" }}></div>
+                </div>
+                
+                <div className="flex-grow-1">
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="mb-4">
+                      <div className="d-flex justify-content-between mb-2">
+                        <div className="skeleton" style={{ height: "16px", width: "30%", borderRadius: "4px" }}></div>
+                        <div className="skeleton" style={{ height: "16px", width: "10%", borderRadius: "4px" }}></div>
+                      </div>
+                      <div className="skeleton mb-2" style={{ height: "8px", width: "100%", borderRadius: "10px" }}></div>
+                      <div className="d-flex gap-3">
+                        <div className="skeleton" style={{ height: "12px", width: "20%", borderRadius: "4px" }}></div>
+                        <div className="skeleton" style={{ height: "12px", width: "20%", borderRadius: "4px" }}></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Insights Skeleton */}
+            <div className="col-12">
+              <div className="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+                <div className="row g-0">
+                  <div className="col-md-4 p-5 d-flex flex-column justify-content-center" style={{ backgroundColor: "#e2e8f0" }}>
+                    <div className="skeleton mb-3" style={{ height: "40px", width: "40px", borderRadius: "8px" }}></div>
+                    <div className="skeleton mb-2" style={{ height: "32px", width: "80%", borderRadius: "6px" }}></div>
+                    <div className="skeleton mb-4" style={{ height: "16px", width: "90%", borderRadius: "4px" }}></div>
+                    <div className="skeleton rounded-pill" style={{ height: "32px", width: "50%" }}></div>
+                  </div>
+                  
+                  <div className="col-md-8 p-4">
+                    {[1, 2].map(i => (
+                      <div key={i} className="d-flex gap-3 mb-3 p-3 rounded-3" style={{ backgroundColor: "#f8f9fa" }}>
+                        <div className="skeleton rounded-3 flex-shrink-0" style={{ height: "40px", width: "40px" }}></div>
+                        <div className="flex-grow-1">
+                          <div className="skeleton mb-2" style={{ height: "20px", width: "40%", borderRadius: "4px" }}></div>
+                          <div className="skeleton mb-2" style={{ height: "14px", width: "90%", borderRadius: "4px" }}></div>
+                          <div className="skeleton mb-2" style={{ height: "14px", width: "60%", borderRadius: "4px" }}></div>
+                          <div className="skeleton mt-2" style={{ height: "16px", width: "30%", borderRadius: "4px" }}></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container-fluid py-5" style={{ backgroundColor: colors.bg, minHeight: "100vh" }}>

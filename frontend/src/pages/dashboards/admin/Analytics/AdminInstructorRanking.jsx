@@ -44,7 +44,6 @@ export default function AdminInstructorRanking() {
                 {/* Header Section */}
                 <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
                     <div className="d-flex align-items-center gap-2">
-                        {/* <FaTrophy className="text-warning" size={28} /> */}
                         <div>
                             <h2 className="fw-bold text-dark m-0" style={{ fontSize: '2rem' }}>Instructor Leaderboard</h2>
                             <p className="text-muted mb-0 mt-1 small">Performance ranking based on engagement, risk, and retention.</p>
@@ -196,11 +195,87 @@ export default function AdminInstructorRanking() {
     );
 }
 
+// ✅ NEW Skeleton Loading Component
 function LoadingSkeleton() {
     return (
-        <div className="vh-100 d-flex flex-column align-items-center justify-content-center bg-white">
-            <div className="spinner-border text-primary mb-3" role="status"></div>
-            <p className="fw-bold text-muted">Calculating Global Rankings...</p>
+        <div className="container-fluid py-4" style={{ backgroundColor: '#f8fafc', minHeight: '100vh' }}>
+            <style>{`
+                .skeleton {
+                    background: #f1f5f9;
+                    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+                    background-size: 200% 100%;
+                    animation: shimmer 1.5s infinite linear;
+                    border-radius: 4px;
+                }
+                @keyframes shimmer {
+                    0% { background-position: 200% 0; }
+                    100% { background-position: -200% 0; }
+                }
+                .skel-title { width: 300px; height: 32px; margin-bottom: 8px; border-radius: 6px; }
+                .skel-subtitle { width: 400px; height: 16px; border-radius: 4px; }
+                .skel-pill { width: 180px; height: 36px; border-radius: 50rem; }
+                
+                .skel-card { background: white; border-radius: 16px; border: 1px solid #f1f5f9; overflow: hidden; }
+                .skel-table-header { height: 50px; background: #fcfcfd; border-bottom: 2px solid #f4f6f8; display: flex; align-items: center; padding: 0 1rem; }
+                .skel-table-row { padding: 1rem; border-bottom: 1px solid #f4f6f8; display: flex; align-items: center; }
+                
+                .skel-rank { width: 32px; height: 32px; border-radius: 50%; }
+                .skel-avatar { width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; }
+                .skel-text-lg { height: 16px; width: 120px; margin-bottom: 6px; }
+                .skel-text-sm { height: 12px; width: 80px; }
+                .skel-block-sm { height: 24px; width: 40px; border-radius: 6px; margin: auto; }
+                .skel-block-md { height: 32px; width: 50px; border-radius: 6px; margin: auto; }
+                .skel-progress { height: 6px; width: 80px; border-radius: 6px; margin: auto; }
+            `}</style>
+
+            <div className="mx-auto" style={{ maxWidth: '1200px' }}>
+                
+                {/* Header Skeleton */}
+                <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+                    <div>
+                        <div className="skeleton skel-title"></div>
+                        <div className="skeleton skel-subtitle"></div>
+                    </div>
+                    <div className="skeleton skel-pill"></div>
+                </div>
+
+                {/* Table Card Skeleton */}
+                <div className="skel-card shadow-sm">
+                    {/* Header Row */}
+                    <div className="skel-table-header">
+                        <div className="skeleton" style={{ width: '40px', height: '14px', marginLeft: '1rem' }}></div>
+                        <div className="skeleton" style={{ width: '120px', height: '14px', marginLeft: '2rem' }}></div>
+                        <div className="skeleton" style={{ width: '60px', height: '14px', marginLeft: 'auto', marginRight: '4%' }}></div>
+                        <div className="skeleton" style={{ width: '100px', height: '14px', marginRight: '3%' }}></div>
+                        <div className="skeleton" style={{ width: '80px', height: '14px', marginRight: '4%' }}></div>
+                        <div className="skeleton" style={{ width: '80px', height: '14px', marginRight: '4%' }}></div>
+                        <div className="skeleton" style={{ width: '70px', height: '14px', marginRight: '2rem' }}></div>
+                    </div>
+
+                    {/* Body Rows */}
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="skel-table-row">
+                            <div className="skeleton skel-rank" style={{ marginLeft: '0.5rem' }}></div>
+                            <div className="d-flex align-items-center gap-3" style={{ marginLeft: '1.5rem', width: '25%' }}>
+                                <div className="skeleton skel-avatar"></div>
+                                <div>
+                                    <div className="skeleton skel-text-lg"></div>
+                                    <div className="skeleton skel-text-sm"></div>
+                                </div>
+                            </div>
+                            <div style={{ width: '12%' }}><div className="skeleton skel-block-sm"></div></div>
+                            <div style={{ width: '15%' }}>
+                                <div className="skeleton skel-block-md mb-1"></div>
+                                <div className="skeleton" style={{ height: '10px', width: '40px', margin: 'auto' }}></div>
+                            </div>
+                            <div style={{ width: '15%' }}><div className="skeleton skel-text-lg" style={{ margin: 'auto', width: '40px' }}></div></div>
+                            <div style={{ width: '15%' }}><div className="skeleton skel-progress"></div></div>
+                            <div style={{ width: '10%', paddingRight: '1rem' }}><div className="skeleton skel-text-lg" style={{ margin: 'auto', width: '30px' }}></div></div>
+                        </div>
+                    ))}
+                </div>
+
+            </div>
         </div>
     );
 }

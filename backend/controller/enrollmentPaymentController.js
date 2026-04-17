@@ -4,6 +4,7 @@ const Enrollment = require("../models/enrollmentModel");
 const Course = require("../models/courseModel");
 const Payment = require("../models/paymentModel");
 const Student = require("../models/studentModel");
+const SystemSettings = require("../models/SystemSettings");
 
 const { generateReceiptPDF } = require("../utils/receiptGenerator");
 const { getEffectivePlatformCommission } = require("../utils/commissionHelper");

@@ -49,6 +49,26 @@ export default function AdminSubscribers() {
 
   return (
     <div className="container py-4">
+      {/* --- CSS STYLES --- */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        /* ✅ Skeleton Animation & Styles */
+        .skeleton {
+          background: #f1f5f9;
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+          border-radius: 4px;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .skel-text-lg { height: 18px; width: 60%; margin-bottom: 6px; }
+        .skel-text-sm { height: 14px; width: 40%; }
+        .skel-date { height: 16px; width: 80px; }
+        .skel-badge { height: 28px; width: 80px; border-radius: 20px; }
+      `}} />
+
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h2 className="fw-bold mb-1" style={{ color: "#1e1b4b" }}>Subscriber Management</h2>
@@ -66,6 +86,7 @@ export default function AdminSubscribers() {
               placeholder="Search by student name or email..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={loading}
             />
           </div>
         </div>
@@ -83,7 +104,28 @@ export default function AdminSubscribers() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="5" className="text-center py-5"><div className="spinner-border text-primary" /></td></tr>
+                /* ✅ Skeleton Table Rows */
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-bottom">
+                    <td className="ps-4 py-3">
+                      <div className="skeleton skel-text-lg"></div>
+                      <div className="skeleton skel-text-sm"></div>
+                    </td>
+                    <td>
+                      <div className="skeleton skel-text-lg" style={{ width: '50%' }}></div>
+                      <div className="skeleton skel-text-sm" style={{ width: '30%' }}></div>
+                    </td>
+                    <td>
+                      <div className="skeleton skel-date"></div>
+                    </td>
+                    <td>
+                      <div className="skeleton skel-date"></div>
+                    </td>
+                    <td>
+                      <div className="skeleton skel-badge"></div>
+                    </td>
+                  </tr>
+                ))
               ) : filteredSubs.length === 0 ? (
                 <tr><td colSpan="5" className="text-center py-5 text-muted">No subscribers found.</td></tr>
               ) : (
@@ -95,7 +137,7 @@ export default function AdminSubscribers() {
                     </td>
                     <td>
                       <div className="fw-bold" style={{ color: "#6f42c1" }}>{sub.planId?.name || "N/A"}</div>
-                      <div className="small text-muted">{sub.planId?.billingCycle}</div>
+                      <div className="small text-muted text-capitalize">{sub.planId?.billingCycle}</div>
                     </td>
                     <td>
                       <div className="fw-medium text-dark">{new Date(sub.startDate).toLocaleDateString()}</div>

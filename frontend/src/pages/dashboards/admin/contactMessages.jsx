@@ -78,15 +78,6 @@ export default function AdminContactMessages() {
     return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
   };
 
-  if (loading) return (
-    <div className="admin-layout">
-      <div className="loader-container">
-        <div className="spinner"></div>
-        <p>Loading your inbox...</p>
-      </div>
-    </div>
-  );
-
   return (
     <div className="admin-layout">
       <div className="dashboard-container">
@@ -106,7 +97,46 @@ export default function AdminContactMessages() {
 
         {/* Data Board */}
         <div className="card-container">
-          {messages.length === 0 ? (
+          {loading ? (
+            /* ✅ Skeleton Loading State */
+            <div className="custom-table">
+              <div className="th-row desktop-only">
+                <div className="th-cell">User</div>
+                <div className="th-cell">Subject</div>
+                <div className="th-cell">Status</div>
+                <div className="th-cell text-right">Actions</div>
+              </div>
+
+              <div className="tb-body">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="tr-row">
+                    <div className="td-cell profile-wrap">
+                      <div className="skeleton skel-avatar"></div>
+                      <div className="user-meta">
+                        <div className="skeleton skel-text-md"></div>
+                        <div className="skeleton skel-text-sm"></div>
+                      </div>
+                    </div>
+
+                    <div className="td-cell subject-wrap">
+                      <span className="mobile-label">Subject</span>
+                      <div className="skeleton skel-subject"></div>
+                    </div>
+
+                    <div className="td-cell status-wrap">
+                      <span className="mobile-label">Status</span>
+                      <div className="skeleton skel-pill"></div>
+                    </div>
+
+                    <div className="td-cell actions-wrap">
+                      <div className="skeleton skel-btn"></div>
+                      <div className="skeleton skel-btn"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">📬</div>
               <h3>You're all caught up!</h3>
@@ -295,7 +325,7 @@ export default function AdminContactMessages() {
         }
 
         /* Loaders & Empty States */
-        .loader-container, .empty-state {
+        .empty-state {
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -303,8 +333,6 @@ export default function AdminContactMessages() {
           height: 60vh;
           color: var(--text-muted);
         }
-        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 1rem; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
         .empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
         .empty-state h3 { margin: 0 0 0.5rem 0; color: var(--text-main); }
@@ -475,6 +503,25 @@ export default function AdminContactMessages() {
         }
         .btn-submit-reply:hover { background: var(--primary-hover); }
 
+        /* ✅ Skeleton Animation & Styles */
+        .skeleton {
+          background: #f1f5f9;
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+          border-radius: 4px;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .skel-avatar { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; }
+        .skel-text-md { width: 120px; height: 16px; margin-bottom: 6px; }
+        .skel-text-sm { width: 80px; height: 12px; }
+        .skel-subject { width: 80%; height: 16px; }
+        .skel-pill { width: 70px; height: 24px; border-radius: 9999px; }
+        .skel-btn { width: 60px; height: 30px; border-radius: 6px; }
+
         /* Animations */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes scaleUp { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
@@ -495,6 +542,10 @@ export default function AdminContactMessages() {
           .action-btn { flex: 1; text-align: center; }
           .modal-box { height: 100%; max-height: 100vh; border-radius: 0; }
           .modal-backdrop { padding: 0; }
+          
+          /* Skeleton Mobile Adjustments */
+          .skel-subject { width: 150px; }
+          .skel-btn { flex: 1; }
         }
       `}</style>
     </div>

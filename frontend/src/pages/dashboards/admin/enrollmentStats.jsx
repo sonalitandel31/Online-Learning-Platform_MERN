@@ -76,8 +76,6 @@ export default function EnrollmentStats() {
     setData({ ...data, topCourses: sorted });
   };
 
-  if (loading) return <div className="loader">Loading analytics...</div>;
-
   return (
     <div className="stats-container">
       <div className="header-flex">
@@ -87,92 +85,171 @@ export default function EnrollmentStats() {
         )}
       </div>
 
-      {/* Filter Controls */}
-      <div className="filter-card">
-        <div className="date-group">
-          <input type="date" className="input-date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-          <span className="date-sep">to</span>
-          <input type="date" className="input-date" value={endDate} onChange={e => setEndDate(e.target.value)} />
-        </div>
-        <div className="button-group">
-          <button className="btn-primary" onClick={() => fetchData(startDate, endDate)}>Apply Filter</button>
-          <button className="btn-secondary" onClick={() => { setStartDate(""); setEndDate(""); fetchData(); }}>Reset</button>
-          <button className="btn-export" onClick={downloadCSV}>Export CSV</button>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="kpi-grid">
-        <div className="kpi-card">
-          <span className="kpi-label">Total Enrollments</span>
-          <span className="kpi-val">{data?.totalEnrollments || 0}</span>
-        </div>
-        <div className="kpi-card">
-          <span className="kpi-label">New This Month</span>
-          <span className="kpi-val">{data?.newThisMonth || 0}</span>
-        </div>
-        <div className="kpi-card">
-          <span className="kpi-label">Growth Rate</span>
-          <span className={`kpi-val ${data?.growth >= 0 ? "up" : "down"}`}>
-            {data?.growth.toFixed(1)}% {data?.growth >= 0 ? "▲" : "▼"}
-          </span>
-        </div>
-      </div>
-
-      {/* Main Chart */}
-      <div className="chart-box">
-        <h4 className="chart-title">Enrollment Trends</h4>
-        <div className="chart-wrapper">
-          <Line
-            data={{
-              labels: data?.labels,
-              datasets: [{
-                label: "Enrollments",
-                data: data?.values,
-                borderColor: "#6f42c1",
-                backgroundColor: "rgba(111,66,193,0.1)",
-                fill: true,
-                tension: 0.4,
-                pointRadius: 4,
-              }]
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { display: false } },
-              scales: {
-                y: { beginAtZero: true, grid: { color: "#f1f5f9" } },
-                x: { grid: { display: false } }
-              }
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Top Courses Table */}
-      <div className="table-card">
-        <h4 className="table-title">Top Performing Courses</h4>
-        <div className="data-header desktop-only">
-          <div onClick={() => sortTopCourses("course")} style={{ cursor: "pointer" }}>Course {sortKey === "course" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}</div>
-          <div onClick={() => sortTopCourses("count")} style={{ cursor: "pointer", textAlign: "right" }}>Enrollments {sortKey === "count" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}</div>
-        </div>
-        <div className="data-body">
-          {data?.topCourses.map((c, idx) => (
-            <div key={idx} className="data-row">
-              <div className="cell course-name">
-                <span className="mobile-label">Course</span>
-                {c.course}
-              </div>
-              <div className="cell count-val">
-                <span className="mobile-label">Enrollments</span>
-                <strong>{c.count}</strong>
-              </div>
+      {loading ? (
+        <>
+          {/* Skeleton Filters */}
+          <div className="filter-card">
+            <div className="date-group" style={{ width: '100%' }}>
+              <div className="skeleton skel-input"></div>
+              <span className="date-sep">to</span>
+              <div className="skeleton skel-input"></div>
             </div>
-          ))}
-        </div>
-      </div>
+            <div className="button-group">
+              <div className="skeleton skel-btn"></div>
+              <div className="skeleton skel-btn"></div>
+              <div className="skeleton skel-btn"></div>
+            </div>
+          </div>
+
+          {/* Skeleton KPI Cards */}
+          <div className="kpi-grid">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="kpi-card">
+                <div className="skeleton skel-kpi-label"></div>
+                <div className="skeleton skel-kpi-val"></div>
+              </div>
+            ))}
+          </div>
+
+          {/* Skeleton Chart */}
+          <div className="chart-box">
+            <div className="skeleton skel-chart-title"></div>
+            <div className="skeleton skel-chart-area"></div>
+          </div>
+
+          {/* Skeleton Table */}
+          <div className="table-card">
+            <div className="skeleton skel-chart-title"></div>
+            <div className="data-header desktop-only border-bottom">
+              <div>Course</div>
+              <div style={{ textAlign: "right" }}>Enrollments</div>
+            </div>
+            <div className="data-body">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="data-row" style={{ padding: '15px 0' }}>
+                  <div className="skeleton skel-table-course"></div>
+                  <div className="skeleton skel-table-count"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Filter Controls */}
+          <div className="filter-card">
+            <div className="date-group">
+              <input type="date" className="input-date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+              <span className="date-sep">to</span>
+              <input type="date" className="input-date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            </div>
+            <div className="button-group">
+              <button className="btn-primary" onClick={() => fetchData(startDate, endDate)}>Apply Filter</button>
+              <button className="btn-secondary" onClick={() => { setStartDate(""); setEndDate(""); fetchData(); }}>Reset</button>
+              <button className="btn-export" onClick={downloadCSV}>Export CSV</button>
+            </div>
+          </div>
+
+          {/* KPI Cards */}
+          <div className="kpi-grid">
+            <div className="kpi-card">
+              <span className="kpi-label">Total Enrollments</span>
+              <span className="kpi-val">{data?.totalEnrollments || 0}</span>
+            </div>
+            <div className="kpi-card">
+              <span className="kpi-label">New This Month</span>
+              <span className="kpi-val">{data?.newThisMonth || 0}</span>
+            </div>
+            <div className="kpi-card">
+              <span className="kpi-label">Growth Rate</span>
+              <span className={`kpi-val ${data?.growth >= 0 ? "up" : "down"}`}>
+                {data?.growth.toFixed(1)}% {data?.growth >= 0 ? "▲" : "▼"}
+              </span>
+            </div>
+          </div>
+
+          {/* Main Chart */}
+          <div className="chart-box">
+            <h4 className="chart-title">Enrollment Trends</h4>
+            <div className="chart-wrapper">
+              <Line
+                data={{
+                  labels: data?.labels,
+                  datasets: [{
+                    label: "Enrollments",
+                    data: data?.values,
+                    borderColor: "#6f42c1",
+                    backgroundColor: "rgba(111,66,193,0.1)",
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                  }]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: { legend: { display: false } },
+                  scales: {
+                    y: { beginAtZero: true, grid: { color: "#f1f5f9" } },
+                    x: { grid: { display: false } }
+                  }
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Top Courses Table */}
+          <div className="table-card">
+            <h4 className="table-title">Top Performing Courses</h4>
+            <div className="data-header desktop-only">
+              <div onClick={() => sortTopCourses("course")} style={{ cursor: "pointer" }}>Course {sortKey === "course" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}</div>
+              <div onClick={() => sortTopCourses("count")} style={{ cursor: "pointer", textAlign: "right" }}>Enrollments {sortKey === "count" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}</div>
+            </div>
+            <div className="data-body">
+              {data?.topCourses.map((c, idx) => (
+                <div key={idx} className="data-row">
+                  <div className="cell course-name">
+                    <span className="mobile-label">Course</span>
+                    {c.course}
+                  </div>
+                  <div className="cell count-val">
+                    <span className="mobile-label">Enrollments</span>
+                    <strong>{c.count}</strong>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       <style>{`
+        /* Skeleton Styles */
+        .skeleton {
+          background: #f1f5f9;
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+          border-radius: 4px;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        
+        .skel-input { width: 180px; height: 36px; border-radius: 8px; }
+        .skel-btn { width: 100px; height: 36px; border-radius: 8px; }
+        
+        .skel-kpi-label { width: 120px; height: 14px; margin-bottom: 12px; }
+        .skel-kpi-val { width: 80px; height: 32px; border-radius: 6px; }
+        
+        .skel-chart-title { width: 200px; height: 24px; margin-bottom: 20px; border-radius: 6px; }
+        .skel-chart-area { width: 100%; height: 300px; border-radius: 8px; }
+        
+        .skel-table-course { width: 60%; height: 18px; border-radius: 4px; }
+        .skel-table-count { width: 40px; height: 18px; border-radius: 4px; margin-left: auto; }
+
+        /* Original Styles */
         .stats-container { padding: 20px; max-width: 1200px; margin: auto; font-family: 'Inter', sans-serif; }
         .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
         .title { color: #2d3436; font-weight: 800; margin: 0; }
@@ -208,7 +285,6 @@ export default function EnrollmentStats() {
         .count-val { text-align: right; }
         
         .mobile-label { display: none; }
-        .loader { padding: 100px; text-align: center; color: #6f42c1; font-weight: 700; }
 
         @media (max-width: 768px) {
           .desktop-only { display: none; }
@@ -219,6 +295,9 @@ export default function EnrollmentStats() {
           .filter-card { flex-direction: column; align-items: stretch; }
           .date-group { flex-direction: column; }
           .button-group { flex-direction: column; }
+          
+          .skel-input { width: 100%; }
+          .skel-btn { width: 100%; }
         }
       `}</style>
     </div>

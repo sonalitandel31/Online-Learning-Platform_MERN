@@ -114,43 +114,54 @@ const CourseDiscussions = () => {
         .reply-input:focus { border-color: var(--p-main); background: white; }
         .p-btn { background: var(--p-main); color: white; border: none; border-radius: 12px; padding: 8px 20px; font-weight: 700; transition: 0.3s; }
         .p-btn:hover { background: #6d28d9; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3); }
+        
+        /* Skeleton Animations */
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: .5; }
+        }
+        .skeleton {
+          animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          background-color: #cbd5e1;
+          border-radius: 6px;
+        }
+
         /* Inhi styles ko existing style tag mein update/add karein */
+        .glass-card { 
+          width: 100%; 
+          max-width: 100%; 
+          /* Isse width fix rahegi */
+          display: flex;
+          flex-direction: column;
+        }
 
-.glass-card { 
-  width: 100%; 
-  max-width: 100%; 
-  /* Isse width fix rahegi */
-  display: flex;
-  flex-direction: column;
-}
+        .course-card {
+          /* Isse ensure hoga ki card header hamesha 100% width par rahe */
+          width: 100%;
+        }
 
-.course-card {
-  /* Isse ensure hoga ki card header hamesha 100% width par rahe */
-  width: 100%;
-}
+        .q-item { 
+          width: 100%; 
+          /* Important: Content ko card ke andar hi wrap karega */
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+        }
 
-.q-item { 
-  width: 100%; 
-  /* Important: Content ko card ke andar hi wrap karega */
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-}
+        /* Replies section ke liye extra safety */
+        .bg-white.p-2.rounded-3.border {
+          max-width: 100%;
+          overflow: hidden;
+        }
+          /* Isse flexbox forced expansion ruk jayegi */
+        .course-card, .q-item, .ans-pill {
+            min-width: 0 !important;
+            word-break: break-word;
+        }
 
-/* Replies section ke liye extra safety */
-.bg-white.p-2.rounded-3.border {
-  max-width: 100%;
-  overflow: hidden;
-}
-  /* Isse flexbox forced expansion ruk jayegi */
-.course-card, .q-item, .ans-pill {
-    min-width: 0 !important;
-    word-break: break-word;
-}
-
-/* Sidebar ko stable rakhne ke liye parent container par */
-.glass-card {
-    table-layout: fixed; /* Even if it's not a table, it helps with some grid layouts */
-}
+        /* Sidebar ko stable rakhne ke liye parent container par */
+        .glass-card {
+            table-layout: fixed; /* Even if it's not a table, it helps with some grid layouts */
+        }
         /* Modal */
         .modal-overlay { position: fixed; inset: 0; background: rgba(30, 27, 75, 0.4); backdrop-filter: blur(8px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .modal-content { background: white; width: 100%; max-width: 900px; border-radius: 28px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
@@ -179,7 +190,19 @@ const CourseDiscussions = () => {
         {activeTab === "discussions" ? (
           <>
             {loadingDiscussions ? (
-              <div className="text-center py-5"><div className="spinner-border text-primary" /></div>
+              <div>
+                {[1, 2, 3].map((item) => (
+                  <div key={item} className="mb-3">
+                    <div className="course-card d-flex justify-content-between align-items-center" style={{ cursor: "default", border: "1px solid #e2e8f0" }}>
+                      <div className="d-flex align-items-center gap-3 w-100">
+                        <div className="skeleton" style={{ width: "52px", height: "52px", borderRadius: "16px" }}></div>
+                        <div className="skeleton" style={{ height: "20px", width: "40%", maxWidth: "300px" }}></div>
+                      </div>
+                      <div className="skeleton" style={{ width: "24px", height: "24px", borderRadius: "50%" }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               Object.entries(groupedQuestions).map(([course, questions]) => (
                 <div key={course} className="mb-3">
@@ -275,7 +298,33 @@ const CourseDiscussions = () => {
             </div>
 
             {loadingReports ? (
-              <div className="text-center py-5"><div className="spinner-grow text-primary" /></div>
+              <div className="mb-4">
+                <div className="skeleton mb-3" style={{ height: "18px", width: "150px", borderRadius: "4px" }}></div>
+                <div className="table-responsive bg-white rounded-4 border overflow-hidden">
+                  <table className="table align-middle mb-0">
+                    <thead className="bg-light">
+                      <tr>
+                        <th className="ps-4"><div className="skeleton" style={{ height: "14px", width: "80px" }}></div></th>
+                        <th><div className="skeleton" style={{ height: "14px", width: "60px" }}></div></th>
+                        <th><div className="skeleton" style={{ height: "14px", width: "80px" }}></div></th>
+                        <th><div className="skeleton" style={{ height: "14px", width: "60px" }}></div></th>
+                        <th className="text-end pe-4"><div className="skeleton ms-auto" style={{ height: "14px", width: "50px" }}></div></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[1, 2, 3, 4].map(row => (
+                        <tr key={row}>
+                          <td className="ps-4"><div className="skeleton" style={{ height: "16px", width: "60%" }}></div></td>
+                          <td><div className="skeleton" style={{ height: "24px", width: "80px", borderRadius: "50rem" }}></div></td>
+                          <td><div className="skeleton" style={{ height: "14px", width: "100px" }}></div></td>
+                          <td><div className="skeleton" style={{ height: "14px", width: "80px" }}></div></td>
+                          <td className="text-end pe-4"><div className="skeleton ms-auto" style={{ height: "30px", width: "80px", borderRadius: "50rem" }}></div></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             ) : filteredReports.length === 0 ? (
               <div className="alert alert-light text-center border-2 py-5">No reports found for this filter.</div>
             ) : (
@@ -409,4 +458,4 @@ const CourseDiscussions = () => {
   );
 };
 
-export default CourseDiscussions; 
+export default CourseDiscussions;

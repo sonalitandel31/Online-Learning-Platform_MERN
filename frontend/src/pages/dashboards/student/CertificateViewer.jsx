@@ -60,11 +60,43 @@ const CertificateViewer = () => {
         }
     };
 
-    if (loading) return (
-        <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh' }}>
-            <div className="spinner-border" style={{ color: themeCol }} />
-        </div>
-    );
+    if (loading) {
+        return (
+            <div className="container-fluid py-4" style={{ minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+                <style>{`
+                    .skeleton {
+                        background: #e2e5e7;
+                        background-image: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+                        background-size: 200px 100%;
+                        background-repeat: no-repeat;
+                        border-radius: 4px;
+                        display: inline-block;
+                        line-height: 1;
+                        animation: skeletonShimmer 1.5s infinite linear;
+                    }
+                    @keyframes skeletonShimmer {
+                        0% { background-position: -200px 0; }
+                        100% { background-position: calc(200px + 100%) 0; }
+                    }
+                `}</style>
+                
+                {/* Skeleton Header */}
+                <div className="container mb-4 d-flex justify-content-between align-items-center">
+                    <div className="skeleton rounded-pill shadow-sm" style={{ width: '160px', height: '40px' }}></div>
+                    <div className="skeleton rounded-pill d-none d-md-block" style={{ width: '280px', height: '32px' }}></div>
+                    <div className="skeleton rounded-pill shadow-sm" style={{ width: '160px', height: '40px' }}></div>
+                </div>
+
+                {/* Skeleton PDF Container */}
+                <div className="container d-flex justify-content-center">
+                    <div 
+                        className="skeleton shadow-lg rounded-3" 
+                        style={{ width: '100%', maxWidth: '1100px', height: '80vh', border: '1px solid #e0e0e0' }}
+                    ></div>
+                </div>
+            </div>
+        );
+    }
 
     if (!data || data.status !== 'completed' || !data.certificate) {
         return (
@@ -79,7 +111,7 @@ const CertificateViewer = () => {
     const pdfUrl = `${BASE_URL}${data.certificate}`;
 
     return (
-        <div className="container-fluid py-4" style={{ minHeight: '100vh' }}>
+        <div className="container-fluid py-4" style={{ minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
             <div className="container mb-4 d-flex justify-content-between align-items-center">
                 <button className="btn btn-light rounded-pill px-4 shadow-sm fw-bold border" onClick={() => navigate(-1)}>
                     <FaArrowLeft className="me-2" /> Back to Learning

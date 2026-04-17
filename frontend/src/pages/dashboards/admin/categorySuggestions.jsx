@@ -79,6 +79,7 @@ export default function CategorySuggestions() {
           placeholder="Search suggestions..."
           value={search}
           onChange={(e) => onSearch(e.target.value)}
+          disabled={loading}
         />
       </div>
 
@@ -91,7 +92,37 @@ export default function CategorySuggestions() {
         </div>
 
         <div className="table-body">
-          {!loading && filtered.length === 0 ? (
+          {loading ? (
+            /* Skeleton Loading Rows */
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="table-row">
+                <div className="cell name-cell">
+                  <span className="mobile-label">Name:</span>
+                  <div className="skeleton skel-text" style={{ width: "60%" }}></div>
+                </div>
+
+                <div className="cell user-cell">
+                  <span className="mobile-label">By:</span>
+                  <div style={{ width: "100%" }}>
+                    <div className="skeleton skel-text" style={{ width: "50%", marginBottom: "8px" }}></div>
+                    <div className="skeleton skel-text" style={{ width: "80%", height: "12px" }}></div>
+                  </div>
+                </div>
+
+                <div className="cell">
+                  <span className="mobile-label">Requested:</span>
+                  <div className="skeleton skel-text" style={{ width: "50%" }}></div>
+                </div>
+
+                <div className="cell actions-cell">
+                  <div className="btn-group">
+                    <div className="skeleton skel-btn"></div>
+                    <div className="skeleton skel-btn"></div>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : filtered.length === 0 ? (
             <div className="empty-state">🎉 No pending suggestions!</div>
           ) : (
             filtered.map((cat) => (
@@ -160,11 +191,11 @@ export default function CategorySuggestions() {
         .user-email { font-size: 0.75rem; color: #718096; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
         .date-text { font-size: 0.85rem; color: #4a5568; }
 
-        .btn-group { display: flex; gap: 8px; justify-content: flex-end; }
+        .btn-group { display: flex; gap: 8px; justify-content: flex-end; width: 100%; }
         .btn-approve { background: #38a169; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
         .btn-reject { background: #edf2f7; color: #e53e3e; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
         
-        .confirm-box { display: flex; align-items: center; gap: 5px; background: #fff5f5; padding: 4px 8px; border-radius: 6px; border: 1px solid #feb2b2; }
+        .confirm-box { display: flex; align-items: center; gap: 5px; background: #fff5f5; padding: 4px 8px; border-radius: 6px; border: 1px solid #feb2b2; justify-content: flex-end; }
         .confirm-box span { font-size: 0.75rem; font-weight: 700; color: #c53030; }
         .btn-confirm { background: #e53e3e; color: white; border: none; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; }
         .btn-cancel { background: #718096; color: white; border: none; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; }
@@ -172,13 +203,33 @@ export default function CategorySuggestions() {
         .empty-state { padding: 40px; text-align: center; color: #a0aec0; }
         .mobile-label { display: none; }
 
+        /* Skeleton Animation */
+        .skeleton {
+          background: #f1f5f9;
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+          border-radius: 4px;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .skel-text { height: 16px; }
+        .skel-btn { height: 30px; width: 75px; border-radius: 6px; }
+
         @media (max-width: 800px) {
           .table-header.desktop-only { display: none; }
           .table-row { grid-template-columns: 1fr; gap: 10px; border-bottom: 6px solid #f7fafc; }
           .cell { display: flex; justify-content: space-between; align-items: center; }
-          .mobile-label { display: block; font-weight: 700; color: #a0aec0; font-size: 0.7rem; text-transform: uppercase; }
+          .mobile-label { display: block; font-weight: 700; color: #a0aec0; font-size: 0.7rem; text-transform: uppercase; width: 80px; flex-shrink: 0; }
+          
           .btn-group { width: 100%; margin-top: 10px; }
-          .btn-approve, .btn-reject { flex: 1; padding: 10px; }
+          .btn-approve, .btn-reject, .skel-btn { flex: 1; padding: 10px; height: 38px; width: auto; }
+          
+          /* Adjusting skeleton layout for mobile */
+          .user-cell > div { display: flex; flex-direction: column; align-items: flex-end; }
+          .skel-text { margin-bottom: 0 !important; margin-top: 4px; }
         }
 
         @keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }

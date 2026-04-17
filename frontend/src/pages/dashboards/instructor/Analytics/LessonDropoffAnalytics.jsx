@@ -115,11 +115,105 @@ export default function LessonDropoffAnalytics() {
     }
   };
 
-  if (loading) return (
-    <div className="d-flex justify-content-center align-items-center vh-100" style={{ background: colors.bg }}>
-      <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}></div>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div style={{ padding: "clamp(20px, 5vw, 40px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Inter', sans-serif" }}>
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+          }
+          .skeleton {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            background-color: #cbd5e1;
+            border-radius: 8px;
+          }
+        `}</style>
+        <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
+          
+          {/* Header Skeleton */}
+          <header style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", marginBottom: "2.5rem", gap: "1.5rem" }}>
+            <div>
+              <div className="d-flex align-items-center gap-3 mb-2">
+                <div className="skeleton" style={{ height: "40px", width: "250px" }}></div>
+                <div className="skeleton" style={{ height: "24px", width: "100px", borderRadius: "100px" }}></div>
+              </div>
+              <div className="skeleton" style={{ height: "16px", width: "300px" }}></div>
+            </div>
+            
+            <div className="skeleton" style={{ height: "48px", width: "160px", borderRadius: "16px" }}></div>
+          </header>
+
+          {/* Selector Card Skeleton */}
+          <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: "24px", padding: "20px 28px", marginBottom: "30px", boxShadow: "0 10px 30px -10px rgba(0,0,0,0.03)" }}>
+            <div className="row g-4 align-items-center text-start">
+              <div className="col-auto d-none d-md-block">
+                <div className="skeleton" style={{ width: "60px", height: "60px", borderRadius: "18px" }}></div>
+              </div>
+              <div className="col">
+                <div className="skeleton" style={{ height: "16px", width: "120px", marginBottom: "8px" }}></div>
+                <div className="skeleton" style={{ height: "12px", width: "220px" }}></div>
+              </div>
+              <div className="col-12 col-lg-5">
+                <div className="skeleton" style={{ height: "56px", width: "100%", borderRadius: "16px" }}></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Analytics Grid Skeleton */}
+          <div className="row g-4">
+            {[1, 2, 3, 4].map((item) => (
+              <div key={item} className="col-12 col-lg-6">
+                <div style={{ background: colors.card, borderRadius: "24px", overflow: "hidden", border: `1px solid ${colors.border}`, height: "100%", display: "flex", flexDirection: "column" }}>
+                  <div className="skeleton" style={{ height: "4px", width: "100%", borderRadius: "0" }}></div>
+                  
+                  <div className="p-4 text-start" style={{ flexGrow: 1 }}>
+                    <div className="d-flex justify-content-between align-items-start mb-4">
+                      <div style={{ flexGrow: 1 }}>
+                        <div className="d-flex align-items-center gap-2 mb-3">
+                          <div className="skeleton" style={{ height: "24px", width: "60px", borderRadius: "8px" }}></div>
+                          <div className="skeleton" style={{ height: "14px", width: "80px" }}></div>
+                        </div>
+                        <div className="skeleton" style={{ height: "24px", width: "80%", marginBottom: "8px" }}></div>
+                        <div className="skeleton" style={{ height: "24px", width: "50%" }}></div>
+                      </div>
+                      <div className="text-center ms-3">
+                        <div className="skeleton" style={{ width: "60px", height: "60px", borderRadius: "50%" }}></div>
+                        <div className="skeleton mt-2 mx-auto" style={{ height: "10px", width: "40px" }}></div>
+                      </div>
+                    </div>
+
+                    <div className="d-flex gap-3 mb-4">
+                      <div className="flex-grow-1 bg-light p-3 rounded-4 border">
+                        <div className="skeleton" style={{ height: "12px", width: "60px", marginBottom: "8px" }}></div>
+                        <div className="skeleton" style={{ height: "24px", width: "40px" }}></div>
+                      </div>
+                      <div className="flex-grow-1 bg-light p-3 rounded-4 border">
+                        <div className="skeleton" style={{ height: "12px", width: "80px", marginBottom: "8px" }}></div>
+                        <div className="skeleton" style={{ height: "24px", width: "40px" }}></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 text-start bg-light" style={{ borderTop: `1px solid ${colors.border}` }}>
+                    <div className="d-flex align-items-start gap-3">
+                      <div className="skeleton" style={{ width: "20px", height: "20px", borderRadius: "50%", marginTop: '4px', flexShrink: 0 }}></div>
+                      <div style={{ width: "100%" }}>
+                        <div className="skeleton" style={{ height: "16px", width: "120px", marginBottom: "8px" }}></div>
+                        <div className="skeleton" style={{ height: "12px", width: "90%", marginBottom: "4px" }}></div>
+                        <div className="skeleton" style={{ height: "12px", width: "60%" }}></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "clamp(20px, 5vw, 40px)", background: colors.bg, minHeight: "100vh", fontFamily: "'Inter', sans-serif" }}>
