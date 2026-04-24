@@ -8,8 +8,8 @@ const User = require("../models/userModel");
 const InstructorProfile = require("../models/instructorModel");
 const ExamResult = require("../models/resultModel");
 const Payment = require("../models/paymentModel");
-const courseRequestModel = require("../models/courseRequestModel"); 
-
+const courseRequestModel = require("../models/courseRequestModel");
+const Payout = require("../models/payoutModel");
 
 const multer = require("multer");
 const path = require("path");
@@ -212,7 +212,7 @@ const courses = async (req, res) => {
       .populate({
         path: "exams",
         // Added settings and proctoring to the select string
-        select: "title duration settings proctoring questions", 
+        select: "title duration settings proctoring questions",
       });
 
     const coursesWithCounts = coursesData.map((c) => ({
@@ -309,7 +309,7 @@ const getCourseDetail = async (req, res) => {
       .populate({
         path: "exams",
         // ✅ Added settings and proctoring
-        select: "title duration settings proctoring questions createdAt", 
+        select: "title duration settings proctoring questions createdAt",
         options: { sort: { createdAt: 1 } },
       });
 
@@ -401,8 +401,6 @@ const getCourseDetail = async (req, res) => {
   }
 }; */
 
-// instructorController.js
-
 const updateCourse = async (req, res) => {
   try {
     const { courseId } = req.params;
@@ -413,13 +411,13 @@ const updateCourse = async (req, res) => {
     // This prevents instructors from bypassing approval by editing after being approved.
     const course = await Course.findOneAndUpdate(
       { _id: courseId, instructor: instructorId },
-      { 
-        title, 
-        description, 
-        category, 
-        level, 
-        price, 
-        thumbnail, 
+      {
+        title,
+        description,
+        category,
+        level,
+        price,
+        thumbnail,
         status: "pendingApproval"
       },
       { new: true }
@@ -488,7 +486,7 @@ const getLessonsByCourse = async (req, res) => {
     const lessons = await Lesson.find({ course: courseId })
       .select("title contentType fileUrl description isPreviewFree duration createdAt")
       .sort({ createdAt: 1 });
-      
+
     return res.json({
       lessons,
       lessonsCount: lessons.length,
@@ -730,15 +728,15 @@ const addExam = async (req, res) => {
     if (errorMsg) return res.status(400).json({ message: errorMsg });
 
     // ✅ Pass settings and proctoring to the Exam document creation
-    const exam = await Exam.create({ 
-      course: courseId, 
-      title, 
-      duration, 
-      settings, 
-      proctoring, 
-      questions 
+    const exam = await Exam.create({
+      course: courseId,
+      title,
+      duration,
+      settings,
+      proctoring,
+      questions
     });
-    
+
     await Course.findByIdAndUpdate(courseId, { $push: { exams: exam._id } });
 
     await recalcCourseTotalDuration(courseId);
@@ -772,7 +770,7 @@ const updateExam = async (req, res) => {
 
     exam.title = title || exam.title;
     exam.duration = duration || exam.duration;
-    
+
     // ✅ Update settings and proctoring objects
     if (settings) exam.settings = settings;
     if (proctoring) exam.proctoring = proctoring;
@@ -842,7 +840,7 @@ const getInstructorCourseExams = async (req, res) => {
     // Fetch all exams for this course
     const exams = await Exam.find({ course: courseId })
       // ✅ Added settings and proctoring
-      .select("title duration settings proctoring questions createdAt") 
+      .select("title duration settings proctoring questions createdAt")
       .sort({ createdAt: 1 })
       .lean();
 
@@ -875,7 +873,7 @@ const getCourseDetailForInstructor = async (req, res) => {
       .populate({
         path: "exams",
         // ✅ Added settings and proctoring
-        select: "title duration settings proctoring questions createdAt", 
+        select: "title duration settings proctoring questions createdAt",
         options: { sort: { createdAt: 1 } },
       });
 
@@ -892,7 +890,7 @@ const getCourseAnalytics = async (req, res) => {
   try {
     const instructorId = req.user._id;
 
-    const courses = await Course.find({ instructor: instructorId, status: "approved"});
+    const courses = await Course.find({ instructor: instructorId, status: "approved" });
 
     const analytics = await Promise.all(
       courses.map(async (course) => {
@@ -919,7 +917,7 @@ const getCourseAnalytics = async (req, res) => {
   }
 };
 
-const getInstructorEarnings = async (req, res) => {
+/* const getInstructorEarnings = async (req, res) => {
   try {
     const instructorId = req.user._id.toString();
     
@@ -971,9 +969,67 @@ const getInstructorEarnings = async (req, res) => {
     console.error("Earnings Error:", error);
     res.status(500).json({ success: false, message: "Server Error" });
   }
+}; */
+
+const getInstructorEarnings = async (req, res) => {
+  try {
+    const instructorId = req.user._id.toString();
+
+    // 1. Get the year from the frontend query, default to current year
+    const targetYear = req.query.year ? parseInt(req.query.year) : new Date().getFullYear();
+
+    // 2. Fetch all successful payments
+    const payments = await Payment.find({
+      $or: [{ instructor: instructorId }, { instructor: new mongoose.Types.ObjectId(instructorId) }],
+      status: "completed"
+    }).lean();
+
+    let totalPendingBalance = 0;
+    let totalWithdrawn = 0;
+    const monthly = {};
+
+    payments.forEach((p) => {
+      // Calculate amount (Full for bounty, earning share for direct)
+      const amount = (p.paymentMethod === "Subscription Bounty")
+        ? Number(p.amount)
+        : Number(p.instructorEarning) || 0;
+
+      // Calculate pending vs withdrawn totals (This is lifetime, so year filter doesn't apply here)
+      if (p.payoutStatus !== "processed") {
+        totalPendingBalance += amount;
+      } else {
+        totalWithdrawn += amount;
+      }
+
+      // Calculate monthly earnings based on the targetYear!
+      const date = new Date(p.paymentDate || p.createdAt);
+      if (date.getFullYear() === targetYear) {
+        const month = date.getMonth() + 1; // 1 to 12
+        monthly[month] = (monthly[month] || 0) + amount;
+      }
+    });
+
+    // 3. Get the Last Payout Amount
+    const Payout = require("../models/payoutModel");
+    const lastPayoutRecord = await Payout.findOne({ instructor: instructorId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json({
+      success: true,
+      pendingBalance: totalPendingBalance,
+      totalWithdrawn: totalWithdrawn,
+      monthly,
+      lastPayout: lastPayoutRecord ? lastPayoutRecord.amount : 0
+    });
+
+  } catch (error) {
+    console.error("Earnings Error:", error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
 };
 
-const getPayoutHistory = async (req, res) => {
+/* const getPayoutHistory = async (req, res) => {
   try {
     const instructorId = req.user._id;
     const { page = 1, limit = 10 } = req.query;
@@ -1002,27 +1058,51 @@ const getPayoutHistory = async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Error fetching payout history", error: err });
   }
+}; */
+
+const getPayoutHistory = async (req, res) => {
+  try {
+    const instructorId = req.user._id;
+    // Get year from frontend, or default to current year
+    const year = req.query.year ? parseInt(req.query.year) : new Date().getFullYear();
+
+    // 🔥 Simplest, most reliable query
+    const payouts = await Payout.find({
+      instructor: instructorId,
+      status: "completed",
+      year: year // Match the exact year field saved in processPayout!
+    }).sort({ _id: -1 }); // Sort by newest first
+
+    res.json({
+      success: true,
+      payouts: payouts
+    });
+
+  } catch (err) {
+    console.error("Error fetching payout history:", err);
+    res.status(500).json({ success: false, message: "Error fetching payout history", error: err.message });
+  }
 };
 
 const getAssignedB2BProjects = async (req, res) => {
-    try {
-        // Instructor ka ID token se aayega (authMiddleware ke through)
-        const instructorId = req.user.id || req.user._id;
+  try {
+    // Instructor ka ID token se aayega (authMiddleware ke through)
+    const instructorId = req.user.id || req.user._id;
 
-        // Sirf wahi projects dhundho jo is instructor ko assign hue hain 
-        // aur jinka status 'in-development' hai
-        const myProjects = await courseRequestModel.find({ 
-            assignedInstructor: instructorId,
-            status: 'in-development' 
-        })
-        .populate('companyId', 'companyName domain') // Company details ke liye
-        .sort({ updatedAt: -1 }); // Latest sabse upar
+    // Sirf wahi projects dhundho jo is instructor ko assign hue hain 
+    // aur jinka status 'in-development' hai
+    const myProjects = await courseRequestModel.find({
+      assignedInstructor: instructorId,
+      status: 'in-development'
+    })
+      .populate('companyId', 'companyName domain') // Company details ke liye
+      .sort({ updatedAt: -1 }); // Latest sabse upar
 
-        res.status(200).json({ success: true, data: myProjects });
-    } catch (error) {
-        console.error("Fetch Assigned Projects Error:", error);
-        res.status(500).json({ success: false, message: "Failed to load assigned projects." });
-    }
+    res.status(200).json({ success: true, data: myProjects });
+  } catch (error) {
+    console.error("Fetch Assigned Projects Error:", error);
+    res.status(500).json({ success: false, message: "Failed to load assigned projects." });
+  }
 };
 
 module.exports = {

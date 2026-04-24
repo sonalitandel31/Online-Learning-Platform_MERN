@@ -6,7 +6,7 @@ import { FaUserPlus, FaSearch, FaFilter, FaEnvelope, FaCalendarAlt, FaBuilding, 
 export default function AllUsers() {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(true); // Track initial load for skeleton
+  const [loadingUsers, setLoadingUsers] = useState(true);
 
   const [roleFilter, setRoleFilter] = useState("all");
   const [activityFilter, setActivityFilter] = useState("all");
@@ -20,6 +20,11 @@ export default function AllUsers() {
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
   const [newAdmin, setNewAdmin] = useState({ name: "", email: "", password: "" });
   const [addingAdmin, setAddingAdmin] = useState(false);
+
+  // New states for the Block/Unblock Confirmation Modal
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [userToToggle, setUserToToggle] = useState(null);
+  const [isToggling, setIsToggling] = useState(false);
 
   const BASE_URL = import.meta.env.VITE_BASE_URL || "";
 
@@ -37,6 +42,35 @@ export default function AllUsers() {
       console.error(err);
     } finally {
       setLoadingUsers(false);
+    }
+  };
+
+  // Opens the confirmation modal and sets the target user
+  const handleToggleBlockClick = (user) => {
+    setUserToToggle(user);
+    setShowConfirmModal(true);
+  };
+
+  // Executes the API call after confirmation
+  const executeToggleBlock = async () => {
+    if (!userToToggle) return;
+    
+    setIsToggling(true);
+    const isBlocking = !userToToggle.isBlocked;
+
+    try {
+      await api.put(`/admin/users/${userToToggle._id}/toggle-block`, {
+        reason: isBlocking ? "Administrative action" : "" 
+      });
+      
+      // Close modal, clear state, and refresh grid
+      setShowConfirmModal(false);
+      setUserToToggle(null);
+      fetchUsers(); 
+    } catch (err) {
+      console.error("Error updating user status:", err);
+    } finally {
+      setIsToggling(false);
     }
   };
 
@@ -106,7 +140,7 @@ export default function AllUsers() {
       let res;
       if (user.role === "student") res = await api.get(`/admin/students/${user._id}`);
       else if (user.role === "instructor") res = await api.get(`/admin/instructors/${user._id}`);
-      else res = { data: {} }; 
+      else res = { data: {} };
       setUserDetails(res.data);
     } catch (err) {
       setUserDetails(null);
@@ -386,7 +420,7 @@ export default function AllUsers() {
                       )}
                     </div>
                   )}
-                  
+
                   <div className="d-flex align-items-center gap-2 mb-3">
                     {activityBadge(activity)}
                     <small style={{ color: colors.textMuted, fontSize: '0.75rem' }}>
@@ -401,20 +435,38 @@ export default function AllUsers() {
                     </div>
                   </div>
 
-                  <Button
-                    size="sm"
-                    className="view-btn"
-                    style={{ 
-                        backgroundColor: colors.primary, 
-                        border: "none", 
-                        borderRadius: "10px", 
+                  <div className="d-flex gap-2">
+                    <Button
+                      size="sm"
+                      style={{
+                        flex: 1,
+                        backgroundColor: colors.primary,
+                        border: "none",
+                        borderRadius: "10px",
                         padding: '10px',
                         fontWeight: '600'
-                    }}
-                    onClick={() => handleViewDetails(u)}
-                  >
-                    View Full Profile
-                  </Button>
+                      }}
+                      onClick={() => handleViewDetails(u)}
+                    >
+                      View Profile
+                    </Button>
+
+                    {/* NEW BLOCK/UNBLOCK BUTTON */}
+                    {u.role !== "admin" && ( 
+                      <Button
+                        size="sm"
+                        variant={u.isBlocked ? "outline-success" : "outline-danger"}
+                        style={{
+                          borderRadius: "10px",
+                          padding: '10px',
+                          fontWeight: '600'
+                        }}
+                        onClick={() => handleToggleBlockClick(u)}
+                      >
+                        {u.isBlocked ? "Unblock" : "Block"}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -422,7 +474,7 @@ export default function AllUsers() {
             {roleFilter === "admin" && (
               <div className="user-card add-admin-card" onClick={() => setShowAddAdminModal(true)}>
                 <div style={{ background: '#eef2ff', padding: '20px', borderRadius: '50%', marginBottom: '15px' }}>
-                    <FaUserPlus size={32} />
+                  <FaUserPlus size={32} />
                 </div>
                 <span style={{ fontWeight: 700 }}>Add Administrator</span>
                 <small className="text-muted">Create new system access</small>
@@ -440,8 +492,8 @@ export default function AllUsers() {
         <Modal.Body style={{ padding: '10px 25px 40px' }}>
           {loadingDetails ? (
             <div className="text-center py-5">
-                <Spinner animation="border" variant="primary" />
-                <p className="mt-3 text-muted">Loading extended profile...</p>
+              <Spinner animation="border" variant="primary" />
+              <p className="mt-3 text-muted">Loading extended profile...</p>
             </div>
           ) : userDetails && selectedUser ? (
             <Row className="align-items-center">
@@ -460,40 +512,40 @@ export default function AllUsers() {
               </Col>
               <Col md={8} className="ps-md-5 mt-4 mt-md-0">
                 <div className="detail-section">
-                    <h6 className="text-uppercase text-primary small fw-bold mb-3" style={{ letterSpacing: '1px' }}>Account Information</h6>
-                    <p className="mb-2"><strong><FaEnvelope className="me-2 text-muted"/> Email:</strong> {selectedUser.email}</p>
-                    <p className="mb-2"><strong><FaCalendarAlt className="me-2 text-muted"/> Joined:</strong> {new Date(selectedUser.createdAt).toLocaleDateString()}</p>
-                    
-                    <hr className="my-4" style={{ opacity: 0.1 }} />
+                  <h6 className="text-uppercase text-primary small fw-bold mb-3" style={{ letterSpacing: '1px' }}>Account Information</h6>
+                  <p className="mb-2"><strong><FaEnvelope className="me-2 text-muted" /> Email:</strong> {selectedUser.email}</p>
+                  <p className="mb-2"><strong><FaCalendarAlt className="me-2 text-muted" /> Joined:</strong> {new Date(selectedUser.createdAt).toLocaleDateString()}</p>
 
-                    <h6 className="text-uppercase text-primary small fw-bold mb-3" style={{ letterSpacing: '1px' }}>Role Specifications</h6>
-                    {selectedUser.role === "student" ? (
+                  <hr className="my-4" style={{ opacity: 0.1 }} />
+
+                  <h6 className="text-uppercase text-primary small fw-bold mb-3" style={{ letterSpacing: '1px' }}>Role Specifications</h6>
+                  {selectedUser.role === "student" ? (
                     <div className="bg-light p-3 rounded-3">
-                        <p className="mb-2"><strong>Education:</strong> {userDetails.education || "Not specified"}</p>
-                        <p className="mb-0"><strong>Current Enrollment:</strong> {userDetails.enrolledCourses?.length || 0} active courses</p>
+                      <p className="mb-2"><strong>Education:</strong> {userDetails.education || "Not specified"}</p>
+                      <p className="mb-0"><strong>Current Enrollment:</strong> {userDetails.enrolledCourses?.length || 0} active courses</p>
                     </div>
-                    ) : selectedUser.role === "instructor" ? (
+                  ) : selectedUser.role === "instructor" ? (
                     <div className="bg-light p-3 rounded-3">
-                        <p className="mb-2"><strong>Expertise:</strong> {userDetails.expertise?.join(", ") || "N/A"}</p>
-                        <p className="mb-2"><strong>Experience:</strong> {userDetails.experience} Years</p>
-                        <p className="mb-0 small"><strong>Bio:</strong> {userDetails.bio || "No bio available"}</p>
+                      <p className="mb-2"><strong>Expertise:</strong> {userDetails.expertise?.join(", ") || "N/A"}</p>
+                      <p className="mb-2"><strong>Experience:</strong> {userDetails.experience} Years</p>
+                      <p className="mb-0 small"><strong>Bio:</strong> {userDetails.bio || "No bio available"}</p>
                     </div>
-                    ) : selectedUser.role === "hr_manager" ? (
+                  ) : selectedUser.role === "hr_manager" ? (
                     <div className="bg-light p-3 rounded-3">
-                        <p className="mb-2"><strong>Account Type:</strong> B2B Enterprise Client</p>
-                        <p className="mb-0"><strong>Permission:</strong> Corporate Training Administrator</p>
+                      <p className="mb-2"><strong>Account Type:</strong> B2B Enterprise Client</p>
+                      <p className="mb-0"><strong>Permission:</strong> Corporate Training Administrator</p>
                     </div>
-                    ) : (
+                  ) : (
                     <div className="bg-light p-3 rounded-3">
-                        <p className="mb-0"><strong>System Access:</strong> Full Administrative Privileges</p>
+                      <p className="mb-0"><strong>System Access:</strong> Full Administrative Privileges</p>
                     </div>
-                    )}
+                  )}
                 </div>
               </Col>
             </Row>
           ) : (
             <div className="text-center py-5">
-                <p className="text-muted">User details could not be retrieved.</p>
+              <p className="text-muted">User details could not be retrieved.</p>
             </div>
           )}
         </Modal.Body>
@@ -540,13 +592,13 @@ export default function AllUsers() {
             <Button
               type="submit"
               disabled={addingAdmin}
-              style={{ 
-                  width: "100%", 
-                  background: colors.primary, 
-                  border: "none", 
-                  padding: '12px',
-                  borderRadius: '12px',
-                  fontWeight: '700'
+              style={{
+                width: "100%",
+                background: colors.primary,
+                border: "none",
+                padding: '12px',
+                borderRadius: '12px',
+                fontWeight: '700'
               }}
             >
               {addingAdmin ? <Spinner size="sm" /> : "Create Admin Account"}
@@ -554,6 +606,52 @@ export default function AllUsers() {
           </Form>
         </Modal.Body>
       </Modal>
+
+      {/* Confirmation Modal for Block/Unblock */}
+      <Modal 
+        show={showConfirmModal} 
+        onHide={() => !isToggling && setShowConfirmModal(false)} 
+        centered 
+        size="sm"
+      >
+        <Modal.Body className="text-center p-4">
+          <div className="mb-3">
+            <span style={{ fontSize: '3rem' }}>
+              {userToToggle?.isBlocked ? "✅" : "⚠️"}
+            </span>
+          </div>
+          
+          <h5 className="fw-bold mb-3">
+            {userToToggle?.isBlocked ? "Unblock User?" : "Block User?"}
+          </h5>
+          
+          <p className="text-muted mb-4 small">
+            {userToToggle?.isBlocked 
+              ? `Are you sure you want to restore access for ${userToToggle?.name}?` 
+              : `Are you sure you want to revoke access for ${userToToggle?.name}? They will not be able to log in.`}
+          </p>
+
+          <div className="d-flex gap-2 justify-content-center">
+            <Button 
+              variant="light" 
+              onClick={() => setShowConfirmModal(false)}
+              disabled={isToggling}
+              style={{ borderRadius: '8px', fontWeight: '600', width: '100px' }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant={userToToggle?.isBlocked ? "success" : "danger"} 
+              onClick={executeToggleBlock}
+              disabled={isToggling}
+              style={{ borderRadius: '8px', fontWeight: '600', width: '100px' }}
+            >
+              {isToggling ? <Spinner size="sm" /> : "Confirm"}
+            </Button>
+          </div>
+        </Modal.Body>
+      </Modal>
+
     </div>
   );
 }

@@ -86,7 +86,7 @@ export default function PayoutHistory() {
             border-radius: 6px;
           }
         `}</style>
-        
+
         <div className="header-section">
           <div className="skeleton" style={{ width: "150px", height: "32px", borderRadius: "8px" }}></div>
           <div className="skeleton" style={{ width: "100px", height: "32px", borderRadius: "8px" }}></div>
@@ -179,7 +179,7 @@ export default function PayoutHistory() {
                 <tr>
                   <th>Date</th>
                   <th>Amount</th>
-                  <th>Method</th>
+                  <th>Transaction ID</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -187,12 +187,14 @@ export default function PayoutHistory() {
                 {payouts.map((p) => (
                   <tr key={p._id}>
                     <td style={{ fontWeight: "500" }}>
-                      {new Date(p.paymentDate || p.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {p.createdAt
+                        ? new Date(p.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : `${p.month}/${p.year}`
+                      }
                     </td>
-                    <td style={{ fontWeight: "700" }}>₹{Number(p.instructorEarning || p.amount).toLocaleString()}</td>
-                    <td>
-                      {p.paymentMethod || "Bank Transfer"}
-                      {p.paymentMethod === "Subscription Bounty" && <span className="royalty-badge">ROYALTY</span>}
+                    <td style={{ fontWeight: "700" }}>₹{Number(p.amount).toLocaleString()}</td>
+                    <td style={{ fontFamily: "monospace", color: colors.textMuted }}>
+                      {p.transactionId || "N/A"} {/* Show Bank Reference */}
                     </td>
                     <td>{getStatusBadge(p.status)}</td>
                   </tr>
@@ -206,18 +208,20 @@ export default function PayoutHistory() {
               <div key={p._id} className="payout-card">
                 <div className="card-header">
                   <div>
-                    <div className="amount-text">₹{Number(p.instructorEarning || p.amount).toLocaleString()}</div>
+                    <div className="amount-text">₹{Number(p.amount).toLocaleString()}</div>
                     <div style={{ fontSize: "0.75rem", color: colors.textMuted }}>
-                      {new Date(p.paymentDate || p.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {p.createdAt
+                        ? new Date(p.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : `${p.month}/${p.year}`
+                      }
                     </div>
                   </div>
                   {getStatusBadge(p.status)}
                 </div>
                 <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: "10px", display: "flex", justifyContent: "space-between", fontSize: "0.85rem" }}>
-                  <span style={{ color: colors.textMuted }}>Method</span>
-                  <span style={{ fontWeight: "600", color: colors.textMain }}>
-                    {p.paymentMethod || "Bank Transfer"}
-                    {p.paymentMethod === "Subscription Bounty" && <span className="royalty-badge">ROYALTY</span>}
+                  <span style={{ color: colors.textMuted }}>Txn ID</span>
+                  <span style={{ fontWeight: "600", color: colors.textMain, fontFamily: "monospace" }}>
+                    {p.transactionId || "N/A"}
                   </span>
                 </div>
               </div>

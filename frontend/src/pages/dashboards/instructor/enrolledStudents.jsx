@@ -303,7 +303,7 @@ function EnrolledStudents() {
                 <tr>
                   <th>Student Info</th>
                   <th>Course Title</th>
-                  <th>Enrollment Type</th> {/* NEW COLUMN */}
+                  <th>Enrollment Type</th> 
                   <th>Progress</th>
                   <th>Status</th>
                   <th>Cert</th>

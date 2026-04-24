@@ -109,6 +109,37 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
+exports.toggleUserBlock = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findById(id);
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        // Toggle the isBlocked boolean
+        user.isBlocked = !user.isBlocked;
+
+        if (user.isBlocked) {
+            // User is being blocked
+            user.blockedAt = new Date();
+            user.blockReason = req.body.reason || "Administrative action"; 
+        } else {
+            // User is being unblocked
+            user.blockedAt = null;
+            user.blockReason = "";
+        }
+
+        await user.save();
+        res.status(200).json({ success: true, data: user });
+
+    } catch (error) {
+        console.error("Error toggling block status:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+    }
+};
+
 exports.getInstructors = async (req, res) => {
   try {
     const instructors = await Instructor.find()
@@ -404,7 +435,29 @@ exports.getPayouts = async (req, res) => {
   }
 };
 
-// Is function ko replace karein (Line 389 ke aas paas)
+exports.getPayoutHistory = async (req, res) => {
+  try {
+    const history = await Payout.find({ status: "completed" })
+      .populate("instructor", "name email")
+      .sort({ createdAt: -1 }); 
+
+    const formattedHistory = history.map(p => ({
+      instructorId: p.instructor ? p.instructor._id : null,
+      name: p.instructor ? p.instructor.name : "Unknown Instructor",
+      email: p.instructor ? p.instructor.email : "N/A",
+      amount: p.amount,
+      transactionId: p.transactionId,
+      date: p.createdAt || p.month + "/" + p.year,
+      month: p.month // 👈 ADD THIS LINE: Pass the exact month number to React
+    }));
+
+    res.status(200).json({ success: true, history: formattedHistory });
+  } catch (error) {
+    console.error("Error fetching payout history:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 exports.getTransactions = async (req, res) => {
   try {
     const txns = await Payment.find({

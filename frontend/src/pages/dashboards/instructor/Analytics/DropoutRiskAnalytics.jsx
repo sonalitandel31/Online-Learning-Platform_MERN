@@ -31,7 +31,7 @@ export default function DropoutRiskAnalytics() {
 
   const fetchInstructorCourses = async () => {
     const candidates = [
-      "/instructor/courses",
+      // "/instructor/courses",
       "/instructor/courses?status=approved",
       "/instructor-dashboard/instructor_courses",
       "/instructor/instructor_courses",

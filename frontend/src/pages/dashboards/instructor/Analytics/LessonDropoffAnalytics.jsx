@@ -55,7 +55,8 @@ export default function LessonDropoffAnalytics() {
 
   const fetchInstructorCourses = async () => {
     const candidates = [
-      "/instructor/courses", "/instructor/courses?status=approved",
+      // "/instructor/courses", 
+      "/instructor/courses?status=approved",
       "/instructor-dashboard/instructor_courses", "/instructor/instructor_courses", "/instructor/my-courses",
     ];
     for (const url of candidates) {

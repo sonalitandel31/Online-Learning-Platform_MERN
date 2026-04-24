@@ -6,7 +6,6 @@ import './App.css';
 /* import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css"; */
 
-
 // student
 import Home from "./pages/dashboards/home";
 import Login from './pages/auth/login';

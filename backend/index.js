@@ -13,6 +13,8 @@ require("./cron/liveClassLifecycleCron");
 const startAutoExpireSubscriptions = require("./utils/autoExpireSubscriptions");
 const { initLiveClassSocket } = require("./socket/liveClassSocket");
 
+const initEngagementCron = require("./cron/engagementCron");
+
 const user = require("./routes/userRoute");
 const course = require("./routes/courseRoute");
 const category = require("./routes/categoryRoute");
@@ -77,6 +79,8 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 conn();
 startAutoExpireSubscriptions();
+
+initEngagementCron();
 
 app.use("/", user);
 app.use("/courses", course);

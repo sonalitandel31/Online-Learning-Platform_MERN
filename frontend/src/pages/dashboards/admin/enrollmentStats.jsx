@@ -160,10 +160,16 @@ export default function EnrollmentStats() {
               <span className="kpi-label">New This Month</span>
               <span className="kpi-val">{data?.newThisMonth || 0}</span>
             </div>
-            <div className="kpi-card">
+            {/* <div className="kpi-card">
               <span className="kpi-label">Growth Rate</span>
               <span className={`kpi-val ${data?.growth >= 0 ? "up" : "down"}`}>
                 {data?.growth.toFixed(1)}% {data?.growth >= 0 ? "▲" : "▼"}
+              </span>
+            </div> */}
+            <div className="kpi-card">
+              <span className="kpi-label">Growth Rate</span>
+              <span className={`kpi-val ${data?.growth >= 0 ? "up" : "down"}`}>
+                {Math.abs(data?.growth || 0).toFixed(1)}% {data?.growth >= 0 ? "▲" : "▼"}
               </span>
             </div>
           </div>

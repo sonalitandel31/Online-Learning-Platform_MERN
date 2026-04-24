@@ -8,6 +8,7 @@ router.post("/add-admin", admin.addAdmin);
 router.get("/dashboard",authMiddleware, admin.dashboard);
 
 router.get("/users", authMiddleware, roleMiddleware(["admin"]), admin.getAllUsers);
+router.put("/users/:id/toggle-block", admin.toggleUserBlock);
 router.get("/instructors", admin.getInstructors);
 router.get("/instructors/:id", admin.getInstructorById);
 router.get("/students", admin.getStudents);
@@ -26,6 +27,7 @@ router.get("/transactions", admin.getTransactions);
 
 // Payout Routes
 router.get("/payouts/pending", authMiddleware, roleMiddleware(["admin"]), admin.getPendingPayouts);
+router.get("/payouts/history", authMiddleware, roleMiddleware(["admin"]), admin.getPayoutHistory);
 router.post("/payouts/process", authMiddleware, roleMiddleware(["admin"]), admin.processPayout);
 
 router.get("/enrollment-stats", admin.getEnrollmentStats);

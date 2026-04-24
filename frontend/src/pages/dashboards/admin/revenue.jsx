@@ -25,6 +25,39 @@ export default function Revenue() {
     });
   }
 
+  let momGrowth = 0;
+  let isGrowthPositive = true;
+  let peakMonth = "N/A";
+
+  if (summary && summary.monthlyData) {
+    const keys = Object.keys(summary.monthlyData);
+    const values = Object.values(summary.monthlyData);
+
+    // Peak Month Calculate karna
+    if (values.length > 0) {
+      const maxVal = Math.max(...values);
+      peakMonth = keys[values.indexOf(maxVal)];
+    }
+
+    // MoM Growth Calculate karna (Safe tareeka)
+    if (keys.length >= 2) {
+      const currentMonth = values[keys.length - 1] || 0;
+      const prevMonth = values[keys.length - 2] || 1; // 1 to prevent divide by zero
+
+      // MoM Growth Calculate 
+      if (keys.length >= 2) {
+        const currentMonth = values[keys.length - 1] || 0;
+        const prevMonth = values[keys.length - 2] || 1; // 1 to prevent divide by zero
+
+        let rawGrowth = ((currentMonth - prevMonth) / prevMonth) * 100;
+
+        isGrowthPositive = rawGrowth >= 0;
+
+        momGrowth = Math.abs(rawGrowth).toFixed(1);
+      }
+    }
+  }
+
   return (
     <div className="dashboard-wrapper">
       {/* --- ALL CSS STYLES --- */}
@@ -179,7 +212,7 @@ export default function Revenue() {
             <Card title="Net Platform Profit" value={formatAmount(summary.platformCommission)} color="#0dcaf0" icon="📈" />
           </div>
 
-          {/* Growth and Highs */}
+          {/*
           <div className="sub-grid">
             <SmallCard
               title="MoM Revenue Growth"
@@ -190,6 +223,22 @@ export default function Revenue() {
             <SmallCard
               title="Peak Performance Month"
               value={Object.keys(summary.monthlyData || {})[Object.values(summary.monthlyData || {}).indexOf(Math.max(...Object.values(summary.monthlyData || {}), 0))] || "N/A"}
+              icon="🏆"
+              color="#fd7e14"
+            />
+          </div> */}
+
+          {/* Growth and Highs */}
+          <div className="sub-grid">
+            <SmallCard
+              title="MoM Revenue Growth"
+              value={`${momGrowth}%`}
+              icon={isGrowthPositive ? "↗️" : "↘️"}
+              color={isGrowthPositive ? "#28a745" : "#dc3545"}
+            />
+            <SmallCard
+              title="Peak Performance Month"
+              value={peakMonth}
               icon="🏆"
               color="#fd7e14"
             />

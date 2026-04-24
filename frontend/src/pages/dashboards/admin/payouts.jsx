@@ -1,48 +1,89 @@
 import React, { useEffect, useState } from "react";
 import api from "../../../api/api";
-import { FaCheckCircle } from "react-icons/fa";
 
 export default function Payouts() {
+  // ===== TAB STATE =====
+  const [activeTab, setActiveTab] = useState("pending"); // "pending" | "history"
+
+  // ===== DATA STATES =====
   const [payouts, setPayouts] = useState([]);
+  const [historyData, setHistoryData] = useState([]);
   const [filtered, setFiltered] = useState([]);
-  const [monthFilter, setMonthFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [monthFilter, setMonthFilter] = useState("all");
   const [loading, setLoading] = useState(true);
 
-  // ===== NEW STATE FOR PAYOUT MODAL =====
+  // ===== MODAL STATES =====
   const [selectedInstructor, setSelectedInstructor] = useState(null);
   const [transactionId, setTransactionId] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(""); // Replaced alert() with inline error
 
+  // Fetch data based on active tab
   useEffect(() => {
-    fetchPayouts();
-  }, []);
+    if (activeTab === "pending") {
+      fetchPendingPayouts();
+    } else {
+      fetchPayoutHistory();
+    }
+  }, [activeTab]);
 
-  const fetchPayouts = () => {
+  const fetchPendingPayouts = () => {
     setLoading(true);
-    // Updated to use the new pending payouts endpoint
     api.get("/admin/payouts/pending")
       .then(res => {
         if (res.data.success) {
           setPayouts(res.data.payouts);
-          setFiltered(res.data.payouts);
         }
       })
-      .catch(err => console.error("Payouts fetch error:", err))
+      .catch(err => console.error("Pending payouts fetch error:", err))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => {
-    let data = [...payouts];
+  const fetchPayoutHistory = () => {
+    setLoading(true);
+    // Assuming you have this endpoint for completed payouts
+    api.get("/admin/payouts/history")
+      .then(res => {
+        if (res.data.success) {
+          setHistoryData(res.data.history);
+        }
+      })
+      .catch(err => console.error("Payout history fetch error:", err))
+      .finally(() => setLoading(false));
+  };
 
+  // Unified Filtering Logic
+  useEffect(() => {
+    let sourceData = activeTab === "pending" ? payouts : historyData;
+    let data = [...sourceData];
+
+    // 1. Search Filter
     if (search.trim()) {
       data = data.filter(p =>
         (p.name || "").toLowerCase().includes(search.toLowerCase())
       );
     }
 
+    // 2. Month Filter (History Tab Only)
+    if (monthFilter !== "all" && activeTab === "history") {
+      const selectedMonth = parseInt(monthFilter, 10);
+
+      data = data.filter(p => {
+        // First check: If backend provided the exact month number, use it! (Foolproof)
+        if (p.month) {
+          return parseInt(p.month, 10) === selectedMonth;
+        }
+
+        // Fallback: Try to parse the date string if 'p.month' is missing
+        if (!p.date) return false;
+        const payoutDate = new Date(p.date);
+        return (payoutDate.getMonth() + 1) === selectedMonth;
+      });
+    }
+
     setFiltered(data);
-  }, [search, payouts]);
+  }, [search, monthFilter, payouts, historyData, activeTab]);
 
   const monthNames = [
     "January", "February", "March", "April", "May", "June",
@@ -57,32 +98,30 @@ export default function Payouts() {
     return "#dc3545";
   };
 
-  // ===== NEW LOGIC TO PROCESS THE PAYOUT =====
   const handleProcessPayout = async () => {
-    if (!transactionId) {
-      // Standard browser alert to prevent empty submission
-      alert("Please enter the Bank Transaction ID!");
+    if (!transactionId.trim()) {
+      setErrorMsg("Please enter the Bank Transaction ID!");
       return;
     }
-
+    setErrorMsg(""); // Clear previous errors
     setProcessing(true);
+
     try {
       const { data } = await api.post("/admin/payouts/process", {
         instructorId: selectedInstructor.instructorId,
         amount: selectedInstructor.amount,
-        paymentIds: selectedInstructor.paymentIds, // Required by backend to update status
+        paymentIds: selectedInstructor.paymentIds,
         transactionId: transactionId
       });
 
       if (data.success) {
-        // Remove the processed instructor from the list
         setPayouts(payouts.filter(p => p.instructorId !== selectedInstructor.instructorId));
         setSelectedInstructor(null);
         setTransactionId("");
-        // Silent update
       }
     } catch (err) {
       console.error("Error processing payment", err);
+      setErrorMsg("Failed to process payout. Please try again.");
     } finally {
       setProcessing(false);
     }
@@ -90,25 +129,49 @@ export default function Payouts() {
 
   return (
     <div className="payouts-container">
-      <h2 className="main-title">Pending Instructor Payouts</h2>
+      <div className="header-flex">
+        <h2 className="main-title">Instructor Payouts</h2>
+
+        {/* Tab Navigation */}
+        <div className="tab-group">
+          <button
+            className={`tab-btn ${activeTab === "pending" ? "active" : ""}`}
+            onClick={() => { setSearch(""); setActiveTab("pending"); }}
+          >
+            Pending
+          </button>
+          <button
+            className={`tab-btn ${activeTab === "history" ? "active" : ""}`}
+            onClick={() => { setSearch(""); setActiveTab("history"); }}
+          >
+            History
+          </button>
+        </div>
+      </div>
 
       {/* Summary Cards */}
       <div className="summary-row">
         <div className="summary-card">
-          <span className="summary-label">Instructors Waiting</span>
+          <span className="summary-label">
+            {activeTab === "pending" ? "Instructors Waiting" : "Total Payouts Made"}
+          </span>
           {loading ? (
             <div className="skeleton skel-text-lg" style={{ marginTop: '5px', width: '60px' }}></div>
           ) : (
-            <span className="summary-value">{payouts.length}</span>
+            <span className="summary-value">
+              {activeTab === "pending" ? payouts.length : historyData.length}
+            </span>
           )}
         </div>
         <div className="summary-card">
-          <span className="summary-label">Total Pending Amount</span>
+          <span className="summary-label">
+            {activeTab === "pending" ? "Total Pending Amount" : "Total Amount Paid"}
+          </span>
           {loading ? (
             <div className="skeleton skel-text-lg" style={{ marginTop: '5px', width: '140px' }}></div>
           ) : (
-            <span className="summary-value" style={{ color: "#dc3545" }}>
-              ₹{total(payouts, "amount").toLocaleString('en-IN')}
+            <span className="summary-value" style={{ color: activeTab === "pending" ? "#dc3545" : "#28a745" }}>
+              ₹{total(activeTab === "pending" ? payouts : historyData, "amount").toLocaleString('en-IN')}
             </span>
           )}
         </div>
@@ -128,7 +191,9 @@ export default function Payouts() {
           className="month-select"
           value={monthFilter}
           onChange={(e) => setMonthFilter(e.target.value)}
-          disabled={loading}
+          // Disable if loading OR if looking at Pending tab
+          disabled={loading || activeTab === "pending"}
+          title={activeTab === "pending" ? "Month filter is only available for History" : ""}
         >
           <option value="all">All Months</option>
           {monthNames.map((name, index) => (
@@ -141,33 +206,24 @@ export default function Payouts() {
       <div className="data-wrapper">
         <div className="data-header desktop-only">
           <div>Instructor</div>
-          <div>Pending Amount</div>
-          <div>Action</div>
+          <div>Amount</div>
+          <div>{activeTab === "pending" ? "Action" : "Details"}</div>
         </div>
 
         <div className="data-body">
           {loading ? (
             /* Skeleton Loading Rows */
-            Array.from({ length: 6 }).map((_, i) => (
+            Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="data-row">
                 <div className="cell instructor-cell">
                   <div className="skeleton skel-avatar"></div>
                   <div style={{ flex: 1 }}>
-                    <span className="mobile-label">Instructor</span>
                     <div className="skeleton skel-text-sm" style={{ width: '140px', marginBottom: '6px' }}></div>
                     <div className="skeleton skel-text-xs" style={{ width: '100px' }}></div>
                   </div>
                 </div>
-
-                <div className="cell">
-                  <span className="mobile-label">Pending Amount</span>
-                  <div className="skeleton skel-text-sm" style={{ width: '90px' }}></div>
-                </div>
-
-                <div className="cell">
-                  <span className="mobile-label">Action</span>
-                  <div className="skeleton skel-btn"></div>
-                </div>
+                <div className="cell"><div className="skeleton skel-text-sm" style={{ width: '90px' }}></div></div>
+                <div className="cell"><div className="skeleton skel-btn"></div></div>
               </div>
             ))
           ) : filtered.length > 0 ? (
@@ -179,8 +235,6 @@ export default function Payouts() {
                     <span className="mobile-label">Instructor</span>
                     <strong>{p.name}</strong>
                     <div style={{ fontSize: "0.8rem", color: "#6c757d" }}>{p.email}</div>
-                    
-                    {/* 👇 NAYA: Subscription Bounty Badge 👇 */}
                     {p.paymentMethod === "Subscription Bounty" && (
                       <span className="badge bg-warning bg-opacity-10 text-dark border border-warning mt-1" style={{ fontSize: "10px", display: "inline-block" }}>
                         👑 Course Completion Bounty
@@ -190,26 +244,46 @@ export default function Payouts() {
                 </div>
 
                 <div className="cell">
-                  <span className="mobile-label">Pending Amount</span>
+                  <span className="mobile-label">Amount</span>
                   <strong style={{ color: earningColor(p.amount) }}>
                     ₹{p.amount.toLocaleString('en-IN')}
                   </strong>
                 </div>
 
-                {/* Action Button */}
+                {/* Conditional Column based on Tab */}
                 <div className="cell">
-                  <span className="mobile-label">Action</span>
-                  <button
-                    className="process-btn"
-                    onClick={() => setSelectedInstructor(p)}
-                  >
-                    Pay Now
-                  </button>
+                  <span className="mobile-label">{activeTab === "pending" ? "Action" : "Details"}</span>
+                  {activeTab === "pending" ? (
+                    <button
+                      className="process-btn"
+                      onClick={() => {
+                        setSelectedInstructor(p);
+                        setErrorMsg("");
+                        setTransactionId("");
+                      }}
+                    >
+                      Pay Now
+                    </button>
+                  ) : (
+                    <div>
+                      <span className="status-badge paid">Paid</span>
+                      <div style={{ fontSize: "0.75rem", color: "#6c757d", marginTop: "4px" }}>
+                        Txn: {p.transactionId || "N/A"}
+                      </div>
+                      <div style={{ fontSize: "0.75rem", color: "#6c757d" }}>
+                        {p.date ? new Date(p.date).toLocaleDateString() : ""}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))
           ) : (
-            <div className="empty-msg">No pending payouts match your criteria. All caught up!</div>
+            <div className="empty-msg">
+              {activeTab === "pending"
+                ? "No pending payouts match your criteria. All caught up!"
+                : "No payout history found."}
+            </div>
           )}
         </div>
       </div>
@@ -235,12 +309,18 @@ export default function Payouts() {
                 </label>
                 <input
                   type="text"
-                  className="search-input"
-                  style={{ width: "100%", marginBottom: "5px" }}
+                  className={`search-input ${errorMsg ? "input-error" : ""}`}
+                  style={{ width: "100%", marginBottom: "5px", boxSizing: "border-box" }}
                   placeholder="e.g. IMPS1234567890"
                   value={transactionId}
-                  onChange={(e) => setTransactionId(e.target.value)}
+                  onChange={(e) => {
+                    setTransactionId(e.target.value);
+                    if (errorMsg) setErrorMsg("");
+                  }}
                 />
+                {/* Inline Error Message */}
+                {errorMsg && <div style={{ color: "#dc3545", fontSize: "0.75rem", marginBottom: "5px" }}>{errorMsg}</div>}
+
                 <small style={{ fontSize: "0.75rem", color: "#b2bec3" }}>
                   Enter the bank reference number after transferring the funds.
                 </small>
@@ -262,9 +342,22 @@ export default function Payouts() {
       )}
 
       <style>{`
-        /* ... Existing CSS ... */
+        /* ... Keep your existing CSS ... */
         .payouts-container { padding: 20px; max-width: 1200px; margin: auto; font-family: 'Inter', sans-serif; }
-        .main-title { color: #6f42c1; margin-bottom: 24px; font-weight: 800; }
+        
+        /* New CSS for Tabs & Header */
+        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 15px; }
+        .main-title { color: #6f42c1; margin: 0; font-weight: 800; }
+        
+        .tab-group { display: flex; background: #f8f9fa; border-radius: 8px; padding: 4px; border: 1px solid #e0e0e0; }
+        .tab-btn { padding: 8px 20px; border: none; background: transparent; border-radius: 6px; font-weight: 600; color: #6c757d; cursor: pointer; transition: 0.2s; }
+        .tab-btn:hover { color: #2d3436; }
+        .tab-btn.active { background: white; color: #6f42c1; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+
+        /* Badge and Input Errors */
+        .status-badge.paid { background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; display: inline-block; }
+        .input-error { border-color: #dc3545 !important; background-color: #fff8f8; }
+
         .summary-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
         .summary-card { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
         .summary-label { font-size: 0.85rem; color: #6c757d; font-weight: 600; }
@@ -299,18 +392,8 @@ export default function Payouts() {
         .confirm-btn { padding: 8px 16px; border-radius: 8px; border: none; background: #28a745; color: white; font-weight: 600; cursor: pointer; }
         .confirm-btn:disabled { opacity: 0.7; cursor: not-allowed; }
 
-        /* ✅ Skeleton Animation & Styles */
-        .skeleton {
-          background: #f1f5f9;
-          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
-          background-size: 200% 100%;
-          animation: shimmer 1.5s infinite linear;
-          border-radius: 4px;
-        }
-        @keyframes shimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
+        .skeleton { background: #f1f5f9; background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite linear; border-radius: 4px; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         .skel-text-lg { height: 32px; border-radius: 6px; }
         .skel-text-sm { height: 18px; border-radius: 4px; }
         .skel-text-xs { height: 14px; border-radius: 4px; }
