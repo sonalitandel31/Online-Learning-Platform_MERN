@@ -1,6 +1,6 @@
 const cron = require("node-cron");
 const Course = require("../models/courseModel");
-const AnalyticsEvent = require("../models/AnalyticsEventModel");
+const AnalyticsEvent = require("../models/analyticsEventModel");
 const EngagementScore = require("../models/EngagementScoreModel");
 
 const computeAllEngagements = async () => {
