@@ -5,7 +5,7 @@ const examModel = require("../models/examModel");
 const userModel = require("../models/userModel");
 const studentModel = require("../models/studentModel");
 const Payment = require("../models/paymentModel");
-const AnalyticsEvent = require("../models/AnalyticsEventModel");
+const AnalyticsEvent = require("../models/analyticsEventModel");
 
 const fs = require("fs");
 const path = require("path");
