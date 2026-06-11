@@ -1,4 +1,4 @@
-const AnalyticsEvent = require("../models/AnalyticsEventModel");
+const AnalyticsEvent = require("../models/analyticsEventModel");
 const EngagementScore = require("../models/EngagementScoreModel");
 const userModel = require("../models/userModel");
 const resultModel = require("../models/resultModel");

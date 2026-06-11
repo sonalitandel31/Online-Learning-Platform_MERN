@@ -9,7 +9,7 @@ const Student = require("../models/studentModel");
 const SystemSettings = require("../models/SystemSettings");
 const courseRequestModel = require("../models/courseRequestModel");
 const Payout = require("../models/payoutModel");
-const AnalyticsEvent = require("../models/AnalyticsEventModel");
+const AnalyticsEvent = require("../models/analyticsEventModel");
 
 const multer = require("multer");
 const path = require("path");
