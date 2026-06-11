@@ -4,6 +4,9 @@ const studentModel = require("../models/studentModel");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
+// Import the Push Notification Helper
+const { sendPushToUser } = require("../utils/pushHelper");
+
 const registerUser = async (req, res) => {
     try {
         let profilePic = req.file
@@ -37,7 +40,7 @@ const registerUser = async (req, res) => {
 
         let extraData = null;
         if (normalizedRole === "student") {
-            // Naya registration hai, toh first day streak set kar do
+            // Setup first day streak for new student registration
             extraData = await studentModel.create({ 
                 user: user._id, 
                 education, 
@@ -122,6 +125,14 @@ const loginUser = async (req, res) => {
                 }
                 
                 await studentProfile.save();
+
+                // 🚀 TRIGGER AUTOMATIC PUSH NOTIFICATION
+                // Welcome the student back and remind them of their learning streak
+                sendPushToUser(user._id, {
+                    title: "Welcome Back! 👋",
+                    message: `You are on a ${studentProfile.streakCount}-day learning streak. Keep it up!`,
+                    url: "/learning"
+                });
             }
         }
         // --- DAILY STREAK LOGIC END ---

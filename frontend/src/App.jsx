@@ -1,7 +1,7 @@
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import './App.css';
 /* import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css"; */
@@ -26,6 +26,7 @@ import StudentLiveClassRoom from "./pages/dashboards/student/liveClassRoom";
 import SkillAnalysis from "./pages/dashboards/student/SkillAnalysis";
 import LearningPath from "./pages/dashboards/student/LearningPath";
 import CertificateViewer from "./pages/dashboards/student/CertificateViewer";
+import Downloads from "./pages/dashboards/student/Downloads";
 
 //admin
 import AdminDashboard from './pages/dashboards/admin/adminDashboard';
@@ -104,8 +105,9 @@ import { useTheme } from "./context/ThemeContext";
 import api from "./api/api";
 import AdminSubscribers from "./pages/dashboards/admin/AdminSubscribers";
 
+import { getUnsyncedProgress, markAsSynced } from "./utils/offlineDB";
+
 // --- UPDATED THEME UPDATER ---
-// Yeh component app root par hai, toh ye ensure karega ki refresh hote hi correct theme lag jaye.
 function ThemeUpdater({ user }) {
   const { setPrimaryColor, setLogoUrl } = useTheme();
 
@@ -117,8 +119,6 @@ function ThemeUpdater({ user }) {
       localStorage.removeItem("themeLogo");
       return;
     }
-
-    // App.jsx ke andar ThemeUpdater function me ye update karein:
 
     const fetchUserBranding = async () => {
       try {
@@ -138,9 +138,9 @@ function ThemeUpdater({ user }) {
         }
         // 2. Agar user kisi company ka hissa hai (isCorporateUser) YA fir us company ka HR hai
         else if (isCorporateUser || role === 'hr_manager') {
-          selectedColor = '#198754'; 
+          selectedColor = '#198754';
         }
-        
+
         setPrimaryColor(selectedColor);
         setPrimaryColor(selectedColor);
         localStorage.setItem("themeColor", selectedColor);
@@ -164,6 +164,9 @@ function App() {
   const [user, setUser] = useState(null);
   const location = useLocation();
 
+  const navigate = useNavigate();
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) setUser(JSON.parse(storedUser));
@@ -175,11 +178,90 @@ function App() {
     location.pathname.startsWith("/hr-dashboard")
   );
 
+  useEffect(() => {
+    // Triggers automatically when the browser comes back online
+    const handleOnline = async () => {
+      console.log('Internet signal detected. Waiting 3 seconds for connection to stabilize...');
+      
+      setTimeout(async () => {
+        setIsOffline(false);
+
+        const loggedInUser = JSON.parse(localStorage.getItem("user") || "null");
+        if (!loggedInUser) return;
+
+        const unsyncedItems = await getUnsyncedProgress(loggedInUser._id);
+
+        if (unsyncedItems.length > 0) {
+          console.log(`Found ${unsyncedItems.length} items to sync. Starting background sync...`);
+          
+          for (let item of unsyncedItems) {
+            try {
+              const token = localStorage.getItem("token");
+              if (!token) {
+                 console.error("No token found. Cannot sync progress.");
+                 return; 
+              }
+
+              // 2. Exam Submission Route
+              if (item.type === 'exam') {
+                await api.post(`/exams/course/${item.courseId}/exam/${item.lessonId}/submit`, {
+                  answers: item.answers,
+                  cheatCount: item.cheatCount
+                });
+                console.log(`Exam ${item.lessonId} synced successfully!`);
+              } 
+              // 3. REAL Lesson Completion Route
+              else {
+                await api.post(`/courses/${item.courseId}/lessons/${item.lessonId}/markWatched`, {}, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                console.log(`Lesson ${item.lessonId} synced successfully!`);
+              }
+
+              // Mark as synced locally ONLY IF API CALL WAS SUCCESSFUL
+              await markAsSynced(item.lessonId);
+
+            } catch (err) {
+              console.error('Sync failed for item', item.lessonId, err);
+            }
+          }
+        } else {
+            console.log('No offline data to sync.');
+        }
+      }, 3000); // 3 second delay
+    };
+
+    // When internet disconnects
+    const handleOffline = () => {
+      setIsOffline(true);
+      console.log('You are offline. Redirecting to Downloads...');
+      if (location.pathname !== '/downloads') {
+        navigate('/downloads');
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [location.pathname, navigate]);
+
   return (
     <>
       <ThemeProvider>
         <ThemeUpdater user={user} />
         {shouldShowNavbar && <Navbar user={user} setUser={setUser} />}
+
+        {/* Global Offline Banner (Optional) */}
+        {isOffline && location.pathname !== '/downloads' && (
+          <div className="bg-danger text-white text-center py-2 fw-bold" style={{ zIndex: 9999, position: 'relative' }}>
+            You are offline. Viewing downloaded content.
+          </div>
+        )}
+
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login setUser={setUser} />} />
@@ -206,6 +288,7 @@ function App() {
           <Route path="/live-classes" element={<StudentLiveClasses />} />
           <Route path="/skill-analysis" element={<SkillAnalysis />} />
           <Route path="/learning-path" element={<LearningPath />} />
+          <Route path="/downloads" element={<Downloads />} />
 
           <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
             <Route path="/admin-dashboard" element={<AdminDashboard />}>

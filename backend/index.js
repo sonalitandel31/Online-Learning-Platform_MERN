@@ -3,6 +3,8 @@ require("dotenv").config();
 const express = require("express");
 const conn = require("./config/db");
 const cors = require("cors");
+const helmet = require("helmet"); // NAYA: Helmet import kiya
+const rateLimit = require("express-rate-limit"); // NAYA: Rate Limit import kiya
 const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -15,6 +17,7 @@ const { initLiveClassSocket } = require("./socket/liveClassSocket");
 
 const initEngagementCron = require("./cron/engagementCron");
 
+// --- Route Imports ---
 const user = require("./routes/userRoute");
 const course = require("./routes/courseRoute");
 const category = require("./routes/categoryRoute");
@@ -43,12 +46,14 @@ const zoomWebhookRoutes = require("./routes/zoomWebhookRoutes");
 const aiRoute = require("./routes/aiRoute");
 const companyRoutes = require('./routes/companyRoute');
 const hrRoutes = require('./routes/hrRoute');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 const { razorpayWebhookHandler } = require("./controller/razorpayWebhookController");
 
 const app = express();
 const server = http.createServer(app);
 
+// SOCKET.IO SETUP
 const io = new Server(server, {
   cors: {
     origin: process.env.CLIENT_URL,
@@ -58,30 +63,53 @@ const io = new Server(server, {
 
 initLiveClassSocket(io);
 
-// Razorpay webhook first
+// EXTERNAL WEBHOOKS (Bypass rate limits & standard parsing)
+// Razorpay webhook first (requires raw body)
 app.post("/webhooks/razorpay", express.raw({ type: "application/json" }), razorpayWebhookHandler);
 
 // Zoom webhook route
 app.use("/webhooks/zoom", express.json(), zoomWebhookRoutes);
 
-// Normal parsers
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// SECURITY MIDDLEWARES
+// 1. Helmet: Secure HTTP headers (crossOriginResourcePolicy false to allow serving images from /uploads)
+app.use(helmet({ crossOriginResourcePolicy: false }));
 
+// 2. CORS: Restrict API access to your allowed frontend URL
 app.use(
   cors({
-    origin: process.env.CLIENT_URL,
+    origin: process.env.CLIENT_URL, 
     credentials: true,
   })
 );
 
+// 3. Rate Limiting: Prevent DDoS and API Spamming
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1500, // Limit each IP to 1500 requests per `window` (15 minutes). High enough for video streaming/LMS needs.
+  message: {
+    success: false,
+    message: "Too many requests from this IP, please try again after 15 minutes."
+  },
+  standardHeaders: true, 
+  legacyHeaders: false, 
+});
+
+// Apply rate limiter to all routes below this line
+app.use(apiLimiter);
+
+// STANDARD MIDDLEWARES & STATIC FILES
+// Normal parsers
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// INITIALIZATION & CRON JOBS
 conn();
 startAutoExpireSubscriptions();
-
 initEngagementCron();
 
+// API ROUTES
 app.use("/", user);
 app.use("/courses", course);
 app.use("/categories", category);
@@ -109,7 +137,9 @@ app.use("/live-class-questions", liveClassQuestionRoutes);
 app.use("/ai", aiRoute);
 app.use('/companies', companyRoutes); 
 app.use('/hr', hrRoutes);             
+app.use('/notifications', notificationRoutes);             
 
+// SERVER START
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {

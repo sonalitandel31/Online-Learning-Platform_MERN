@@ -4,6 +4,7 @@ import api from "../../../api/api";
 import { track } from "../../../utils/track";
 import { Eye, Download, PlayCircle, BookOpen, FileText, CheckCircle, Lock, Award, Info, AlertTriangle, ChevronRight, Clock, User, BarChart, MessageCircle, ShieldAlert, Trophy, } from "lucide-react";
 import RatingBox from "../../../components/RatingBox";
+import { saveProgressLocally } from "../../../utils/offlineDB";
 
 const PLANS_ROUTE = "/subscription-plans";
 
@@ -44,6 +45,8 @@ function CourseDetail() {
     message: "",
     type: "info",
   });
+
+  const [offlineSyncMessage, setOfflineSyncMessage] = useState("");
 
   // Access from /courses/:id -> data.access.ok (purchase/subscription/none)
   const [hasAccess, setHasAccess] = useState(false);
@@ -647,35 +650,56 @@ function CourseDetail() {
     };
   }, [selectedLesson?._id]);
 
-  // ---------- mark lesson complete ----------
+  // ---------- mark lesson complete (Offline Capable) ----------
   useEffect(() => {
     if (!selectedLesson || !studentId || !isEnrolled) return;
 
     const markCompleted = async () => {
+      // If already marked complete locally, do nothing
       if (completedLessons.includes(selectedLesson._id)) return;
 
-      try {
-        await api.post(
-          `/courses/${course?._id}/lessons/${selectedLesson._id}/markWatched`,
-          {},
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+      const offlinePayload = {
+        courseId: course?._id,
+        contentType: selectedLesson.contentType,
+        title: selectedLesson.title
+      };
 
-        track("lesson_complete", {
-          courseId: course?._id || id,
-          lessonId: selectedLesson._id,
-          contentType: selectedLesson.contentType,
-          via: selectedLesson.contentType === "video" ? "video_90_percent" : "non_video",
-        });
+      if (navigator.onLine) {
+        try {
+          await api.post(
+            `/courses/${course?._id}/lessons/${selectedLesson._id}/markWatched`,
+            {},
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
 
+          track("lesson_complete", {
+            courseId: course?._id || id,
+            lessonId: selectedLesson._id,
+            contentType: selectedLesson.contentType,
+            via: selectedLesson.contentType === "video" ? "video_90_percent" : "non_video",
+          });
+
+          setCompletedLessons((prev) => [...prev, selectedLesson._id]);
+          await refreshEnrollmentState(course?._id);
+          await Promise.all([fetchGamification(course?._id), fetchBadges(course?._id)]);
+
+          setOfflineSyncMessage(""); // Clear message if online
+          showAlert(`+10 XP earned ✅ (${selectedLesson.title} completed!)`, "success");
+        } catch (err) {
+          console.error("API failed, saving progress locally:", err);
+          // Save to IndexedDB if API fails despite being online
+          await saveProgressLocally(selectedLesson._id, offlinePayload);
+          setCompletedLessons((prev) => [...prev, selectedLesson._id]);
+          setOfflineSyncMessage("Saved offline. Will sync when internet returns.");
+        }
+      } else {
+        // User is completely offline
+        console.log("Offline mode: Saving progress locally");
+        await saveProgressLocally(selectedLesson._id, offlinePayload);
+
+        // Optimistically update the UI so the student sees the green checkmark
         setCompletedLessons((prev) => [...prev, selectedLesson._id]);
-
-        await refreshEnrollmentState(course?._id);
-
-        await Promise.all([fetchGamification(course?._id), fetchBadges(course?._id)]);
-        showAlert(`+10 XP earned ✅ (${selectedLesson.title} completed!)`, "success");
-      } catch (err) {
-        console.error("Mark watched error:", err);
+        setOfflineSyncMessage("Saved offline. Will sync when internet returns.");
       }
     };
 
@@ -862,7 +886,7 @@ function CourseDetail() {
             100% { background-position: calc(200px + 100%) 0; }
           }
         `}</style>
-        
+
         {/* Skeleton Header */}
         <div className="py-5 mb-4 border-bottom" style={{ background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)" }}>
           <div className="container">
@@ -873,7 +897,7 @@ function CourseDetail() {
                 <div className="skeleton mb-4" style={{ height: "16px", width: "40%" }}></div>
                 <div className="skeleton mb-2" style={{ height: "16px", width: "80%" }}></div>
                 <div className="skeleton mb-4" style={{ height: "16px", width: "60%" }}></div>
-                
+
                 <div className="d-flex gap-3">
                   <div className="skeleton rounded-pill" style={{ height: "40px", width: "180px" }}></div>
                   <div className="skeleton rounded-pill" style={{ height: "40px", width: "120px" }}></div>
@@ -1143,6 +1167,14 @@ function CourseDetail() {
                         </span>
                       )}
                     </div>
+                    
+                    {/* Offline sync inline message */}
+                    {offlineSyncMessage && (
+                      <div className="bg-warning bg-opacity-10 text-dark px-4 py-2 border-bottom border-warning d-flex align-items-center gap-2" style={{ fontSize: "14px" }}>
+                        <Clock size={16} className="text-warning" />
+                        <span className="fw-medium">{offlineSyncMessage}</span>
+                      </div>
+                    )}
 
                     <div className="ratio ratio-16x9 bg-dark shadow-inner">
                       {selectedLesson.contentType === "video" ? (

@@ -5,22 +5,27 @@ import { track } from "../../utils/track";
 import "bootstrap/dist/css/bootstrap.min.css";
 import {
   FiUser, FiEdit, FiShield, FiMail, FiBookOpen,
-  FiCamera, FiCheckCircle, FiAlertCircle, FiTrendingUp, FiChevronRight, FiBarChart2
+  FiCamera, FiCheckCircle, FiAlertCircle, FiTrendingUp, FiChevronRight, FiBarChart2, FiBell
 } from "react-icons/fi";
 import { FaFire, FaMedal } from "react-icons/fa";
 
-import { useTheme } from "../../context/ThemeContext"; 
+import { useTheme } from "../../context/ThemeContext";
+import {
+  subscribeToPushNotifications,
+  checkPushSubscriptionStatus,
+  unsubscribeFromPushNotifications
+} from "../../utils/pushNotifications";
 
 export default function Profile() {
   const navigate = useNavigate();
-  
+
   const { primaryColor } = useTheme();
 
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const [mode, setMode] = useState("view"); 
+  const [mode, setMode] = useState("view");
 
   const [formData, setFormData] = useState({});
   const [userData, setUserData] = useState({});
@@ -39,6 +44,16 @@ export default function Profile() {
 
   const BASE_URL = (import.meta.env.VITE_BASE_URL || "").replace(/\/+$/, "");
   const DEFAULT_PROFILE = `${BASE_URL}/uploads/default.png`;
+
+  const [isPushEnabled, setIsPushEnabled] = useState(false);
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      const status = await checkPushSubscriptionStatus();
+      setIsPushEnabled(status);
+    };
+    checkStatus();
+  }, []);
 
   const fieldPlaceholders = {
     interests: "e.g. React, Node.js, Artificial Intelligence",
@@ -61,6 +76,33 @@ export default function Profile() {
       if (profilePicPreview) URL.revokeObjectURL(profilePicPreview);
     };
   }, [profilePicPreview]);
+
+  const [notifyStatus, setNotifyStatus] = useState("");
+  const [isSubscribing, setIsSubscribing] = useState(false);
+
+  const handleToggleNotifications = async () => {
+    setIsSubscribing(true);
+    setNotifyStatus("");
+
+    if (isPushEnabled) {
+      const success = await unsubscribeFromPushNotifications();
+      if (success) {
+        setIsPushEnabled(false);
+        setNotifyStatus("Success: Push notifications disabled.");
+      } else {
+        setNotifyStatus("Error: Could not disable notifications.");
+      }
+    } else {
+      const success = await subscribeToPushNotifications();
+      if (success) {
+        setIsPushEnabled(true);
+        setNotifyStatus("Success: Push notifications are now enabled!");
+      } else {
+        setNotifyStatus("Error: Permission denied or not supported.");
+      }
+    }
+    setIsSubscribing(false);
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -168,12 +210,12 @@ export default function Profile() {
   const formatDate = (d) => d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Not set";
 
   const calculateLevel = (xp) => {
-    const xpPerLevel = 500; 
+    const xpPerLevel = 500;
     const currentXp = xp || 0;
     const level = Math.floor(currentXp / xpPerLevel) + 1;
     const currentLevelProgressXp = currentXp % xpPerLevel;
     const progressPercentage = (currentLevelProgressXp / xpPerLevel) * 100;
-    
+
     return { level, nextLevelXp: xpPerLevel, currentLevelProgressXp, progressPercentage };
   };
 
@@ -188,7 +230,7 @@ export default function Profile() {
         <div className="row g-4">
           {skills.map((s, idx) => {
             const level = s.level || 0;
-            let color = "#F98080"; 
+            let color = "#F98080";
             let status = "Learning";
             let bg = "#FDF2F2";
 
@@ -256,7 +298,7 @@ export default function Profile() {
   };
 
   const displayPic = profilePicPreview || profilePicUrl || DEFAULT_PROFILE;
-  
+
   const levelInfo = profile ? calculateLevel(profile.xpTotal) : { level: 1, nextLevelXp: 500, currentLevelProgressXp: 0, progressPercentage: 0 };
 
   // --- SKELETON LOADER ENHANCEMENT ---
@@ -280,7 +322,7 @@ export default function Profile() {
           }
         `}</style>
         <div className="container px-0" style={{ maxWidth: 900 }}>
-          
+
           {/* Header Skeleton */}
           <div className="card border-0 rounded-4 shadow-sm overflow-hidden mb-4 bg-white">
             <div className="skeleton" style={{ height: "88px", width: "100%", borderRadius: "0" }}></div>
@@ -301,15 +343,15 @@ export default function Profile() {
 
           {/* Tabs Skeleton */}
           <div className="bg-white p-2 rounded-2 shadow-sm mb-4 d-flex gap-2">
-             <div className="skeleton rounded" style={{ height: "36px", width: "100px" }}></div>
-             <div className="skeleton rounded" style={{ height: "36px", width: "100px" }}></div>
-             <div className="skeleton rounded" style={{ height: "36px", width: "100px" }}></div>
+            <div className="skeleton rounded" style={{ height: "36px", width: "100px" }}></div>
+            <div className="skeleton rounded" style={{ height: "36px", width: "100px" }}></div>
+            <div className="skeleton rounded" style={{ height: "36px", width: "100px" }}></div>
           </div>
 
           {/* Content Skeleton */}
           <div className="card border-0 rounded-4 shadow-sm p-4 p-md-5 bg-white">
             <div className="skeleton mb-4" style={{ height: "24px", width: "250px", borderRadius: "6px" }}></div>
-            
+
             <div className="row g-4 mb-5">
               {[1, 2, 3, 4].map(i => (
                 <div className="col-md-6" key={i}>
@@ -435,15 +477,15 @@ export default function Profile() {
                         <FiTrendingUp size={24} className="mb-2 text-primary" />
                         <div className="text-muted small fw-semibold">Total Learning XP</div>
                         <div className="fw-bolder fs-3 text-primary mb-3">{profile?.xpTotal || 0}</div>
-                        
+
                         <div className="px-3">
                           <div className="d-flex justify-content-between align-items-center mb-1">
                             <small className="text-muted fw-bold" style={{ fontSize: "10px" }}>Lvl {levelInfo.level}</small>
                             <small className="text-muted fw-bold" style={{ fontSize: "10px" }}>Lvl {levelInfo.level + 1}</small>
                           </div>
                           <div className="progress rounded-pill" style={{ height: "8px", backgroundColor: "#E0E7FF" }}>
-                            <div className="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
-                                 style={{ width: `${levelInfo.progressPercentage}%` }} />
+                            <div className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                              style={{ width: `${levelInfo.progressPercentage}%` }} />
                           </div>
                           <small className="text-muted mt-2 d-block fw-semibold" style={{ fontSize: "11px" }}>
                             {levelInfo.currentLevelProgressXp} / {levelInfo.nextLevelXp} XP
@@ -470,7 +512,7 @@ export default function Profile() {
                       <h5 className="fw-bold mb-4" style={{ color: primaryColor }}>Ongoing Courses</h5>
                       <div className="d-flex flex-column gap-3">
                         {profile.enrolledCourses.map((c) => (
-                          <div key={c._id} className="p-3 rounded-4 bg-white border border-light d-flex justify-content-between align-items-center shadow-sm" style={{cursor: 'pointer'}} onClick={() => navigate(`/courses/${c._id}`)}>
+                          <div key={c._id} className="p-3 rounded-4 bg-white border border-light d-flex justify-content-between align-items-center shadow-sm" style={{ cursor: 'pointer' }} onClick={() => navigate(`/courses/${c._id}`)}>
                             <div className="d-flex align-items-center gap-3">
                               <div className="p-2 rounded-circle bg-light text-primary"><FiBookOpen /></div>
                               <span className="fw-bold text-dark">{c.title}</span>
@@ -524,6 +566,42 @@ export default function Profile() {
                 <div className="mb-4"><label className="form-label fw-bold">New Password</label><input className="form-control form-control-lg bg-light border-0" type="password" placeholder="New Password" value={passwords.newPassword} onChange={e => setPasswords({ ...passwords, newPassword: e.target.value })} /></div>
                 <div className="mb-5"><label className="form-label fw-bold">Confirm Password</label><input className="form-control form-control-lg bg-light border-0" type="password" placeholder="Confirm Password" value={passwords.confirmPassword} onChange={e => setPasswords({ ...passwords, confirmPassword: e.target.value })} /></div>
                 <button className="btn btn-lg w-100 fw-bold rounded-pill text-white" style={{ background: primaryColor }} onClick={handlePasswordChange}>Update Password</button>
+
+                {/* --- PUSH NOTIFICATIONS SECTION --- */}
+                <div className="mt-5 pt-4 border-top">
+                  <div className="d-flex align-items-center gap-3 mb-4">
+                    <div className="bg-info bg-opacity-10 p-3 rounded-circle text-info">
+                      <FiBell size={24} />
+                    </div>
+                    <div className="text-start">
+                      <h5 className="fw-bold mb-1 text-dark">Push Notifications</h5>
+                      <p className="text-muted small mb-0">
+                        Get instant alerts for live classes, exam results, and updates even when the app is closed.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    className={`btn fw-bold rounded-pill px-4 py-2 w-100 ${isPushEnabled ? "btn-outline-danger" : "btn-outline-info"
+                      }`}
+                    onClick={handleToggleNotifications}
+                    disabled={isSubscribing}
+                  >
+                    {isSubscribing
+                      ? "Processing..."
+                      : isPushEnabled
+                        ? "Disable Notifications"
+                        : "Enable Browser Notifications"
+                    }
+                  </button>
+
+                  {/* Inline feedback message */}
+                  {notifyStatus && (
+                    <div className={`mt-3 px-3 py-2 rounded text-start small fw-medium ${notifyStatus.startsWith("Success") ? "bg-success bg-opacity-10 text-success border-success" : "bg-danger bg-opacity-10 text-danger border-danger"}`}>
+                      {notifyStatus}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

@@ -17,6 +17,8 @@ import {
   AlertTriangle
 } from "lucide-react";
 
+import { saveProgressLocally } from "../../../utils/offlineDB";
+
 const PLANS_ROUTE = "/plans";
 
 export default function Exams() {
@@ -43,14 +45,14 @@ export default function Exams() {
   const [cameraStream, setCameraStream] = useState(null);
   const [cheatCount, setCheatCount] = useState(0);
   const [systemMessage, setSystemMessage] = useState({ text: "", type: "" });
-  
+
   // --- NAYA STATE: Fullscreen track karne ke liye ---
-  const [isFullscreen, setIsFullscreen] = useState(true); 
+  const [isFullscreen, setIsFullscreen] = useState(true);
 
   // Refs for logic & fixes
   const videoRef = useRef(null);
-  const cheatCountRef = useRef(0); 
-  const isSubmittingRef = useRef(false); 
+  const cheatCountRef = useRef(0);
+  const isSubmittingRef = useRef(false);
 
   // access control
   const [hasAccess, setHasAccess] = useState(false);
@@ -228,7 +230,7 @@ export default function Exams() {
       if (document.hidden && proctoringActive && !submitted) {
         cheatCountRef.current += 1;
         const newCount = cheatCountRef.current;
-        
+
         setCheatCount(newCount);
 
         if (newCount >= tabLimit) {
@@ -245,7 +247,7 @@ export default function Exams() {
         setIsFullscreen(false); // Set state to block UI
         cheatCountRef.current += 1;
         setCheatCount(cheatCountRef.current);
-        
+
         if (cheatCountRef.current >= tabLimit) {
           handleSubmit(true);
         }
@@ -274,10 +276,10 @@ export default function Exams() {
     setAnswers({});
     setTimeLeft((exam?.duration || 0) * 60);
     setCheatCount(0);
-    cheatCountRef.current = 0; 
-    isSubmittingRef.current = false; 
+    cheatCountRef.current = 0;
+    isSubmittingRef.current = false;
     setIsFullscreen(true);
-    
+
     window.scrollTo({ top: 0, behavior: "smooth" });
 
     try {
@@ -286,11 +288,11 @@ export default function Exams() {
         setCameraStream(stream);
         if (videoRef.current) videoRef.current.srcObject = stream;
       }
-      
+
       if (exam?.proctoring?.fullscreenRequired !== false) {
         await document.documentElement.requestFullscreen();
       }
-      
+
       setProctoringActive(true);
       displayMessage("Proctoring active. Exam started.", "success");
     } catch (err) {
@@ -316,7 +318,7 @@ export default function Exams() {
 
   const handleSubmit = async (isAuto = false) => {
     if (!examId || !exam || submitted || isSubmittingRef.current) return;
-    
+
     if (!hasAccess) {
       navigate(PLANS_ROUTE);
       return;
@@ -327,24 +329,44 @@ export default function Exams() {
     stopCamera();
     setProctoringActive(false);
 
-    try {
-      track("exam_submit_attempt", { courseId, examId, isAuto });
-      const currentCheatCount = cheatCountRef.current;
-      const res = await api.post(`/exams/course/${courseId}/exam/${examId}/submit`, { answers, cheatCount: currentCheatCount });
-      const earnedXp = (res.data?.xpAwards || []).reduce((sum, x) => sum + Number(x?.xp || 0), 0);
+    const currentCheatCount = cheatCountRef.current;
 
-      if (isAuto) displayMessage("Time up or violations exceeded! Exam auto-submitted.", "danger");
-      else if (earnedXp > 0) displayMessage(`Exam submitted! +${earnedXp} XP earned ✅`, "success");
-      else displayMessage("Exam submitted successfully.", "success");
+    // Package the data for potential offline storage
+    const offlinePayload = {
+      type: "exam", // Tagging this so the background sync knows it is an exam, not a lesson
+      courseId: courseId,
+      answers: answers,
+      cheatCount: currentCheatCount
+    };
 
-      await loadResult(examId);
-      track("exam_submit_success", { courseId, examId, earnedXp });
-    } catch (err) {
-      setSubmitted(false);
-      isSubmittingRef.current = false;
-      track("exam_submit_failed", { courseId, examId });
-      displayMessage(err.response?.data?.message || "Submission failed.", "danger");
+    if (navigator.onLine) {
+      try {
+        track("exam_submit_attempt", { courseId, examId, isAuto });
+        const res = await api.post(`/exams/course/${courseId}/exam/${examId}/submit`, { answers, cheatCount: currentCheatCount });
+        const earnedXp = (res.data?.xpAwards || []).reduce((sum, x) => sum + Number(x?.xp || 0), 0);
+
+        if (isAuto) displayMessage("Time up or violations exceeded! Exam auto-submitted.", "danger");
+        else if (earnedXp > 0) displayMessage(`Exam submitted! +${earnedXp} XP earned ✅`, "success");
+        else displayMessage("Exam submitted successfully.", "success");
+
+        await loadResult(examId);
+        track("exam_submit_success", { courseId, examId, earnedXp });
+      } catch (err) {
+        console.error("API failed, falling back to offline storage", err);
+
+        // Save locally if the API fails despite the browser reporting it is online
+        await saveProgressLocally(examId, offlinePayload);
+        displayMessage("Network error. Your exam has been saved offline and will be evaluated when your connection returns.", "warning");
+      }
+    } else {
+      // User is completely offline
+      console.log("Offline mode: Saving exam locally");
+      await saveProgressLocally(examId, offlinePayload);
+
+      displayMessage("You are offline. Your exam has been securely saved locally and will auto-submit when the internet returns.", "warning");
     }
+
+    isSubmittingRef.current = false;
   };
 
   const suggestAutoEnroll = hasAccess && accessType === "subscription" && attemptNumber === 0 && !result;
@@ -378,7 +400,7 @@ export default function Exams() {
             .exam-sidebar { display: none; }
           }
         `}</style>
-        
+
         {/* Skeleton Sidebar */}
         <aside className="exam-sidebar shadow-sm d-none d-lg-flex">
           <div className="sidebar-header">
@@ -403,11 +425,11 @@ export default function Exams() {
             <div className="d-none d-lg-block"></div>
             <div className="skeleton rounded-pill" style={{ width: "120px", height: "36px" }}></div>
           </div>
-          
+
           <div className="question-container mt-5 pt-5 text-center">
-             <div className="skeleton rounded-circle mb-4 mx-auto" style={{ width: "80px", height: "80px" }}></div>
-             <div className="skeleton mb-3 mx-auto" style={{ height: "32px", width: "250px", borderRadius: "8px" }}></div>
-             <div className="skeleton mx-auto" style={{ height: "16px", width: "350px", borderRadius: "4px" }}></div>
+            <div className="skeleton rounded-circle mb-4 mx-auto" style={{ width: "80px", height: "80px" }}></div>
+            <div className="skeleton mb-3 mx-auto" style={{ height: "32px", width: "250px", borderRadius: "8px" }}></div>
+            <div className="skeleton mx-auto" style={{ height: "16px", width: "350px", borderRadius: "4px" }}></div>
           </div>
         </main>
       </div>
@@ -590,14 +612,14 @@ export default function Exams() {
                         <div className="fw-bold h5 mb-0">{result.bestScore ?? 0}%</div>
                       </div>
                     </div>
-                    
+
                     <div className="col-12 col-md-6">
-                       <div className="p-3 border rounded-3">
-                         <div className="fw-bold">Exam Status</div>
-                         <div className="text-muted small">
-                           Passing score required is <b>{result?.passPercentage || 60}%</b>.
-                         </div>
-                       </div>
+                      <div className="p-3 border rounded-3">
+                        <div className="fw-bold">Exam Status</div>
+                        <div className="text-muted small">
+                          Passing score required is <b>{result?.passPercentage || 60}%</b>.
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -632,9 +654,9 @@ export default function Exams() {
                                 </td>
                                 <td>
                                   {att.isPassed ? (
-                                     <span className="text-success fw-bold">Pass</span>
+                                    <span className="text-success fw-bold">Pass</span>
                                   ) : (
-                                     <span className="text-danger fw-bold">Fail</span>
+                                    <span className="text-danger fw-bold">Fail</span>
                                   )}
                                 </td>
                               </tr>
@@ -652,8 +674,8 @@ export default function Exams() {
                   <h3 className="fw-bold mb-3">Pre-Exam Check</h3>
                   <p className="text-muted">This exam is strictly proctored. Before starting, please ensure:</p>
                   <ul className="text-muted mb-4 text-start">
-                    <li><Camera size={16} className="me-2 d-inline"/> You allow camera permissions (your video is recorded locally).</li>
-                    <li><Maximize size={16} className="me-2 d-inline"/> You stay in fullscreen mode.</li>
+                    <li><Camera size={16} className="me-2 d-inline" /> You allow camera permissions (your video is recorded locally).</li>
+                    <li><Maximize size={16} className="me-2 d-inline" /> You stay in fullscreen mode.</li>
                     <li>Do not switch tabs. You are allowed a maximum of {tabLimit} warnings before automatic submission.</li>
                   </ul>
                   <button className="btn btn-purple rounded-pill py-2 px-4 fw-bold d-inline-block w-auto" onClick={startProctoredExam}>
@@ -667,7 +689,7 @@ export default function Exams() {
                   <Award size={60} className="text-purple mb-4 mx-auto" />
                   <h2 className="fw-bold h4">Assessment View</h2>
                   <p className="text-muted small mb-4">You have already completed this exam or reached the attempt limit.</p>
-                  
+
                   <button className="btn btn-purple px-4 py-2 rounded-pill fw-bold" onClick={() => navigate(`/courses/${courseId}`)}>
                     Back to Lessons
                   </button>
@@ -733,15 +755,15 @@ export default function Exams() {
             </>
           )}
         </div>
-        
+
         {proctoringActive && exam?.proctoring?.webcamRequired !== false && (
-          <video 
-            ref={videoRef} 
-            autoPlay 
-            muted 
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
             playsInline
-            className="video-proctor" 
-            style={{ transform: "scaleX(-1)" }} 
+            className="video-proctor"
+            style={{ transform: "scaleX(-1)" }}
           />
         )}
       </main>

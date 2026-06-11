@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   FaUserCircle, FaSearch, FaBars, FaTimes, FaMap, FaChartBar,
   FaTachometerAlt, FaUser, FaBook, FaPlayCircle, FaCrown,
-  FaFileInvoiceDollar, FaSignOutAlt
+  FaFileInvoiceDollar, FaSignOutAlt, FaDownload
 } from "react-icons/fa";
 import "../styles/home.css";
 import api from "../api/api";
@@ -374,6 +374,8 @@ const Navbar = ({ user, setUser }) => {
 
                   <li><Link className="dropdown-item" to="/profile" onClick={closeMenu}><FaUser /> My Profile</Link></li>
                   <li><Link className="dropdown-item" to="/learning" onClick={closeMenu}><FaBook /> My Learnings</Link></li>
+
+                  <li><Link className="dropdown-item" to="/downloads" onClick={closeMenu}><FaDownload /> My Downloads</Link></li>
 
                   {role === "student" && (
                     <>

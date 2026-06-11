@@ -15,9 +15,14 @@ import {
   ArrowLeft,
   Layout,
   Sparkles,
+  DownloadCloud,
+  Trash2
 } from "lucide-react";
 
-const PLANS_ROUTE = "/plans"; // ✅ change this to your real route
+import axios from "axios";
+import { saveVideoOffline, getVideoOffline, removeVideoOffline } from "../../../utils/offlineDB";
+
+const PLANS_ROUTE = "/plans";
 
 function Lesson() {
   const { courseId, lessonId } = useParams();
@@ -38,6 +43,8 @@ function Lesson() {
   const [hasAccess, setHasAccess] = useState(false);
   const [accessReason, setAccessReason] = useState("");
 
+  const [offlineSyncMessage, setOfflineSyncMessage] = useState("");
+
   const videoRef = useRef(null);
   const markingRef = useRef(false);
 
@@ -45,6 +52,94 @@ function Lesson() {
   const studentId = loggedInUser?._id;
 
   const BASE_URL = (import.meta.env.VITE_BASE_URL || "").replace(/\/+$/, "");
+
+  const [offlineVideoState, setOfflineVideoState] = useState("none"); // "none", "downloading", "downloaded"
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [localVideoUrl, setLocalVideoUrl] = useState(null);
+
+  // Check if current lesson video is already saved offline
+  useEffect(() => {
+    const checkOfflineStatus = async () => {
+      if (currentLesson && String(currentLesson.contentType).toLowerCase() === "video") {
+        try {
+          const blob = await getVideoOffline(String(currentLesson._id), studentId);
+          if (blob) {
+            // Create a local URL from the blob to play in the browser
+            setLocalVideoUrl(URL.createObjectURL(blob));
+            setOfflineVideoState("downloaded");
+          } else {
+            setLocalVideoUrl(null);
+            setOfflineVideoState("none");
+          }
+        } catch (error) {
+          console.error("Failed to check offline video status", error);
+        }
+      }
+    };
+    checkOfflineStatus();
+
+    // Cleanup local URL to prevent memory leaks when changing lessons
+    return () => {
+      if (localVideoUrl) URL.revokeObjectURL(localVideoUrl);
+    };
+  }, [currentLesson]);
+
+  const handleDownloadVideo = async () => {
+    if (!fileUrl) return;
+    setOfflineVideoState("downloading");
+    setDownloadProgress(0);
+
+    try {
+      // 1. Send token only if fetching from your own backend
+      const isLocalHost = fileUrl.includes("localhost") || fileUrl.includes(BASE_URL);
+      const requestHeaders = isLocalHost 
+        ? { Authorization: `Bearer ${localStorage.getItem("token")}` } 
+        : {};
+
+      // 2. Fetch the video blob
+      const response = await axios({
+        url: fileUrl,
+        method: "GET",
+        responseType: "blob",
+        headers: requestHeaders,
+        onDownloadProgress: (progressEvent) => {
+          const total = progressEvent.total || 1; // Fallback to avoid dividing by zero
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / total);
+          setDownloadProgress(percentCompleted);
+        },
+      });
+
+      // 3. SMARTER CHECK: Check if server sent an error message (JSON/HTML) instead of a file
+      const fileType = response.data.type.toLowerCase();
+      if (fileType.includes("json") || fileType.includes("html") || fileType.includes("text")) {
+        console.error("Wrong file format downloaded:", fileType);
+        throw new Error("Server returned an error instead of a video.");
+      }
+
+      // 4. Check for empty files
+      if (response.data.size === 0) {
+        throw new Error("Downloaded file is completely empty (0 bytes).");
+      }
+
+      // 5. Save to Database
+      await saveVideoOffline(currentLesson, course, response.data, studentId);
+      setLocalVideoUrl(URL.createObjectURL(response.data));
+      setOfflineVideoState("downloaded");
+      showNotify("Video saved for offline viewing! ✅");
+
+    } catch (error) {
+      console.error("Video download failed", error);
+      setOfflineVideoState("none");
+      showNotify("Failed to download video. Server blocked the request.");
+    }
+  };
+
+  const handleDeleteOfflineVideo = async () => {
+    await removeVideoOffline(String(currentLesson._id));
+    setLocalVideoUrl(null);
+    setOfflineVideoState("none");
+    showNotify("Offline video removed to free up space.");
+  };
 
   const showNotify = (msg) => {
     setNotification(msg);
@@ -142,19 +237,17 @@ function Lesson() {
     return () => video.removeEventListener("timeupdate", handleTimeUpdate);
   }, [currentLesson]);
 
-  // ====== NAYA CODE: SMART WATCH TIME TRACKER (With Debugging) ======
   useEffect(() => {
     const video = videoRef.current;
-    
-    // 🔍 DEBUG 1: Page load hote hi ye print hona chahiye
+
     console.log("👀 Checking Lesson:", currentLesson?.title, "| Type:", currentLesson?.contentType);
 
     if (!video || String(currentLesson?.contentType || "").toLowerCase() !== "video") {
-      console.log("⚠️ Tracker Stopped: Ya toh video player nahi mila, ya contentType 'video' nahi hai.");
+      console.log("⚠️ Tracker Stopped: Video player / contentType 'video' not found.");
       return;
     }
 
-    console.log("🚀 Tracker is ACTIVE! Bacha video play karega toh timer chalega...");
+    console.log("🚀 Tracker is ACTIVE!");
 
     let heartbeatInterval;
 
@@ -163,7 +256,7 @@ function Lesson() {
         await api.post(
           "/analytics/track",
           {
-            event: "video_watch_30s", 
+            event: "video_watch_30s",
             payload: { courseId: courseId, lessonId: currentLesson._id }
           },
           { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
@@ -201,40 +294,70 @@ function Lesson() {
       video.removeEventListener("ended", handleVideoEnd);
     };
   }, [currentLesson, courseId, isEnrolled]);
-  // ====== NAYA CODE KHATAM ======
 
+  // ====== PROGRESS TRACKING (Offline Capable) ======
   useEffect(() => {
-    // progress endpoints depend on enrollment record
+    // Progress endpoints depend on enrollment record
     if (!currentLesson || !isEnrolled || !course?._id) return;
 
     const markAsCompleted = async () => {
       const lessonKey = String(currentLesson._id);
+
+      // If already marked complete locally, do nothing
       if (completedLessons.includes(lessonKey)) return;
       if (markingRef.current) return;
 
       markingRef.current = true;
-      try {
-        const resp = await api.post(
-          `/courses/${course._id}/lessons/${currentLesson._id}/markWatched`,
-          {},
-          { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
-        );
 
-        setCompletedLessons((prev) => (prev.includes(lessonKey) ? prev : [...prev, lessonKey]));
+      const offlinePayload = {
+        courseId: course?._id,
+        contentType: currentLesson.contentType,
+        title: currentLesson.title
+      };
 
-        const earnedXp = (resp.data?.xpAwards || []).reduce((sum, x) => sum + Number(x?.xp || 0), 0);
-        if (earnedXp > 0) showNotify(`+${earnedXp} XP earned ✅`);
-      } catch (err) {
-        console.error("markWatched error:", err);
-        if (err.response?.status === 403) {
-          showNotify("Start Learning via Subscription to enable progress tracking.");
+      // Check internet connection
+      if (navigator.onLine) {
+        try {
+          const resp = await api.post(
+            `/courses/${course._id}/lessons/${currentLesson._id}/markWatched`,
+            {},
+            { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+          );
+
+          setCompletedLessons((prev) => (prev.includes(lessonKey) ? prev : [...prev, lessonKey]));
+
+          const earnedXp = (resp.data?.xpAwards || []).reduce((sum, x) => sum + Number(x?.xp || 0), 0);
+          if (earnedXp > 0) showNotify(`+${earnedXp} XP earned ✅`);
+
+          setOfflineSyncMessage(""); // Clear offline message if online
+        } catch (err) {
+          console.error("markWatched error:", err);
+          if (err.response?.status === 403) {
+            showNotify("Start Learning via Subscription to enable progress tracking.");
+          } else {
+            // Save locally if API fails despite being online
+            console.log("API failed, falling back to offline storage");
+            await saveProgressLocally(currentLesson._id, offlinePayload, studentId);
+            setCompletedLessons((prev) => (prev.includes(lessonKey) ? prev : [...prev, lessonKey]));
+            setOfflineSyncMessage("Saved offline. Will sync when internet returns.");
+          }
+        } finally {
+          markingRef.current = false;
         }
-      } finally {
+      } else {
+        // User is completely offline
+        console.log("Offline mode: Saving progress locally");
+        await saveProgressLocally(currentLesson._id, offlinePayload, studentId);
+
+        // Optimistically update the UI
+        setCompletedLessons((prev) => (prev.includes(lessonKey) ? prev : [...prev, lessonKey]));
+        setOfflineSyncMessage("Saved offline. Will sync when internet returns.");
         markingRef.current = false;
       }
     };
 
     const isVideo = String(currentLesson.contentType || "").toLowerCase() === "video";
+    // Trigger completion if video hits 90%, or immediately if it is text/pdf
     if (isVideo ? videoProgress >= 90 : true) markAsCompleted();
   }, [currentLesson, videoProgress, isEnrolled, completedLessons, studentId, course]);
 
@@ -299,7 +422,7 @@ function Lesson() {
             .lesson-sidebar { display: none; }
           }
         `}</style>
-        
+
         {/* Skeleton Sidebar */}
         <aside className="lesson-sidebar d-none d-lg-flex">
           <div className="p-4 border-bottom bg-white">
@@ -310,12 +433,12 @@ function Lesson() {
           <div className="p-3 flex-grow-1 overflow-hidden">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className="d-flex align-items-center gap-3 mb-3 p-3 rounded-4 border" style={{ borderColor: "#f8f5fe", background: "#fff" }}>
-                 <div className="skeleton rounded-3" style={{ width: "24px", height: "24px", flexShrink: 0 }}></div>
-                 <div className="flex-grow-1">
-                   <div className="skeleton mb-2" style={{ height: "14px", width: "80%" }}></div>
-                   <div className="skeleton" style={{ height: "10px", width: "40%" }}></div>
-                 </div>
-                 <div className="skeleton rounded-circle" style={{ width: "16px", height: "16px", flexShrink: 0 }}></div>
+                <div className="skeleton rounded-3" style={{ width: "24px", height: "24px", flexShrink: 0 }}></div>
+                <div className="flex-grow-1">
+                  <div className="skeleton mb-2" style={{ height: "14px", width: "80%" }}></div>
+                  <div className="skeleton" style={{ height: "10px", width: "40%" }}></div>
+                </div>
+                <div className="skeleton rounded-circle" style={{ width: "16px", height: "16px", flexShrink: 0 }}></div>
               </div>
             ))}
           </div>
@@ -347,21 +470,21 @@ function Lesson() {
             </div>
 
             {/* Video/PDF Container Placeholder */}
-            <div 
-              className="skeleton" 
-              style={{ 
-                width: "100%", 
-                aspectRatio: "16/9", 
-                borderRadius: "20px", 
-                border: "4px solid white", 
-                boxShadow: "0 25px 50px -12px rgba(111, 66, 193, 0.2)" 
+            <div
+              className="skeleton"
+              style={{
+                width: "100%",
+                aspectRatio: "16/9",
+                borderRadius: "20px",
+                border: "4px solid white",
+                boxShadow: "0 25px 50px -12px rgba(111, 66, 193, 0.2)"
               }}
             ></div>
 
             {/* Navigation Placeholder */}
             <div className="d-none d-lg-flex justify-content-between mt-5 pt-4 border-top" style={{ borderColor: "#e0d7f2" }}>
-               <div className="skeleton rounded-pill" style={{ height: "40px", width: "120px" }}></div>
-               <div className="skeleton rounded-pill" style={{ height: "40px", width: "160px" }}></div>
+              <div className="skeleton rounded-pill" style={{ height: "40px", width: "120px" }}></div>
+              <div className="skeleton rounded-pill" style={{ height: "40px", width: "160px" }}></div>
             </div>
           </div>
         </main>
@@ -574,16 +697,64 @@ function Lesson() {
                 PART {currentIndex + 1} OF {lessons.length}
               </span>
             </div>
+
+            {/* Offline sync inline message */}
+            {offlineSyncMessage && (
+              <div className="mt-3 bg-warning bg-opacity-10 text-dark px-3 py-2 border-start border-warning border-4 rounded-end d-inline-block" style={{ fontSize: "14px" }}>
+                <span className="fw-medium">{offlineSyncMessage}</span>
+              </div>
+            )}
           </div>
 
           {canAccess ? (
             <div className="media-section">
               {String(currentLesson?.contentType || "").toLowerCase() === "video" ? (
-                <div className="player-wrapper">
-                  <video ref={videoRef} className="w-100 h-100" controls controlsList="nodownload">
-                    <source src={fileUrl} type="video/mp4" />
-                  </video>
-                </div>
+                <>
+                  <div className="player-wrapper">
+                    {/* Use local blob URL if downloaded, otherwise fetch from internet */}
+                    <video ref={videoRef} className="w-100 h-100" controls controlsList="nodownload">
+                      <source src={localVideoUrl || fileUrl} type="video/mp4" />
+                    </video>
+                  </div>
+
+                  {/* --- OFFLINE DOWNLOAD CONTROL PANEL --- */}
+                  <div className="d-flex align-items-center justify-content-between bg-white p-3 rounded-4 shadow-sm border mb-4">
+                    <div className="d-flex align-items-center gap-2">
+                      <div className="bg-purple bg-opacity-10 p-2 rounded-circle text-purple">
+                        {offlineVideoState === "downloaded" ? <CheckCircle size={20} className="text-success" /> : <DownloadCloud size={20} />}
+                      </div>
+                      <div>
+                        <div className="fw-bold text-dark" style={{ fontSize: "14px" }}>Offline Viewing</div>
+                        <div className="text-muted" style={{ fontSize: "11px" }}>
+                          {offlineVideoState === "downloaded"
+                            ? "Video is saved on this device."
+                            : "Download to watch without internet."}
+                        </div>
+                      </div>
+                    </div>
+
+                    {offlineVideoState === "none" && (
+                      <button className="btn btn-sm btn-outline-purple rounded-pill fw-bold px-3" onClick={handleDownloadVideo}>
+                        Download
+                      </button>
+                    )}
+
+                    {offlineVideoState === "downloading" && (
+                      <div className="d-flex align-items-center gap-2" style={{ width: "120px" }}>
+                        <div className="progress flex-grow-1" style={{ height: "6px" }}>
+                          <div className="progress-bar progress-bar-striped progress-bar-animated bg-purple" style={{ width: `${downloadProgress}%` }}></div>
+                        </div>
+                        <span className="small fw-bold text-purple" style={{ fontSize: "11px" }}>{downloadProgress}%</span>
+                      </div>
+                    )}
+
+                    {offlineVideoState === "downloaded" && (
+                      <button className="btn btn-sm btn-light text-danger rounded-pill fw-bold px-3 d-flex align-items-center gap-1" onClick={handleDeleteOfflineVideo}>
+                        <Trash2 size={14} /> Remove
+                      </button>
+                    )}
+                  </div>
+                </>
               ) : String(currentLesson?.contentType || "").toLowerCase() === "pdf" ? (
                 <div className="pdf-container mb-4">
                   <iframe src={`${fileUrl}#toolbar=0`} className="pdf-frame" title="PDF Content" />
