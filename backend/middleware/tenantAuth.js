@@ -1,11 +1,8 @@
-// middleware/tenantAuth.js
-const userModel = require('../models/userModel'); // Apna path verify kar lena
-const Company = require('../models/CompanyModel');
+const userModel = require('../models/userModel'); 
+const Company = require('../models/companyModel');
 
 const tenantAuth = async (req, res, next) => {
     try {
-        // ASSUMPTION: Ye middleware aapke standard `verifyToken` ya `isAuth` middleware ke BAAD chalega.
-        // Matlab `req.user` mein logged-in user ki details (ID, role) already honi chahiye.
 
         if (!req.user || !req.user.id) {
              // Returning standard JSON error, frontend can handle this gracefully with inline text

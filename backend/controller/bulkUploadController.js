@@ -1,7 +1,7 @@
 const fs = require('fs');
 const csv = require('csv-parser');
 const userModel = require('../models/userModel');
-const Company = require('../models/CompanyModel');
+const Company = require('../models/companyModel');
 const bcrypt = require('bcryptjs');
 
 exports.bulkEnrollEmployees = async (req, res) => {
