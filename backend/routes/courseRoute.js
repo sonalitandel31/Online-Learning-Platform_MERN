@@ -1,5 +1,5 @@
 const express = require("express");
-const { getCourses, getCourseById, createCourse, updateCourse, deleteCourse, getCourseCategory, createCategory, getRecommendedCourses, getTrendingCourses, rateCourse, getCourseRatings, getMyCourseRating, getPersonalizedRecommendations,} = require("../controller/courseController");
+const { getCourses, getCourseById, createCourse, updateCourse, deleteCourse, getCourseCategory, createCategory, getRecommendedCourses, getTrendingCourses, rateCourse, getCourseRatings, getMyCourseRating, getPersonalizedRecommendations, getInstructorAllRatings,} = require("../controller/courseController");
 const attachUserIfExists = require("../middleware/attachUserIfExists");
 const authMiddleware = require("../middleware/authMiddleware");
 
@@ -10,6 +10,8 @@ router.post("/addCategory", createCategory);
 router.get("/recommended", authMiddleware, getRecommendedCourses);
 router.get("/trending", getTrendingCourses);
 router.get("/recommendations/personalized", authMiddleware, getPersonalizedRecommendations);
+
+router.get("/instructor/all-ratings", authMiddleware, getInstructorAllRatings);
 
 // create/update rating (enrolled only)
 router.post("/:id/rate", authMiddleware, rateCourse);

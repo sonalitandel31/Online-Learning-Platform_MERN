@@ -52,6 +52,7 @@ import SystemSettingsPage from "./pages/dashboards/admin/SystemSettingsPage";
 import AdminLiveClasses from "./pages/dashboards/admin/liveClasses";
 import ManageCompanies from "./pages/dashboards/admin/ManageCompanies";
 import CourseRequests from "./pages/dashboards/admin/B2BRequests";
+import AdminSubscribers from "./pages/dashboards/admin/AdminSubscribers";
 
 //instructor
 import InstructorDashboard from './pages/dashboards/instructor/InstructorDashboard';
@@ -82,6 +83,7 @@ import AddRecording from "./pages/dashboards/instructor/liveClasses/addRecording
 import InstructorLiveClassRoom from "./pages/dashboards/instructor/liveClasses/liveClassRoom";
 import PlatformRules from "./pages/dashboards/instructor/platformRules";
 import AssignedB2BProjects from "./pages/dashboards/instructor/AssignedB2BProjects";
+import InstructorReviews from "./pages/dashboards/instructor/InstructorReviews";
 
 // hr
 import HRDashboard from "./pages/dashboards/HR/HRDashboard";
@@ -103,7 +105,6 @@ import AboutUs from './pages/aboutus';
 import { ThemeProvider } from "./context/ThemeContext";
 import { useTheme } from "./context/ThemeContext";
 import api from "./api/api";
-import AdminSubscribers from "./pages/dashboards/admin/AdminSubscribers";
 
 import { getUnsyncedProgress, markAsSynced } from "./utils/offlineDB";
 
@@ -343,6 +344,7 @@ function App() {
               <Route path="course_analytics" element={<CourseAnalytics />} />
               <Route path="student_progress" element={<StudentProgress />} />
               <Route path="course-discussions" element={<CourseDiscussions />} />
+              <Route path="course-reviews" element={<InstructorReviews />} />
               <Route path="live-classes" element={<InstructorLiveClasses />} />
               <Route path="live-classes/create" element={<CreateLiveClass />} />
               <Route path="live-classes/:liveClassId/attendance" element={<InstructorLiveClassAttendance />} />

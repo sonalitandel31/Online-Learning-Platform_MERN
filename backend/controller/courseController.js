@@ -520,6 +520,27 @@ const getMyCourseRating = async (req, res) => {
   }
 };
 
+const getInstructorAllRatings = async (req, res) => {
+  try {
+    const instructorId = req.user._id;
+
+    // 1. Instructor ke sabhi courses find karo
+    const myCourses = await courseModel.find({ instructor: instructorId }).select("_id");
+    const courseIds = myCourses.map(course => course._id);
+
+    // 2. Un courses ki saari ratings fetch karo (Latest first)
+    const ratings = await Rating.find({ course: { $in: courseIds } })
+      .populate("student", "name email") // Student ki details
+      .populate("course", "title thumbnail") // Course ki details
+      .sort({ createdAt: -1 });
+
+    return res.json({ success: true, ratings });
+  } catch (err) {
+    console.error("Get Instructor Ratings Error:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 const rateCourse = async (req, res) => {
   try {
     const courseId = req.params.id;
@@ -710,6 +731,7 @@ module.exports = {
   rateCourse,
   getCourseRatings,
   getMyCourseRating,
+  getInstructorAllRatings,
   rateCourse,
   getPersonalizedRecommendations,
 };

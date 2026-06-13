@@ -345,7 +345,6 @@ export const instructorSidebarLinks = [
       { label: "Manage Exams", path: "/instructor-dashboard/manage_exams" },
     ],
   },
-  // 👇 NEW MODULE 7 UPDATE: Instructor B2B Section 👇
   {
     label: "Corporate Projects",
     icon: <FaBuilding />,
@@ -359,6 +358,7 @@ export const instructorSidebarLinks = [
     children: [
       { label: "Enrolled Students", path: "/instructor-dashboard/enrolled_students" },
       { label: "Course Discussions", path: "/instructor-dashboard/course-discussions" },
+      { label: "Course Reviews", path: "/instructor-dashboard/course-reviews" },
     ],
   },
   {
@@ -385,20 +385,6 @@ export const instructorSidebarLinks = [
       { label: "Platform Policies", path: "/instructor-dashboard/platform-rules" }
     ],
   },
-  /* {
-    label: "Platform Insights",
-    icon: <FaChartLine />,
-    children: [
-      { label: "Engagement (DAU)", path: "/instructor-dashboard/engagement-analytics" },
-      { label: "Course Events", path: "/instructor-dashboard/course-event-analytics" },
-      { label: "Engagement Score", path: "/instructor-dashboard/engagement-score" },
-      { label: "Drop-out Risk", path: "/instructor-dashboard/dropout-risk" },
-      { label: "Lesson Drop-Off", path: "/instructor-dashboard/lesson-dropoff" },
-      { label: "My Performance Score", path: "/instructor-dashboard/instructor-score" },
-      { label: "Course Analytics", path: "/instructor-dashboard/course_analytics" },
-      { label: "Student Progress", path: "/instructor-dashboard/student_progress" },
-    ],
-  }, */
   {
     label: "Platform Insights (AI)",
     icon: <FaChartLine />,
