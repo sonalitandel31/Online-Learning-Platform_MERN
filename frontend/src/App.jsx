@@ -183,7 +183,7 @@ function App() {
     // Triggers automatically when the browser comes back online
     const handleOnline = async () => {
       console.log('Internet signal detected. Waiting 3 seconds for connection to stabilize...');
-      
+
       setTimeout(async () => {
         setIsOffline(false);
 
@@ -194,13 +194,13 @@ function App() {
 
         if (unsyncedItems.length > 0) {
           console.log(`Found ${unsyncedItems.length} items to sync. Starting background sync...`);
-          
+
           for (let item of unsyncedItems) {
             try {
               const token = localStorage.getItem("token");
               if (!token) {
-                 console.error("No token found. Cannot sync progress.");
-                 return; 
+                console.error("No token found. Cannot sync progress.");
+                return;
               }
 
               // 2. Exam Submission Route
@@ -210,7 +210,7 @@ function App() {
                   cheatCount: item.cheatCount
                 });
                 console.log(`Exam ${item.lessonId} synced successfully!`);
-              } 
+              }
               // 3. REAL Lesson Completion Route
               else {
                 await api.post(`/courses/${item.courseId}/lessons/${item.lessonId}/markWatched`, {}, {
@@ -227,7 +227,7 @@ function App() {
             }
           }
         } else {
-            console.log('No offline data to sync.');
+          console.log('No offline data to sync.');
         }
       }, 3000); // 3 second delay
     };
@@ -266,6 +266,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login setUser={setUser} />} />
+          <Route path="/portal/:identifier" element={<Login setUser={setUser} />} />
           <Route path="/register" element={<Register setUser={setUser} />} />
           <Route path="/profile" element={<Profile user={user} setUser={setUser} />} />
           <Route element={<ProtectedRoute allowedRoles={["student"]} />}>

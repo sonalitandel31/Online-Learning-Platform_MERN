@@ -48,12 +48,33 @@ const Navbar = ({ user, setUser }) => {
 
   const handleLogout = () => {
     closeMenu();
+
+    // 1. Check if they belong to a corporate portal BEFORE clearing storage
+    const portalId = localStorage.getItem("portalIdentifier");
+
+    // 2. Clear everything
     localStorage.removeItem("user");
     localStorage.removeItem("role");
     localStorage.removeItem("token");
+    localStorage.removeItem("themeColor");
+    localStorage.removeItem("themeLogo");
+    localStorage.removeItem("portalIdentifier"); // Clear it for safety
+
     setUser(null);
-    navigate("/login");
-    window.location.reload();
+
+    // 3. Smart Redirect
+    if (portalId) {
+      // Send them back to their company's branded login page!
+      navigate(`/portal/${portalId}`);
+    } else {
+      // Send normal students to the public login page
+      navigate("/login");
+    }
+
+    // Slight delay to allow React Router to navigate before reloading
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
   };
 
   const handleSearch = (e) => {
@@ -382,11 +403,11 @@ const Navbar = ({ user, setUser }) => {
                       <li><Link className="dropdown-item" to={learningPathRoute} onClick={closeMenu}><FaMap /> Learning Roadmap</Link></li>
                       <li><Link className="dropdown-item" to={skillAnalysisRoute} onClick={closeMenu}><FaChartBar /> Skill Intelligence</Link></li>
                       <li><hr className="dropdown-divider my-1" /></li>
-                      
+
                       {hasEnrollment && (
                         <li><Link className="dropdown-item" to="/live-classes" onClick={closeMenu}><FaPlayCircle /> Live Classes</Link></li>
                       )}
-                      
+
                       <li><Link className="dropdown-item" to={subscriptionPlansPath} onClick={closeMenu}><FaCrown /> Subscription Plans</Link></li>
                       <li><Link className="dropdown-item" to={mySubscriptionPath} onClick={closeMenu}><FaFileInvoiceDollar /> My Subscription</Link></li>
                     </>

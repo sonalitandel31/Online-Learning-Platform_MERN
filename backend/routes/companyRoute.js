@@ -15,4 +15,6 @@ router.put('/branding', authMiddleware, tenantAuth, companyController.updateBran
 router.put('/:id/licenses', authMiddleware, tenantAuth, companyController.updateLicenses);
 router.post('/request-upgrade', authMiddleware, tenantAuth, companyController.requestLicenseUpgrade);
 
+router.get('/portal/:identifier', companyController.getPortalBranding);
+
 module.exports = router;

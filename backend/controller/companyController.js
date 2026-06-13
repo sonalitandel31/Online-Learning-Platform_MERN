@@ -194,3 +194,32 @@ exports.requestLicenseUpgrade = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error while sending email." });
     }
 };
+
+exports.getPortalBranding = async (req, res) => {
+  try {
+    const { identifier } = req.params; // The URL part, e.g., "tcs" or "TCS"
+
+    // Search by Company Name (case-insensitive) OR Domain (starting with identifier)
+    const company = await Company.findOne({
+      $or: [
+        { companyName: { $regex: new RegExp(`^${identifier}$`, "i") } },
+        { domain: { $regex: new RegExp(`^${identifier}`, "i") } } // matches "tcs.com" if they type "tcs"
+      ],
+      isActive: true
+    });
+
+    if (!company) {
+      return res.status(404).json({ success: false, message: "Portal not found" });
+    }
+
+    // Returning data using YOUR exact schema structure
+    res.json({
+      success: true,
+      name: company.companyName,
+      logo: company.branding.logoUrl,        
+      primaryColor: company.branding.themeColor 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};

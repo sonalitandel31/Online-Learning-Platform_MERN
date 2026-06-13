@@ -1,10 +1,12 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import FormButton from "../../components/formButtons";
 import FormInput from "../../components/formInputs";
 import "../../styles/form.css";
 import { loginValidation } from "./validation";
 import api from "../../api/api";
+
+import { useTheme } from "../../context/ThemeContext";
 
 function Login({ setUser }) {
   const navigate = useNavigate();
@@ -13,6 +15,16 @@ function Login({ setUser }) {
   const [loading, setLoading] = useState(false);
 
   const [statusMsg, setStatusMsg] = useState({ type: "", text: "" });
+
+  const { identifier } = useParams();
+
+  const { setPrimaryColor, setLogoUrl } = useTheme();
+
+  const [branding, setBranding] = useState({
+    logo: null,
+    primaryColor: "#9f64f7", 
+    companyName: ""
+  });
 
   const handleChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -61,6 +73,31 @@ function Login({ setUser }) {
     }
   };
 
+  useEffect(() => {
+    if (identifier) {
+      localStorage.setItem("portalIdentifier", identifier);
+      
+      api.get(`/companies/portal/${identifier}`)
+        .then(res => {
+          if (res.data.success) {
+            setBranding({
+              logo: res.data.logo,
+              primaryColor: res.data.primaryColor,
+              companyName: res.data.name
+            });
+            setPrimaryColor(res.data.primaryColor);
+            setLogoUrl(res.data.logo);
+          }
+        })
+        .catch(err => console.error("Portal not found, falling back to default"));
+    } else {
+      localStorage.removeItem("portalIdentifier");
+      
+      setPrimaryColor('#6f42c1');
+      setLogoUrl(null);
+    }
+  }, [identifier, setPrimaryColor, setLogoUrl]);
+  
   return (
     <div className="login-page-wrapper">
       <style>
@@ -81,6 +118,8 @@ function Login({ setUser }) {
             box-shadow: 0 10px 25px rgba(0,0,0,0.05);
             width: 100%;
             max-width: 420px;
+            border-top: 6px solid ${branding.primaryColor}; 
+            transition: border-color 0.3s ease;
           }
 
           .login-card h1 {
@@ -90,6 +129,12 @@ function Login({ setUser }) {
             margin-bottom: 0.5rem;
             text-align: center;
           }
+          .brand-logo {
+            display: block;
+            margin: 0 auto 1.5rem auto;
+            max-height: 50px;
+            object-fit: contain;
+          }
 
           .subtitle {
             text-align: center;
@@ -98,7 +143,6 @@ function Login({ setUser }) {
             font-size: 0.9rem;
           }
 
-          /* Inline Alert Styling */
           .status-alert {
             padding: 12px;
             border-radius: 8px;
@@ -124,7 +168,7 @@ function Login({ setUser }) {
 
           .form-footer a {
             font-size: 0.85rem;
-            color: #9f64f7;
+            color: ${branding.primaryColor};
             text-decoration: none;
             font-weight: 600;
           }
@@ -135,7 +179,7 @@ function Login({ setUser }) {
             width: 100% !important;
             padding: 12px !important;
             border-radius: 10px !important;
-            background: #9f64f7 !important;
+            background: ${branding.primaryColor} !important;
             border: none !important;
             color: white !important;
             font-weight: 700 !important;
@@ -152,7 +196,7 @@ function Login({ setUser }) {
             color: #636e72;
           }
 
-          .signup-text a { color: #9f64f7; font-weight: 700; text-decoration: none; }
+          .signup-text a { color: ${branding.primaryColor}; font-weight: 700; text-decoration: none; }
 
           @media (max-width: 480px) {
             .login-card { padding: 1.5rem; }
@@ -161,8 +205,16 @@ function Login({ setUser }) {
       </style>
 
       <div className="login-card">
-        <h1>Welcome Back</h1>
-        <p className="subtitle">Please enter your details to sign in</p>
+        {branding.logo ? (
+          <img src={branding.logo} alt="Company Logo" className="brand-logo" />
+        ) : (
+          <h1>Welcome Back</h1>
+        )}
+        <p className="subtitle">
+          {branding.companyName 
+            ? `Sign in to your ${branding.companyName} portal` 
+            : "Please enter your details to sign in"}
+        </p>
 
         {statusMsg.text && (
           <div className={`status-alert ${statusMsg.type === "error" ? "alert-error" : "alert-success"}`}>
@@ -207,9 +259,15 @@ function Login({ setUser }) {
             />
           </div>
 
-          <p className="signup-text">
-            New here? <Link to="/register">Create an account</Link>
-          </p>
+          {!identifier ? (
+            <p className="signup-text">
+              New here? <Link to="/register">Create an account</Link>
+            </p>
+          ) : (
+            <p className="signup-text" style={{ fontSize: "0.85rem" }}>
+              Need access? <span style={{ color: branding.primaryColor, fontWeight: 600 }}>Contact your HR Manager</span>
+            </p>
+          )}
         </form>
       </div>
     </div>
