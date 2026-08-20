@@ -3,10 +3,11 @@ require("dotenv").config();
 const express = require("express");
 const conn = require("./config/db");
 const cors = require("cors");
-const helmet = require("helmet"); // NAYA: Helmet import kiya
-const rateLimit = require("express-rate-limit"); // NAYA: Rate Limit import kiya
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const path = require("path");
 const http = require("http");
+const mongoose = require("mongoose");
 const { Server } = require("socket.io");
 
 require("./utils/autoUnenroll");
@@ -77,7 +78,7 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
 // 2. CORS: Restrict API access to your allowed frontend URL
 app.use(
   cors({
-    origin: process.env.CLIENT_URL, 
+    origin: process.env.CLIENT_URL,
     credentials: true,
   })
 );
@@ -90,8 +91,8 @@ const apiLimiter = rateLimit({
     success: false,
     message: "Too many requests from this IP, please try again after 15 minutes."
   },
-  standardHeaders: true, 
-  legacyHeaders: false, 
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // Apply rate limiter to all routes below this line
@@ -103,6 +104,30 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+app.get("/health", (req, res) => {
+  const dbState = mongoose.connection.readyState;
+
+  const states = {
+    0: "Disconnected",
+    1: "Connected",
+    2: "Connecting",
+    3: "Disconnecting"
+  };
+
+  const dbStatus = states[dbState] || "Unknown";
+  const isHealthy = dbState === 1;
+
+  res.status(isHealthy ? 200 : 503).json({
+    success: isHealthy,
+    server: "Running",
+    database: {
+      readyState: dbState,
+      status: dbStatus
+    },
+    timestamp: new Date().toISOString()
+  });
+});
 
 // INITIALIZATION & CRON JOBS
 conn();
@@ -135,9 +160,9 @@ app.use("/live-classes", liveClassRoutes);
 app.use("/live-class-chat", liveClassChatRoutes);
 app.use("/live-class-questions", liveClassQuestionRoutes);
 app.use("/ai", aiRoute);
-app.use('/companies', companyRoutes); 
-app.use('/hr', hrRoutes);             
-app.use('/notifications', notificationRoutes);             
+app.use('/companies', companyRoutes);
+app.use('/hr', hrRoutes);
+app.use('/notifications', notificationRoutes);
 
 // SERVER START
 const PORT = process.env.PORT || 3000;
